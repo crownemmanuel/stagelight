@@ -1,0 +1,41 @@
+<!doctype html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>StageLight</title><link rel="icon" type="image/png" href="/favicon.png"><link rel="stylesheet" href="/style.css?v=ui-2"><script type="importmap">{"imports":{"three":"/vendor/three.module.js","three/addons/controls/OrbitControls.js":"/vendor/OrbitControls.js"}}</script></head><body data-mode="show">
+<header class="topbar">
+ <a class="brand" href="/" aria-label="StageLight home"><img src="/logo.png" alt=""><span>StageLight</span></a>
+ <span class="show-name" id="showName">Salvation</span>
+ <div class="mode-switch" role="tablist" aria-label="Mode"><button data-mode="show" role="tab" aria-selected="true"><span data-icon="show"></span>Show</button><button data-mode="build" role="tab" aria-selected="false"><span data-icon="build"></span>Build</button></div>
+ <button id="blindButton" class="blind-pill" title="Blind: program without changing the live lights"><span data-icon="blind"></span><span>Blind</span></button>
+ <div class="top-actions"><button id="agentChip" class="status-chip agent-chip" hidden title=""><span data-icon="agent"></span><span>Agent connected</span></button><span id="engineStatus" class="status-chip"><i></i>Connecting</span><button id="outputButton" class="output-pill"><i></i><span>Output off</span></button><div class="menu-wrap"><button id="menuButton" class="round-button" aria-haspopup="menu" aria-expanded="false" aria-label="Menu" data-icon="menu"></button><div id="menu" class="menu" role="menu" hidden>
+  <button role="menuitem" data-menu="agent"><span data-icon="agent"></span>Connect an agent<small>MCP</small></button>
+  <button role="menuitem" data-menu="connection"><span data-icon="plug"></span>Connection & diagnostics</button>
+  <button role="menuitem" data-menu="settings"><span data-icon="settings"></span>Settings</button>
+  <button role="menuitem" data-menu="network"><span data-icon="network"></span>Network & triggers<small>OSC</small></button>
+  <button role="menuitem" data-menu="patch"><span data-icon="patch"></span>Patch<small>Fixtures & DMX</small></button>
+  <hr><button role="menuitem" data-menu="export"><span data-icon="download"></span>Export show</button>
+  <button role="menuitem" data-menu="import"><span data-icon="upload"></span>Import show</button>
+  <hr><button role="menuitem" data-menu="help"><span data-icon="help"></span>Guides</button>
+  <button role="menuitem" data-menu="update" hidden><span data-icon="download"></span><span id="updateLabel">Check for updates…</span></button>
+ </div></div></div>
+</header>
+<div class="workspace">
+ <aside class="pages-rail"><div class="rail-head"><h2>Pages</h2><button id="newPage" class="round-button small build-only" aria-label="New page" data-icon="plus"></button></div><div id="pageList"></div></aside>
+ <main>
+  <section class="stage-panel"><div id="viewport"><div id="webglFallback" hidden>3D preview unavailable on this device. Controls and engine remain available.</div><div id="groupGrid" class="group-grid" hidden></div><img id="stagePhoto" src="/assets/stage-render.png" alt="Architectural rendering of the curved sanctuary stage; static reference, not live lighting" hidden>
+   <div class="stage-top"><div id="groupPills" class="group-pills"></div><div class="stage-tools"><div class="view-switch" role="tablist" aria-label="Stage view"><button data-stage-view="stage" title="3D visualizer"><span data-icon="show"></span>Visualizer</button><button data-stage-view="groups" title="Group tiles · visualizer off"><span data-icon="group"></span>Groups</button></div><button id="ledButton" class="tool-button" title="LED wall"><span data-icon="screen"></span><span>LED wall</span></button><button id="popoutButton" class="tool-button icon-only" title="Pop out the visualizer into its own window (drag it to another screen)" aria-label="Pop out visualizer"><span data-icon="popout"></span></button></div></div>
+   <div id="previewBanner" class="preview-banner" hidden></div><div id="ledTray" class="led-tray" hidden></div>
+   <div class="stage-bottom"><span class="preview-label">Preview</span><div id="selectionBar" class="selection-bar" hidden></div><div class="stage-tools"><div class="view-options"><button class="view active" data-view="front" title="Front" data-icon="front"></button><button class="view" data-view="orbit" title="Orbit" data-icon="orbit"></button><button class="view" data-view="top" title="Top" data-icon="top"></button><button class="view" data-view="reference" title="Reference render" data-icon="image"></button></div><label class="haze-control" title="Haze (preview only)"><span data-icon="haze"></span><input id="haze" type="range" min="0" max="100" value="45" aria-label="Haze"></label></div></div>
+  </div></section>
+  <section class="fixture-strip"><div id="fixtureChips"></div></section>
+ </main>
+ <aside class="side-panel" id="sidePanel"></aside>
+</div>
+<footer class="gobar">
+ <div class="go-buttons"><button id="backButton" class="round-button big" aria-label="Back" data-icon="back"></button><button id="goButton" class="go-button"><span data-icon="go"></span>GO</button><button id="stopButton" class="round-button big" aria-label="Stop and fade out" title="Stop · fade to dark" data-icon="stop"></button></div>
+ <div class="now-next"><div class="now"><span class="label" id="playState">Ready</span><strong id="nowName">—</strong><div class="progress"><i id="progressBar"></i><b id="fadeBar"></b></div></div><div class="next"><span class="label">Next</span><strong id="nextName">—</strong><small id="nextMeta"></small></div></div>
+ <button id="saveButton" class="save-button" title="Save your changes into a cue"><span data-icon="save"></span><span>Save</span></button>
+ <button id="releaseButton" class="release-button" title="Fade manual changes back to the running cue"><span data-icon="release"></span><span>Clear</span><b id="overrideCount">0</b></button>
+ <div class="master"><span data-icon="sun"></span><input id="master" type="range" min="0" max="100" value="80" aria-label="Master"><output id="masterValue">80%</output></div>
+ <button id="blackout" class="blackout"><span data-icon="moon"></span><span>Blackout</span></button>
+</footer>
+<div id="toast" role="status" hidden></div><div id="ctxMenu" class="menu ctx-menu" role="menu" hidden></div><dialog id="dialog"><div class="dialog-head"><h2 id="dialogTitle"></h2><button id="closeDialog" class="round-button" aria-label="Close dialog" data-icon="close"></button></div><div id="dialogBody"></div></dialog>
+<input id="mediaFile" type="file" accept="image/png,image/jpeg,image/webp,image/gif,video/mp4,video/webm,video/quicktime,.m4v" hidden>
+<script type="module" src="/app.js?v=ui-2"></script></body></html>

@@ -1,0 +1,5 @@
+import test from 'node:test';import assert from 'node:assert/strict';import {defaults,rearHeadFixtures} from '../engine/model.mjs';import {validateShow} from '../engine/spec.mjs';import {baseState,encode} from '../engine/render.mjs';
+test('Rear heads keep photographed patches and leave spacing gaps clear',()=>{
+ const fixtures=rearHeadFixtures();assert.deepEqual(fixtures.map(f=>[f.id,f.universe,f.address]),[['4104',3,120],['4102',3,78],['3901',3,162],['4103',3,99],['4101',3,57]]);for(const f of fixtures){assert.equal(f.enabled,true);assert.equal(f.verified,true);assert.equal(f.profile,f.id==='3901'?'beam200':'beam7r')}
+ assert.deepEqual(fixtures.map(f=>f.position[0]),[-6,-3,0,3,6]);const show=defaults();validateShow(show);const p=encode(show,show.fixtures.map(f=>({...baseState(f),intensity:1}))).get(2);for(const [a,b] of [[72,77],[93,98],[114,119],[135,161]])for(let i=a;i<b;i++)assert.equal(p[i],0);assert.equal(p[176],0);assert.deepEqual(show.groups.find(g=>g.id==='rear-heads').fixtures,fixtures.map(f=>f.id));
+});

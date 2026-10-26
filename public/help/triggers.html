@@ -1,0 +1,55 @@
+<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Let other apps trigger StageLight</title><link rel="icon" type="image/png" href="/favicon.png"><style>*{box-sizing:border-box}body{margin:0;background:#f3f5f8;color:#223047;font:17px/1.65 -apple-system,BlinkMacSystemFont,Segoe UI,sans-serif}main{max-width:980px;margin:auto;padding:54px 30px}h1{font-size:44px;line-height:1.1;letter-spacing:-1.8px}h2{font-size:25px;margin-top:42px}h3{font-size:19px}p{max-width:76ch}a{color:#2461a5}header small{color:#61728a}.lead{font-size:21px}.box{background:white;border:1px solid #d9e1ec;border-radius:14px;padding:22px;margin:20px 0}table{width:100%;border-collapse:collapse;background:white}th,td{text-align:left;padding:12px;border-bottom:1px solid #dce3ec}th{color:#51627a;font-size:14px}code{background:#e4ebf3;padding:3px 6px;border-radius:5px}li{margin:10px 0}.note{border-left:4px solid #d7a64b;padding:10px 18px;background:#fff9eb}@media print{body{background:white}main{padding:0}.box{break-inside:avoid}}</style><main>
+<header><small>StageLight guide</small><h1>Let other apps trigger StageLight</h1></header>
+<p class="lead">Other apps on the show computer or the show network (LiveStage, a sound desk app, camera control, a Stream Deck, QLab…) can GO cues and fire actions in StageLight by sending it short OSC messages over UDP.</p>
+
+<div class="note"><strong>Safe by design.</strong> A trigger can GO, stop, clear, black out or set the master, but it can never arm physical output or change the patch. Cues only reach the real lights while you have armed output in StageLight.</div>
+
+<h2>1. Turn it on</h2>
+<ol>
+<li>Open <strong>☰ → Network &amp; triggers</strong>.</li>
+<li>Under <strong>Allow other apps to trigger</strong>, choose who may send:
+ <ul><li><strong>This Mac only</strong>: apps running on this computer. This is the default.</li>
+ <li><strong>Show network</strong>: other computers too. Type their IP addresses, separated by commas (for example <code>192.168.1.20, 192.168.1.31</code>), or <code>*</code> for any device. Messages from anyone else are ignored and counted as rejected.</li></ul></li>
+<li>Leave the port at <strong>1461</strong> unless something else uses it, then press <strong>Save</strong>. The top line should read <em>Listening on …:1461</em>.</li>
+</ol>
+
+<h2>2. Point the other app at StageLight</h2>
+<div class="box">In the other app, add an OSC (UDP) output to <strong>this computer's IP address</strong> (or <code>127.0.0.1</code> on the same Mac), port <strong>1461</strong>. Arguments are strings, whole numbers or decimals.</div>
+
+<h2>3. Use named triggers (recommended)</h2>
+<p>Instead of hard-coding cue numbers in the other app, send a name, and decide in StageLight what that name does. You can change the action later without touching the other app.</p>
+<ol>
+<li>In <strong>Named triggers</strong>, type a name such as <code>chorus</code>, pick an action (GO a page or a specific cue, back, stop, clear, blackout, master level, LED wall, play a cue) and press <strong>Add trigger</strong>.</li>
+<li>Press the ▶ button next to it to try it from StageLight.</li>
+<li>In the other app, send <code>/stagelight/trigger "chorus"</code>.</li>
+</ol>
+
+<h2>Messages StageLight understands</h2>
+<p>Pages and cues can be given by name, by number (1 = first) or by ID.</p>
+<table><tr><th>Address</th><th>Arguments</th><th>Does</th></tr>
+<tr><td><code>/stagelight/trigger</code></td><td>name</td><td>Fire a named trigger</td></tr>
+<tr><td><code>/stagelight/go</code></td><td>[page]</td><td>GO the next cue (on that page, or the one running)</td></tr>
+<tr><td><code>/stagelight/go/cue</code></td><td>page, cue</td><td>GO a specific cue, e.g. <code>"Act 1" 4</code></td></tr>
+<tr><td><code>/stagelight/back</code></td><td></td><td>Previous cue</td></tr>
+<tr><td><code>/stagelight/stop</code></td><td>[fade seconds]</td><td>Stop and fade to dark</td></tr>
+<tr><td><code>/stagelight/clear</code></td><td>[fade seconds]</td><td>Release manual changes back to the cue</td></tr>
+<tr><td><code>/stagelight/blackout</code></td><td>1 or 0</td><td>Blackout on or off</td></tr>
+<tr><td><code>/stagelight/master</code></td><td>0 to 1</td><td>Master level</td></tr>
+<tr><td><code>/stagelight/play</code></td><td>cue [fade]</td><td>Play a library cue outside the pages</td></tr>
+<tr><td><code>/stagelight/ledwall</code></td><td>media or <code>off</code></td><td>Change the LED wall preview</td></tr>
+<tr><td><code>/stagelight/ping</code></td><td>[reply port]</td><td>Answers <code>/stagelight/hello</code> with the version, whether output is armed, and the running page and cue</td></tr>
+<tr><td><code>/stagelight/catalog</code></td><td>[reply port]</td><td>Answers with every page, cue, named trigger and library cue, so the other app can show them in a list to pick from</td></tr>
+</table>
+<p>If something is wrong (an unknown trigger, a page that does not exist), StageLight answers <code>/stagelight/error</code> with the reason. The full list is also under <em>Addresses StageLight understands</em> in the sheet.</p>
+
+<h2>Telling other apps what StageLight is doing</h2>
+<p>Under <strong>Send to</strong>, add the other app as a target (its IP and OSC port, or an HTTP address). Tick <strong>Announce</strong> and it hears <code>/stagelight/cue/live</code> with the page and cue every time a cue GOes. A cue can also send a <em>look summary</em> (colour temperature, level and colour), for example to keep a camera's white balance right: open the cue in the cue list and choose <em>When this cue GOes, send</em>. Use <strong>Ping</strong> and <strong>Send look</strong> to test a target.</p>
+
+<h2>Checking it works</h2>
+<ul>
+<li><strong>Recent messages</strong> at the bottom of the sheet lists everything received and sent, who sent it, what StageLight did and how long it took.</li>
+<li>Send <code>/stagelight/ping</code> from the other app first. If nothing shows up, check the IP address and port in the other app, and that its computer is on the allowed list.</li>
+<li>A message marked rejected came from a device that is not allowed: add its IP, or choose <em>This Mac only</em> if both apps are on this computer.</li>
+</ul>
+
+<p><a href="/">Return to the lighting desk</a> · <a href="/help/agent-api.html">Agent API</a></p></main></html>

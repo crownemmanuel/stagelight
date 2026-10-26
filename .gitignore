@@ -1,0 +1,6 @@
+.DS_Store
+node_modules/
+
+# Runtime files the engine writes beside its show when run from this folder (npm start)
+data/*
+!data/show.json

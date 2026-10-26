@@ -1,0 +1,9 @@
+import test from 'node:test';import assert from 'node:assert/strict';import {defaults} from '../engine/model.mjs';import {baseState,encode} from '../engine/render.mjs';import {Engine} from '../engine/engine.mjs';import {aimAngles} from '../public/aim.js';
+test('7R screenshot personality places intensity/shutter and 16-bit position on the correct channels',()=>{
+ const show=defaults(),states=show.fixtures.map(baseState),frame=states.find(f=>f.id==='4101');Object.assign(frame,{intensity:1,pan:0x1234/65535,tilt:0xabcd/65535,frost:.5,focus:1,gobo:14,prism:1,prismRotation:0});const p=encode(show,states).get(2);assert.deepEqual([...p.subarray(56,72)],[0,255,255,56,255,191,0,128,255,0x12,0x34,0xab,0xcd,0,0,0]);
+ frame.intensity=0;const dark=encode(show,states).get(2);assert.equal(dark[57],0);assert.equal(dark[58],0);assert.equal(dark[70],0);assert.equal(dark[71],0);assert.deepEqual(aimAngles(show.fixtures.find(f=>f.id==='4101'),1,1),[270,135]);
+});
+test('7R gobos/shake use only the photographed slots; lamp strike/douse never touch reset channel 15',async()=>{
+ const show=defaults(),states=show.fixtures.map(baseState),f=states.find(f=>f.id==='4101');f.gobo=1;f.goboShake=1;assert.equal(encode(show,states).get(2)[59],166);f.gobo=14;assert.equal(encode(show,states).get(2)[59],249);
+ let t=0;const output={armed:true,last:null,send(p){this.last=p},status(){return {armed:true}}};const e=new Engine({output,clock:()=>t});e.tick();await e.command('fixture.lamp',{ids:['4101'],action:'strike'});assert.equal(output.last.get(2)[71],101);assert.equal(output.last.get(2)[70],0);t=5;e.tick();assert.equal(output.last.get(2)[71],0);await e.command('fixture.lamp',{ids:['4101'],action:'douse'});assert.equal(output.last.get(2)[71],26);assert.equal(output.last.get(2)[70],0);t=10;e.tick();assert.equal(output.last.get(2)[71],0);await assert.rejects(e.command('fixture.set',{ids:['4101'],values:{gobo:15}}),/0–14/);
+});

@@ -1,0 +1,28 @@
+[
+  {
+    "file": "User Created 7R Beam 230W 16ch rev 0.xml",
+    "bytes": 38406,
+    "sha256": "fb71d38330709221df6883343e010b3be3634c3d40d07ed285d2c5d6eea8891c",
+    "encrypted": true,
+    "elements": [
+      "CipherData",
+      "CipherValue",
+      "Creator",
+      "EncryptedData",
+      "Hog"
+    ]
+  },
+  {
+    "file": "User Created 200W Beam rev 0.xml",
+    "bytes": 14598,
+    "sha256": "a2a5c83cf35157aaa5808149b047c0a2b5acb4da5d1aaa6855c63d91871bd622",
+    "encrypted": true,
+    "elements": [
+      "CipherData",
+      "CipherValue",
+      "Creator",
+      "EncryptedData",
+      "Hog"
+    ]
+  }
+]

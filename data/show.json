@@ -1,0 +1,5535 @@
+{
+  "version": 1,
+  "name": "Salvation · lighting study",
+  "fixtures": [
+    {
+      "id": "401",
+      "name": "Backlight 1",
+      "profile": "colorado",
+      "universe": 3,
+      "address": 1,
+      "enabled": true,
+      "verified": true,
+      "position": [
+        -7,
+        4.7,
+        -3.5
+      ],
+      "calibration": {
+        "home": [
+          0.5,
+          0.53
+        ],
+        "panRange": [
+          0,
+          1
+        ],
+        "tiltRange": [
+          0,
+          1
+        ],
+        "invertPan": false,
+        "invertTilt": false,
+        "reviewed": true
+      }
+    },
+    {
+      "id": "402",
+      "name": "Backlight 2",
+      "profile": "colorado",
+      "universe": 3,
+      "address": 8,
+      "enabled": true,
+      "verified": true,
+      "position": [
+        -5,
+        4.7,
+        -3.5
+      ],
+      "calibration": {
+        "home": [
+          0.5,
+          0.53
+        ],
+        "panRange": [
+          0,
+          1
+        ],
+        "tiltRange": [
+          0,
+          1
+        ],
+        "invertPan": false,
+        "invertTilt": false,
+        "reviewed": true
+      }
+    },
+    {
+      "id": "403",
+      "name": "Backlight 3",
+      "profile": "colorado",
+      "universe": 3,
+      "address": 15,
+      "enabled": true,
+      "verified": true,
+      "position": [
+        -3,
+        4.7,
+        -3.5
+      ],
+      "calibration": {
+        "home": [
+          0.5,
+          0.53
+        ],
+        "panRange": [
+          0,
+          1
+        ],
+        "tiltRange": [
+          0,
+          1
+        ],
+        "invertPan": false,
+        "invertTilt": false,
+        "reviewed": true
+      }
+    },
+    {
+      "id": "404",
+      "name": "Backlight 4",
+      "profile": "colorado",
+      "universe": 3,
+      "address": 22,
+      "enabled": true,
+      "verified": true,
+      "position": [
+        -1,
+        4.7,
+        -3.5
+      ],
+      "calibration": {
+        "home": [
+          0.5,
+          0.53
+        ],
+        "panRange": [
+          0,
+          1
+        ],
+        "tiltRange": [
+          0,
+          1
+        ],
+        "invertPan": false,
+        "invertTilt": false,
+        "reviewed": true
+      }
+    },
+    {
+      "id": "405",
+      "name": "Backlight 5",
+      "profile": "colorado",
+      "universe": 3,
+      "address": 29,
+      "enabled": true,
+      "verified": true,
+      "position": [
+        1,
+        4.7,
+        -3.5
+      ],
+      "calibration": {
+        "home": [
+          0.5,
+          0.53
+        ],
+        "panRange": [
+          0,
+          1
+        ],
+        "tiltRange": [
+          0,
+          1
+        ],
+        "invertPan": false,
+        "invertTilt": false,
+        "reviewed": true
+      }
+    },
+    {
+      "id": "406",
+      "name": "Backlight 6",
+      "profile": "colorado",
+      "universe": 3,
+      "address": 36,
+      "enabled": true,
+      "verified": true,
+      "position": [
+        3,
+        4.7,
+        -3.5
+      ],
+      "calibration": {
+        "home": [
+          0.5,
+          0.53
+        ],
+        "panRange": [
+          0,
+          1
+        ],
+        "tiltRange": [
+          0,
+          1
+        ],
+        "invertPan": false,
+        "invertTilt": false,
+        "reviewed": true
+      }
+    },
+    {
+      "id": "407",
+      "name": "Backlight 7",
+      "profile": "colorado",
+      "universe": 3,
+      "address": 43,
+      "enabled": true,
+      "verified": true,
+      "position": [
+        5,
+        4.7,
+        -3.5
+      ],
+      "calibration": {
+        "home": [
+          0.5,
+          0.53
+        ],
+        "panRange": [
+          0,
+          1
+        ],
+        "tiltRange": [
+          0,
+          1
+        ],
+        "invertPan": false,
+        "invertTilt": false,
+        "reviewed": true
+      }
+    },
+    {
+      "id": "408",
+      "name": "Backlight 8",
+      "profile": "colorado",
+      "universe": 3,
+      "address": 50,
+      "enabled": true,
+      "verified": true,
+      "position": [
+        7,
+        4.7,
+        -3.5
+      ],
+      "calibration": {
+        "home": [
+          0.5,
+          0.53
+        ],
+        "panRange": [
+          0,
+          1
+        ],
+        "tiltRange": [
+          0,
+          1
+        ],
+        "invertPan": false,
+        "invertTilt": false,
+        "reviewed": true
+      }
+    },
+    {
+      "id": "301",
+      "name": "Rogue 1",
+      "profile": "rogue",
+      "universe": 4,
+      "address": 106,
+      "enabled": true,
+      "verified": true,
+      "position": [
+        -5.5,
+        6.3,
+        0
+      ],
+      "calibration": {
+        "home": [
+          0.49,
+          0.5625
+        ],
+        "panRange": [
+          0,
+          1
+        ],
+        "tiltRange": [
+          0,
+          1
+        ],
+        "invertPan": false,
+        "invertTilt": false,
+        "reviewed": false,
+        "alignment": {
+          "actual": [
+            0.7019607843137254,
+            0.5568627450980392
+          ],
+          "virtual": [
+            359.2352941176471,
+            15.352941176470594
+          ],
+          "panSign": -1,
+          "tiltSign": 1,
+          "name": "Stage alignment",
+          "savedAt": "2026-10-26T00:51:12.665Z"
+        }
+      }
+    },
+    {
+      "id": "302",
+      "name": "Rogue 2",
+      "profile": "rogue",
+      "universe": 4,
+      "address": 122,
+      "enabled": true,
+      "verified": true,
+      "position": [
+        5.5,
+        6.3,
+        0
+      ],
+      "calibration": {
+        "home": [
+          0.49,
+          0.5625
+        ],
+        "panRange": [
+          0,
+          1
+        ],
+        "tiltRange": [
+          0,
+          1
+        ],
+        "invertPan": false,
+        "invertTilt": false,
+        "reviewed": false
+      }
+    },
+    {
+      "id": "303",
+      "name": "Rogue 3",
+      "profile": "rogue",
+      "universe": 4,
+      "address": 138,
+      "enabled": true,
+      "verified": true,
+      "position": [
+        -4,
+        6.3,
+        2
+      ],
+      "calibration": {
+        "home": [
+          0.49,
+          0.5625
+        ],
+        "panRange": [
+          0,
+          1
+        ],
+        "tiltRange": [
+          0,
+          1
+        ],
+        "invertPan": false,
+        "invertTilt": false,
+        "reviewed": false,
+        "alignment": {
+          "actual": [
+            0.6862745098039216,
+            0.5625
+          ],
+          "virtual": [
+            0.23529411764704378,
+            16.875
+          ],
+          "panSign": -1,
+          "tiltSign": 1,
+          "name": "Stage alignment",
+          "savedAt": "2026-10-26T00:52:37.923Z"
+        }
+      }
+    },
+    {
+      "id": "304",
+      "name": "Rogue 4",
+      "profile": "rogue",
+      "universe": 4,
+      "address": 154,
+      "enabled": true,
+      "verified": true,
+      "position": [
+        4,
+        6.3,
+        2
+      ],
+      "calibration": {
+        "home": [
+          0.49,
+          0.5625
+        ],
+        "panRange": [
+          0,
+          1
+        ],
+        "tiltRange": [
+          0,
+          1
+        ],
+        "invertPan": false,
+        "invertTilt": false,
+        "reviewed": false,
+        "alignment": {
+          "actual": [
+            0,
+            1
+          ],
+          "virtual": [
+            -373,
+            135
+          ],
+          "panSign": -1,
+          "tiltSign": 1,
+          "name": "Stage alignment",
+          "savedAt": "2026-10-26T00:42:22.975Z"
+        }
+      }
+    },
+    {
+      "id": "305",
+      "name": "Rogue 5",
+      "profile": "rogue",
+      "universe": 5,
+      "address": 106,
+      "enabled": true,
+      "verified": true,
+      "position": [
+        -7,
+        6.3,
+        2
+      ],
+      "calibration": {
+        "home": [
+          0.49,
+          0.5625
+        ],
+        "panRange": [
+          0,
+          1
+        ],
+        "tiltRange": [
+          0,
+          1
+        ],
+        "invertPan": false,
+        "invertTilt": false,
+        "reviewed": false,
+        "alignment": {
+          "actual": [
+            0.6941176470588235,
+            0.5625
+          ],
+          "virtual": [
+            9,
+            16.875
+          ],
+          "panSign": -1,
+          "tiltSign": 1,
+          "name": "Stage alignment",
+          "savedAt": "2026-10-26T01:01:00.863Z"
+        }
+      }
+    },
+    {
+      "id": "306",
+      "name": "Rogue 6",
+      "profile": "rogue",
+      "universe": 5,
+      "address": 122,
+      "enabled": true,
+      "verified": true,
+      "position": [
+        7,
+        6.3,
+        2
+      ],
+      "calibration": {
+        "home": [
+          0.49,
+          0.5625
+        ],
+        "panRange": [
+          0,
+          1
+        ],
+        "tiltRange": [
+          0,
+          1
+        ],
+        "invertPan": false,
+        "invertTilt": false,
+        "reviewed": false,
+        "alignment": {
+          "actual": [
+            0.6627450980392157,
+            0.592156862745098
+          ],
+          "virtual": [
+            -16,
+            24.88235294117647
+          ],
+          "panSign": -1,
+          "tiltSign": 1,
+          "name": "Stage alignment",
+          "savedAt": "2026-10-26T00:54:28.165Z"
+        }
+      }
+    },
+    {
+      "id": "705",
+      "name": "MH7 705 · stage row 1",
+      "profile": "mh7",
+      "universe": 6,
+      "address": 1,
+      "enabled": true,
+      "verified": true,
+      "position": [
+        -5,
+        0.7,
+        -2.9
+      ],
+      "calibration": {
+        "home": [
+          0.5,
+          0.5
+        ],
+        "panRange": [
+          0,
+          1
+        ],
+        "tiltRange": [
+          0,
+          1
+        ],
+        "invertPan": false,
+        "invertTilt": false,
+        "reviewed": false,
+        "alignment": {
+          "actual": [
+            0.1568627450980392,
+            0.6980392156862745
+          ],
+          "virtual": [
+            17.5,
+            130.49019607843138
+          ],
+          "panSign": -1,
+          "tiltSign": -1,
+          "name": "Stage alignment",
+          "savedAt": "2026-10-26T01:59:02.895Z"
+        }
+      }
+    },
+    {
+      "id": "706",
+      "name": "MH7 706 · stage row 4",
+      "profile": "mh7",
+      "universe": 6,
+      "address": 22,
+      "enabled": true,
+      "verified": true,
+      "position": [
+        5,
+        0.7,
+        -2.9
+      ],
+      "calibration": {
+        "home": [
+          0.5,
+          0.5
+        ],
+        "panRange": [
+          0,
+          1
+        ],
+        "tiltRange": [
+          0,
+          1
+        ],
+        "invertPan": false,
+        "invertTilt": false,
+        "reviewed": false,
+        "alignment": {
+          "actual": [
+            0.17254901960784313,
+            0.7725490196078432
+          ],
+          "virtual": [
+            344.5,
+            123
+          ],
+          "panSign": -1,
+          "tiltSign": -1,
+          "name": "Stage alignment",
+          "savedAt": "2026-10-26T01:57:27.151Z"
+        }
+      }
+    },
+    {
+      "id": "707",
+      "name": "MH7 707 · stage row 2",
+      "profile": "mh7",
+      "universe": 6,
+      "address": 43,
+      "enabled": true,
+      "verified": true,
+      "position": [
+        -2,
+        0.7,
+        -2.9
+      ],
+      "calibration": {
+        "home": [
+          0.5,
+          0.5
+        ],
+        "panRange": [
+          0,
+          1
+        ],
+        "tiltRange": [
+          0,
+          1
+        ],
+        "invertPan": false,
+        "invertTilt": false,
+        "reviewed": false,
+        "alignment": {
+          "actual": [
+            0.5411764705882353,
+            0.30196078431372547
+          ],
+          "virtual": [
+            -22.23529411764704,
+            229.50980392156862
+          ],
+          "panSign": -1,
+          "tiltSign": -1,
+          "name": "Stage alignment",
+          "savedAt": "2026-10-26T01:57:23.746Z"
+        }
+      }
+    },
+    {
+      "id": "708",
+      "name": "MH7 708 · stage row 3",
+      "profile": "mh7",
+      "universe": 6,
+      "address": 64,
+      "enabled": true,
+      "verified": true,
+      "position": [
+        2,
+        0.7,
+        -2.9
+      ],
+      "calibration": {
+        "home": [
+          0.5,
+          0.5
+        ],
+        "panRange": [
+          0,
+          1
+        ],
+        "tiltRange": [
+          0,
+          1
+        ],
+        "invertPan": false,
+        "invertTilt": false,
+        "reviewed": false,
+        "alignment": {
+          "actual": [
+            0.2235294117647059,
+            0.86
+          ],
+          "virtual": [
+            349.5,
+            107
+          ],
+          "panSign": -1,
+          "tiltSign": -1,
+          "name": "Stage alignment",
+          "savedAt": "2026-10-26T01:58:24.522Z"
+        }
+      }
+    },
+    {
+      "id": "3101",
+      "name": "MH7 3101 · audience left?",
+      "profile": "mh7",
+      "universe": 1,
+      "address": 337,
+      "enabled": true,
+      "verified": true,
+      "position": [
+        5.5,
+        6.3,
+        8
+      ],
+      "calibration": {
+        "home": [
+          0.5,
+          0.5
+        ],
+        "panRange": [
+          0,
+          1
+        ],
+        "tiltRange": [
+          0,
+          1
+        ],
+        "invertPan": false,
+        "invertTilt": false,
+        "reviewed": false,
+        "alignment": {
+          "actual": [
+            0.17647058823529413,
+            0.17254901960784313
+          ],
+          "virtual": [
+            -199.5,
+            -88.5
+          ],
+          "panSign": 1,
+          "tiltSign": 1,
+          "name": "Stage alignment",
+          "savedAt": "2026-10-26T02:26:42.090Z"
+        }
+      }
+    },
+    {
+      "id": "3102",
+      "name": "MH7 3102 · audience right?",
+      "profile": "mh7",
+      "universe": 1,
+      "address": 358,
+      "enabled": true,
+      "verified": true,
+      "position": [
+        -5.5,
+        6.3,
+        8
+      ],
+      "calibration": {
+        "home": [
+          0.5,
+          0.5
+        ],
+        "panRange": [
+          0,
+          1
+        ],
+        "tiltRange": [
+          0,
+          1
+        ],
+        "invertPan": false,
+        "invertTilt": false,
+        "reviewed": false
+      }
+    },
+    {
+      "id": "3103",
+      "name": "MH7 3103 · location provisional",
+      "profile": "mh7",
+      "universe": 6,
+      "address": 235,
+      "enabled": true,
+      "verified": true,
+      "position": [
+        -8.5,
+        0.7,
+        2
+      ],
+      "calibration": {
+        "home": [
+          0.5,
+          0.5
+        ],
+        "panRange": [
+          0,
+          1
+        ],
+        "tiltRange": [
+          0,
+          1
+        ],
+        "invertPan": false,
+        "invertTilt": false,
+        "reviewed": false
+      }
+    },
+    {
+      "id": "3104",
+      "name": "MH7 3104 · location provisional",
+      "profile": "mh7",
+      "universe": 6,
+      "address": 256,
+      "enabled": true,
+      "verified": true,
+      "position": [
+        8.5,
+        0.7,
+        2
+      ],
+      "calibration": {
+        "home": [
+          0.5,
+          0.5
+        ],
+        "panRange": [
+          0,
+          1
+        ],
+        "tiltRange": [
+          0,
+          1
+        ],
+        "invertPan": false,
+        "invertTilt": false,
+        "reviewed": false
+      }
+    },
+    {
+      "id": "201",
+      "name": "Grid row 1 · 1",
+      "profile": "q120",
+      "universe": 4,
+      "address": 1,
+      "enabled": true,
+      "verified": true,
+      "position": [
+        -7,
+        6.1,
+        -3.6
+      ],
+      "calibration": {
+        "home": [
+          0.5,
+          0.5
+        ],
+        "panRange": [
+          0,
+          1
+        ],
+        "tiltRange": [
+          0,
+          1
+        ],
+        "invertPan": false,
+        "invertTilt": false,
+        "reviewed": true
+      }
+    },
+    {
+      "id": "202",
+      "name": "Grid row 1 · 2",
+      "profile": "q120",
+      "universe": 4,
+      "address": 6,
+      "enabled": true,
+      "verified": true,
+      "position": [
+        -5.8,
+        6.1,
+        -3.6
+      ],
+      "calibration": {
+        "home": [
+          0.5,
+          0.5
+        ],
+        "panRange": [
+          0,
+          1
+        ],
+        "tiltRange": [
+          0,
+          1
+        ],
+        "invertPan": false,
+        "invertTilt": false,
+        "reviewed": true
+      }
+    },
+    {
+      "id": "203",
+      "name": "Grid row 1 · 3",
+      "profile": "q120",
+      "universe": 4,
+      "address": 36,
+      "enabled": true,
+      "verified": true,
+      "position": [
+        -1,
+        6.1,
+        -3.6
+      ],
+      "calibration": {
+        "home": [
+          0.5,
+          0.5
+        ],
+        "panRange": [
+          0,
+          1
+        ],
+        "tiltRange": [
+          0,
+          1
+        ],
+        "invertPan": false,
+        "invertTilt": false,
+        "reviewed": true
+      }
+    },
+    {
+      "id": "204",
+      "name": "Grid row 1 · 4",
+      "profile": "q120",
+      "universe": 4,
+      "address": 11,
+      "enabled": true,
+      "verified": true,
+      "position": [
+        3,
+        6.1,
+        -3.6
+      ],
+      "calibration": {
+        "home": [
+          0.5,
+          0.5
+        ],
+        "panRange": [
+          0,
+          1
+        ],
+        "tiltRange": [
+          0,
+          1
+        ],
+        "invertPan": false,
+        "invertTilt": false,
+        "reviewed": true
+      }
+    },
+    {
+      "id": "205",
+      "name": "Grid row 1 · 5",
+      "profile": "q120",
+      "universe": 4,
+      "address": 16,
+      "enabled": true,
+      "verified": true,
+      "position": [
+        7,
+        6.1,
+        -3.6
+      ],
+      "calibration": {
+        "home": [
+          0.5,
+          0.5
+        ],
+        "panRange": [
+          0,
+          1
+        ],
+        "tiltRange": [
+          0,
+          1
+        ],
+        "invertPan": false,
+        "invertTilt": false,
+        "reviewed": true
+      }
+    },
+    {
+      "id": "206",
+      "name": "Grid row 2 · 1",
+      "profile": "q120",
+      "universe": 4,
+      "address": 21,
+      "enabled": true,
+      "verified": true,
+      "position": [
+        -7,
+        6.1,
+        -2
+      ],
+      "calibration": {
+        "home": [
+          0.5,
+          0.5
+        ],
+        "panRange": [
+          0,
+          1
+        ],
+        "tiltRange": [
+          0,
+          1
+        ],
+        "invertPan": false,
+        "invertTilt": false,
+        "reviewed": true
+      }
+    },
+    {
+      "id": "207",
+      "name": "Grid row 2 · 2",
+      "profile": "q120",
+      "universe": 4,
+      "address": 26,
+      "enabled": true,
+      "verified": true,
+      "position": [
+        0,
+        6.1,
+        -2
+      ],
+      "calibration": {
+        "home": [
+          0.5,
+          0.5
+        ],
+        "panRange": [
+          0,
+          1
+        ],
+        "tiltRange": [
+          0,
+          1
+        ],
+        "invertPan": false,
+        "invertTilt": false,
+        "reviewed": true
+      }
+    },
+    {
+      "id": "208",
+      "name": "Grid row 2 · 3",
+      "profile": "q120",
+      "universe": 4,
+      "address": 31,
+      "enabled": true,
+      "verified": true,
+      "position": [
+        7,
+        6.1,
+        -2
+      ],
+      "calibration": {
+        "home": [
+          0.5,
+          0.5
+        ],
+        "panRange": [
+          0,
+          1
+        ],
+        "tiltRange": [
+          0,
+          1
+        ],
+        "invertPan": false,
+        "invertTilt": false,
+        "reviewed": true
+      }
+    },
+    {
+      "id": "209",
+      "name": "Grid row 3 · 1",
+      "profile": "q120",
+      "universe": 4,
+      "address": 41,
+      "enabled": true,
+      "verified": true,
+      "position": [
+        -7,
+        6.1,
+        -0.3999999999999999
+      ],
+      "calibration": {
+        "home": [
+          0.5,
+          0.5
+        ],
+        "panRange": [
+          0,
+          1
+        ],
+        "tiltRange": [
+          0,
+          1
+        ],
+        "invertPan": false,
+        "invertTilt": false,
+        "reviewed": true
+      }
+    },
+    {
+      "id": "210",
+      "name": "Grid row 3 · 2",
+      "profile": "q120",
+      "universe": 4,
+      "address": 46,
+      "enabled": true,
+      "verified": true,
+      "position": [
+        -2.333333333333333,
+        6.1,
+        -0.3999999999999999
+      ],
+      "calibration": {
+        "home": [
+          0.5,
+          0.5
+        ],
+        "panRange": [
+          0,
+          1
+        ],
+        "tiltRange": [
+          0,
+          1
+        ],
+        "invertPan": false,
+        "invertTilt": false,
+        "reviewed": true
+      }
+    },
+    {
+      "id": "211",
+      "name": "Grid row 3 · 3",
+      "profile": "q120",
+      "universe": 4,
+      "address": 51,
+      "enabled": true,
+      "verified": true,
+      "position": [
+        2.333333333333334,
+        6.1,
+        -0.3999999999999999
+      ],
+      "calibration": {
+        "home": [
+          0.5,
+          0.5
+        ],
+        "panRange": [
+          0,
+          1
+        ],
+        "tiltRange": [
+          0,
+          1
+        ],
+        "invertPan": false,
+        "invertTilt": false,
+        "reviewed": true
+      }
+    },
+    {
+      "id": "212",
+      "name": "Grid row 3 · 4",
+      "profile": "q120",
+      "universe": 5,
+      "address": 56,
+      "enabled": true,
+      "verified": true,
+      "position": [
+        7,
+        6.1,
+        -0.3999999999999999
+      ],
+      "calibration": {
+        "home": [
+          0.5,
+          0.5
+        ],
+        "panRange": [
+          0,
+          1
+        ],
+        "tiltRange": [
+          0,
+          1
+        ],
+        "invertPan": false,
+        "invertTilt": false,
+        "reviewed": true
+      }
+    },
+    {
+      "id": "213",
+      "name": "Grid row 4 · 1",
+      "profile": "q120",
+      "universe": 5,
+      "address": 61,
+      "enabled": true,
+      "verified": true,
+      "position": [
+        -7,
+        6.1,
+        1.2000000000000006
+      ],
+      "calibration": {
+        "home": [
+          0.5,
+          0.5
+        ],
+        "panRange": [
+          0,
+          1
+        ],
+        "tiltRange": [
+          0,
+          1
+        ],
+        "invertPan": false,
+        "invertTilt": false,
+        "reviewed": true
+      }
+    },
+    {
+      "id": "214",
+      "name": "Grid row 4 · 2",
+      "profile": "q120",
+      "universe": 5,
+      "address": 66,
+      "enabled": true,
+      "verified": true,
+      "position": [
+        0,
+        6.1,
+        1.2000000000000006
+      ],
+      "calibration": {
+        "home": [
+          0.5,
+          0.5
+        ],
+        "panRange": [
+          0,
+          1
+        ],
+        "tiltRange": [
+          0,
+          1
+        ],
+        "invertPan": false,
+        "invertTilt": false,
+        "reviewed": true
+      }
+    },
+    {
+      "id": "215",
+      "name": "Grid row 4 · 3",
+      "profile": "q120",
+      "universe": 5,
+      "address": 71,
+      "enabled": true,
+      "verified": true,
+      "position": [
+        7,
+        6.1,
+        1.2000000000000006
+      ],
+      "calibration": {
+        "home": [
+          0.5,
+          0.5
+        ],
+        "panRange": [
+          0,
+          1
+        ],
+        "tiltRange": [
+          0,
+          1
+        ],
+        "invertPan": false,
+        "invertTilt": false,
+        "reviewed": true
+      }
+    },
+    {
+      "id": "216",
+      "name": "Grid row 5 · 1",
+      "profile": "q120",
+      "universe": 5,
+      "address": 76,
+      "enabled": true,
+      "verified": true,
+      "position": [
+        -7,
+        6.1,
+        2.8000000000000003
+      ],
+      "calibration": {
+        "home": [
+          0.5,
+          0.5
+        ],
+        "panRange": [
+          0,
+          1
+        ],
+        "tiltRange": [
+          0,
+          1
+        ],
+        "invertPan": false,
+        "invertTilt": false,
+        "reviewed": true
+      }
+    },
+    {
+      "id": "217",
+      "name": "Grid row 5 · 2",
+      "profile": "q120",
+      "universe": 5,
+      "address": 81,
+      "enabled": true,
+      "verified": true,
+      "position": [
+        -3.5,
+        6.1,
+        2.8000000000000003
+      ],
+      "calibration": {
+        "home": [
+          0.5,
+          0.5
+        ],
+        "panRange": [
+          0,
+          1
+        ],
+        "tiltRange": [
+          0,
+          1
+        ],
+        "invertPan": false,
+        "invertTilt": false,
+        "reviewed": true
+      }
+    },
+    {
+      "id": "218",
+      "name": "Grid row 5 · 3",
+      "profile": "q120",
+      "universe": 5,
+      "address": 86,
+      "enabled": true,
+      "verified": true,
+      "position": [
+        0,
+        6.1,
+        2.8000000000000003
+      ],
+      "calibration": {
+        "home": [
+          0.5,
+          0.5
+        ],
+        "panRange": [
+          0,
+          1
+        ],
+        "tiltRange": [
+          0,
+          1
+        ],
+        "invertPan": false,
+        "invertTilt": false,
+        "reviewed": true
+      }
+    },
+    {
+      "id": "219",
+      "name": "Grid row 5 · 4",
+      "profile": "q120",
+      "universe": 5,
+      "address": 91,
+      "enabled": true,
+      "verified": true,
+      "position": [
+        3.5,
+        6.1,
+        2.8000000000000003
+      ],
+      "calibration": {
+        "home": [
+          0.5,
+          0.5
+        ],
+        "panRange": [
+          0,
+          1
+        ],
+        "tiltRange": [
+          0,
+          1
+        ],
+        "invertPan": false,
+        "invertTilt": false,
+        "reviewed": true
+      }
+    },
+    {
+      "id": "220",
+      "name": "Grid row 5 · 5",
+      "profile": "q120",
+      "universe": 5,
+      "address": 96,
+      "enabled": true,
+      "verified": true,
+      "position": [
+        7,
+        6.1,
+        2.8000000000000003
+      ],
+      "calibration": {
+        "home": [
+          0.5,
+          0.5
+        ],
+        "panRange": [
+          0,
+          1
+        ],
+        "tiltRange": [
+          0,
+          1
+        ],
+        "invertPan": false,
+        "invertTilt": false,
+        "reviewed": true
+      }
+    },
+    {
+      "id": "221",
+      "name": "Grid row 6 · 1",
+      "profile": "q120",
+      "universe": 5,
+      "address": 101,
+      "enabled": true,
+      "verified": true,
+      "position": [
+        -7,
+        6.1,
+        4.4
+      ],
+      "calibration": {
+        "home": [
+          0.5,
+          0.5
+        ],
+        "panRange": [
+          0,
+          1
+        ],
+        "tiltRange": [
+          0,
+          1
+        ],
+        "invertPan": false,
+        "invertTilt": false,
+        "reviewed": true
+      }
+    },
+    {
+      "id": "grid-pending-1",
+      "name": "Grid row 6 · 2 · patch unknown",
+      "profile": "unknown",
+      "universe": 0,
+      "address": 0,
+      "enabled": false,
+      "verified": false,
+      "position": [
+        0,
+        6.1,
+        4.4
+      ],
+      "calibration": {
+        "home": [
+          0.5,
+          0.5
+        ],
+        "panRange": [
+          0,
+          1
+        ],
+        "tiltRange": [
+          0,
+          1
+        ],
+        "invertPan": false,
+        "invertTilt": false,
+        "reviewed": false
+      }
+    },
+    {
+      "id": "grid-pending-2",
+      "name": "Grid row 6 · 3 · patch unknown",
+      "profile": "unknown",
+      "universe": 0,
+      "address": 0,
+      "enabled": false,
+      "verified": false,
+      "position": [
+        7,
+        6.1,
+        4.4
+      ],
+      "calibration": {
+        "home": [
+          0.5,
+          0.5
+        ],
+        "panRange": [
+          0,
+          1
+        ],
+        "tiltRange": [
+          0,
+          1
+        ],
+        "invertPan": false,
+        "invertTilt": false,
+        "reviewed": false
+      }
+    },
+    {
+      "id": "4101",
+      "name": "4101 · 7R Beam 230W · color slots pending",
+      "profile": "beam7r",
+      "universe": 3,
+      "address": 57,
+      "enabled": true,
+      "verified": true,
+      "position": [
+        6,
+        5,
+        -3.5
+      ],
+      "calibration": {
+        "home": [
+          0.5,
+          0.53
+        ],
+        "panRange": [
+          0,
+          1
+        ],
+        "tiltRange": [
+          0,
+          1
+        ],
+        "invertPan": false,
+        "invertTilt": false,
+        "reviewed": false,
+        "alignment": {
+          "actual": [
+            0.6666666666666666,
+            0.3254901960784314
+          ],
+          "virtual": [
+            169.5,
+            -47.11764705882353
+          ],
+          "panSign": -1,
+          "tiltSign": 1,
+          "name": "Stage alignment",
+          "savedAt": "2026-10-26T03:32:04.093Z"
+        }
+      },
+      "colorSlots": [
+        {
+          "name": "White",
+          "color": "#ffffff",
+          "value": 0
+        },
+        {
+          "name": "Red",
+          "color": "#ff0000",
+          "value": 11
+        },
+        {
+          "name": "Red + yellow",
+          "color": "#ff7800",
+          "value": 17
+        },
+        {
+          "name": "Yellow · 24",
+          "color": "#ffff00",
+          "value": 24
+        },
+        {
+          "name": "Blue",
+          "color": "#0040ff",
+          "value": 31
+        },
+        {
+          "name": "Blue + green",
+          "color": "#20a0b0",
+          "value": 35
+        },
+        {
+          "name": "Green",
+          "color": "#00ff40",
+          "value": 41
+        },
+        {
+          "name": "Green + purple",
+          "color": "#a070ac",
+          "value": 49
+        },
+        {
+          "name": "Pinkish purple",
+          "color": "#ed60c4",
+          "value": 55
+        },
+        {
+          "name": "Gold / deep orange",
+          "color": "#e87800",
+          "value": 60
+        },
+        {
+          "name": "Deep orange + very light blue",
+          "color": "#c0aaa0",
+          "value": 67
+        },
+        {
+          "name": "Very light blue / almost white",
+          "color": "#e4f7ff",
+          "value": 72
+        },
+        {
+          "name": "Light blue + amber yellow",
+          "color": "#b8d4ad",
+          "value": 78
+        },
+        {
+          "name": "Yellow · 82",
+          "color": "#ffe040",
+          "value": 82
+        },
+        {
+          "name": "Yellow + deep purple",
+          "color": "#a284a8",
+          "value": 85
+        },
+        {
+          "name": "Deep purple",
+          "color": "#6600bb",
+          "value": 91
+        },
+        {
+          "name": "Deep purple + yellowish green",
+          "color": "#a6a170",
+          "value": 97
+        },
+        {
+          "name": "Yellowish green",
+          "color": "#caff30",
+          "value": 101
+        },
+        {
+          "name": "Yellowish green + pink",
+          "color": "#dac78d",
+          "value": 109
+        },
+        {
+          "name": "Pink",
+          "color": "#ff80bd",
+          "value": 113
+        }
+      ]
+    },
+    {
+      "id": "4102",
+      "name": "4102 · 7R Beam 230W · color slots pending",
+      "profile": "beam7r",
+      "universe": 3,
+      "address": 78,
+      "enabled": true,
+      "verified": true,
+      "position": [
+        -3,
+        5,
+        -3.5
+      ],
+      "calibration": {
+        "home": [
+          0.5,
+          0.53
+        ],
+        "panRange": [
+          0,
+          1
+        ],
+        "tiltRange": [
+          0,
+          1
+        ],
+        "invertPan": false,
+        "invertTilt": false,
+        "reviewed": false,
+        "alignment": {
+          "actual": [
+            0.611764705882353,
+            0.3254901960784314
+          ],
+          "virtual": [
+            216,
+            -47.11764705882353
+          ],
+          "panSign": -1,
+          "tiltSign": 1,
+          "name": "Stage alignment",
+          "savedAt": "2026-10-26T03:30:42.285Z"
+        }
+      },
+      "colorSlots": [
+        {
+          "name": "White",
+          "color": "#ffffff",
+          "value": 0
+        },
+        {
+          "name": "Red",
+          "color": "#ff0000",
+          "value": 11
+        },
+        {
+          "name": "Red + yellow",
+          "color": "#ff7800",
+          "value": 17
+        },
+        {
+          "name": "Yellow · 24",
+          "color": "#ffff00",
+          "value": 24
+        },
+        {
+          "name": "Blue",
+          "color": "#0040ff",
+          "value": 31
+        },
+        {
+          "name": "Blue + green",
+          "color": "#20a0b0",
+          "value": 35
+        },
+        {
+          "name": "Green",
+          "color": "#00ff40",
+          "value": 41
+        },
+        {
+          "name": "Green + purple",
+          "color": "#a070ac",
+          "value": 49
+        },
+        {
+          "name": "Pinkish purple",
+          "color": "#ed60c4",
+          "value": 55
+        },
+        {
+          "name": "Gold / deep orange",
+          "color": "#e87800",
+          "value": 60
+        },
+        {
+          "name": "Deep orange + very light blue",
+          "color": "#c0aaa0",
+          "value": 67
+        },
+        {
+          "name": "Very light blue / almost white",
+          "color": "#e4f7ff",
+          "value": 72
+        },
+        {
+          "name": "Light blue + amber yellow",
+          "color": "#b8d4ad",
+          "value": 78
+        },
+        {
+          "name": "Yellow · 82",
+          "color": "#ffe040",
+          "value": 82
+        },
+        {
+          "name": "Yellow + deep purple",
+          "color": "#a284a8",
+          "value": 85
+        },
+        {
+          "name": "Deep purple",
+          "color": "#6600bb",
+          "value": 91
+        },
+        {
+          "name": "Deep purple + yellowish green",
+          "color": "#a6a170",
+          "value": 97
+        },
+        {
+          "name": "Yellowish green",
+          "color": "#caff30",
+          "value": 101
+        },
+        {
+          "name": "Yellowish green + pink",
+          "color": "#dac78d",
+          "value": 109
+        },
+        {
+          "name": "Pink",
+          "color": "#ff80bd",
+          "value": 113
+        }
+      ]
+    },
+    {
+      "id": "4103",
+      "name": "4103 · 7R Beam 230W · color slots pending",
+      "profile": "beam7r",
+      "universe": 3,
+      "address": 99,
+      "enabled": true,
+      "verified": true,
+      "position": [
+        3,
+        5,
+        -3.5
+      ],
+      "calibration": {
+        "home": [
+          0.5,
+          0.53
+        ],
+        "panRange": [
+          0,
+          1
+        ],
+        "tiltRange": [
+          0,
+          1
+        ],
+        "invertPan": false,
+        "invertTilt": false,
+        "reviewed": false,
+        "alignment": {
+          "actual": [
+            0.6627450980392157,
+            0.3254901960784314
+          ],
+          "virtual": [
+            168.38235294117646,
+            -47.11764705882353
+          ],
+          "panSign": -1,
+          "tiltSign": 1,
+          "name": "Stage alignment",
+          "savedAt": "2026-10-26T03:33:23.768Z"
+        }
+      },
+      "colorSlots": [
+        {
+          "name": "White",
+          "color": "#ffffff",
+          "value": 0
+        },
+        {
+          "name": "Red",
+          "color": "#ff0000",
+          "value": 11
+        },
+        {
+          "name": "Red + yellow",
+          "color": "#ff7800",
+          "value": 17
+        },
+        {
+          "name": "Yellow · 24",
+          "color": "#ffff00",
+          "value": 24
+        },
+        {
+          "name": "Blue",
+          "color": "#0040ff",
+          "value": 31
+        },
+        {
+          "name": "Blue + green",
+          "color": "#20a0b0",
+          "value": 35
+        },
+        {
+          "name": "Green",
+          "color": "#00ff40",
+          "value": 41
+        },
+        {
+          "name": "Green + purple",
+          "color": "#a070ac",
+          "value": 49
+        },
+        {
+          "name": "Pinkish purple",
+          "color": "#ed60c4",
+          "value": 55
+        },
+        {
+          "name": "Gold / deep orange",
+          "color": "#e87800",
+          "value": 60
+        },
+        {
+          "name": "Deep orange + very light blue",
+          "color": "#c0aaa0",
+          "value": 67
+        },
+        {
+          "name": "Very light blue / almost white",
+          "color": "#e4f7ff",
+          "value": 72
+        },
+        {
+          "name": "Light blue + amber yellow",
+          "color": "#b8d4ad",
+          "value": 78
+        },
+        {
+          "name": "Yellow · 82",
+          "color": "#ffe040",
+          "value": 82
+        },
+        {
+          "name": "Yellow + deep purple",
+          "color": "#a284a8",
+          "value": 85
+        },
+        {
+          "name": "Deep purple",
+          "color": "#6600bb",
+          "value": 91
+        },
+        {
+          "name": "Deep purple + yellowish green",
+          "color": "#a6a170",
+          "value": 97
+        },
+        {
+          "name": "Yellowish green",
+          "color": "#caff30",
+          "value": 101
+        },
+        {
+          "name": "Yellowish green + pink",
+          "color": "#dac78d",
+          "value": 109
+        },
+        {
+          "name": "Pink",
+          "color": "#ff80bd",
+          "value": 113
+        }
+      ]
+    },
+    {
+      "id": "4104",
+      "name": "4104 · 7R Beam 230W · color slots pending",
+      "profile": "beam7r",
+      "universe": 3,
+      "address": 120,
+      "enabled": true,
+      "verified": true,
+      "position": [
+        -6,
+        5,
+        -3.5
+      ],
+      "calibration": {
+        "home": [
+          0.5,
+          0.53
+        ],
+        "panRange": [
+          0,
+          1
+        ],
+        "tiltRange": [
+          0,
+          1
+        ],
+        "invertPan": false,
+        "invertTilt": false,
+        "reviewed": false,
+        "alignment": {
+          "actual": [
+            0.7843137254901961,
+            0.3254901960784314
+          ],
+          "virtual": [
+            124,
+            -47.11764705882353
+          ],
+          "panSign": -1,
+          "tiltSign": 1,
+          "name": "Stage alignment",
+          "savedAt": "2026-10-26T03:27:16.330Z"
+        }
+      },
+      "colorSlots": [
+        {
+          "name": "White",
+          "color": "#ffffff",
+          "value": 0
+        },
+        {
+          "name": "Red",
+          "color": "#ff0000",
+          "value": 11
+        },
+        {
+          "name": "Red + yellow",
+          "color": "#ff7800",
+          "value": 17
+        },
+        {
+          "name": "Yellow · 24",
+          "color": "#ffff00",
+          "value": 24
+        },
+        {
+          "name": "Blue",
+          "color": "#0040ff",
+          "value": 31
+        },
+        {
+          "name": "Blue + green",
+          "color": "#20a0b0",
+          "value": 35
+        },
+        {
+          "name": "Green",
+          "color": "#00ff40",
+          "value": 41
+        },
+        {
+          "name": "Green + purple",
+          "color": "#a070ac",
+          "value": 49
+        },
+        {
+          "name": "Pinkish purple",
+          "color": "#ed60c4",
+          "value": 55
+        },
+        {
+          "name": "Gold / deep orange",
+          "color": "#e87800",
+          "value": 60
+        },
+        {
+          "name": "Deep orange + very light blue",
+          "color": "#c0aaa0",
+          "value": 67
+        },
+        {
+          "name": "Very light blue / almost white",
+          "color": "#e4f7ff",
+          "value": 72
+        },
+        {
+          "name": "Light blue + amber yellow",
+          "color": "#b8d4ad",
+          "value": 78
+        },
+        {
+          "name": "Yellow · 82",
+          "color": "#ffe040",
+          "value": 82
+        },
+        {
+          "name": "Yellow + deep purple",
+          "color": "#a284a8",
+          "value": 85
+        },
+        {
+          "name": "Deep purple",
+          "color": "#6600bb",
+          "value": 91
+        },
+        {
+          "name": "Deep purple + yellowish green",
+          "color": "#a6a170",
+          "value": 97
+        },
+        {
+          "name": "Yellowish green",
+          "color": "#caff30",
+          "value": 101
+        },
+        {
+          "name": "Yellowish green + pink",
+          "color": "#dac78d",
+          "value": 109
+        },
+        {
+          "name": "Pink",
+          "color": "#ff80bd",
+          "value": 113
+        }
+      ]
+    },
+    {
+      "id": "3901",
+      "name": "3901 · 200W Beam · color slots pending",
+      "profile": "beam200",
+      "universe": 3,
+      "address": 162,
+      "enabled": true,
+      "verified": true,
+      "position": [
+        0,
+        5,
+        -3.5
+      ],
+      "calibration": {
+        "home": [
+          0.5,
+          0.53
+        ],
+        "panRange": [
+          0,
+          1
+        ],
+        "tiltRange": [
+          0,
+          1
+        ],
+        "invertPan": false,
+        "invertTilt": false,
+        "reviewed": false,
+        "alignment": {
+          "actual": [
+            0.49019607843137253,
+            0.7490196078431373
+          ],
+          "virtual": [
+            -1,
+            67.23529411764706
+          ],
+          "panSign": -1,
+          "tiltSign": 1,
+          "name": "Stage alignment",
+          "savedAt": "2026-10-26T03:31:06.084Z"
+        }
+      },
+      "colorSlots": [
+        {
+          "name": "PURPLE",
+          "color": "#ff40ff",
+          "value": 71,
+          "secondary": 0
+        },
+        {
+          "name": "White",
+          "color": "#ffffff",
+          "value": 0,
+          "secondary": 0
+        },
+        {
+          "name": "Red",
+          "color": "#ff0000",
+          "value": 8,
+          "secondary": 0
+        },
+        {
+          "name": "Red + yellow",
+          "color": "#ff7000",
+          "value": 13,
+          "secondary": 0
+        },
+        {
+          "name": "Yellow",
+          "color": "#ffff00",
+          "value": 16,
+          "secondary": 0
+        },
+        {
+          "name": "Yellow + red",
+          "color": "#ffaa00",
+          "value": 20,
+          "secondary": 0
+        },
+        {
+          "name": "Pink",
+          "color": "#ff65ad",
+          "value": 24,
+          "secondary": 0
+        },
+        {
+          "name": "Pink + purple · 30",
+          "color": "#dc50e8",
+          "value": 30,
+          "secondary": 0
+        },
+        {
+          "name": "Purple",
+          "color": "#9900ff",
+          "value": 34,
+          "secondary": 0
+        },
+        {
+          "name": "Green",
+          "color": "#00ff40",
+          "value": 41,
+          "secondary": 0
+        },
+        {
+          "name": "Green + red · 46",
+          "color": "#b29c20",
+          "value": 46,
+          "secondary": 0
+        },
+        {
+          "name": "Orange",
+          "color": "#ff8000",
+          "value": 50,
+          "secondary": 0
+        },
+        {
+          "name": "Orange + blue",
+          "color": "#b080a0",
+          "value": 54,
+          "secondary": 0
+        },
+        {
+          "name": "Light blue",
+          "color": "#70cfff",
+          "value": 58,
+          "secondary": 0
+        },
+        {
+          "name": "Pink + purple · 69",
+          "color": "#b850e8",
+          "value": 69,
+          "secondary": 0
+        },
+        {
+          "name": "Light orange",
+          "color": "#ffc080",
+          "value": 73,
+          "secondary": 0
+        },
+        {
+          "name": "Orange + green",
+          "color": "#b6bc30",
+          "value": 78,
+          "secondary": 0
+        },
+        {
+          "name": "Green + red · 84",
+          "color": "#9cb830",
+          "value": 84,
+          "secondary": 0
+        },
+        {
+          "name": "Whitish light blue",
+          "color": "#dcefff",
+          "value": 89,
+          "secondary": 0
+        },
+        {
+          "name": "Blue + light blue + red",
+          "color": "#a080cf",
+          "value": 95,
+          "secondary": 0
+        },
+        {
+          "name": "Pale yellow / amber",
+          "color": "#fff0ae",
+          "value": 99,
+          "secondary": 0
+        },
+        {
+          "name": "Amber + blue",
+          "color": "#b8b1b0",
+          "value": 101,
+          "secondary": 0
+        },
+        {
+          "name": "Deep blue",
+          "color": "#1035ff",
+          "value": 106,
+          "secondary": 0
+        },
+        {
+          "name": "Deep blue + amber",
+          "color": "#645fa0",
+          "value": 109,
+          "secondary": 0
+        },
+        {
+          "name": "Whitish amber",
+          "color": "#fff2d7",
+          "value": 112,
+          "secondary": 0
+        }
+      ]
+    }
+  ],
+  "groups": [
+    {
+      "id": "backlights",
+      "name": "Backlights",
+      "fixtures": [
+        "401",
+        "402",
+        "403",
+        "404",
+        "405",
+        "406",
+        "407",
+        "408"
+      ]
+    },
+    {
+      "id": "rogues",
+      "name": "Front beams",
+      "fixtures": [
+        "301",
+        "302",
+        "303",
+        "304",
+        "305",
+        "306"
+      ]
+    },
+    {
+      "id": "left",
+      "name": "Stage left",
+      "fixtures": [
+        "401",
+        "402",
+        "403",
+        "404",
+        "301",
+        "302",
+        "303"
+      ]
+    },
+    {
+      "id": "right",
+      "name": "Stage right",
+      "fixtures": [
+        "405",
+        "406",
+        "407",
+        "408",
+        "304",
+        "305",
+        "306"
+      ]
+    },
+    {
+      "id": "mh7s",
+      "name": "MH7s · provisional positions",
+      "fixtures": [
+        "705",
+        "707",
+        "708",
+        "706",
+        "3101",
+        "3102",
+        "3103",
+        "3104"
+      ]
+    },
+    {
+      "id": "audience",
+      "name": "Audience MH7s",
+      "fixtures": [
+        "3101",
+        "3102"
+      ]
+    },
+    {
+      "id": "grid",
+      "name": "Ceiling grid · 21 patched / 23 positions",
+      "fixtures": [
+        "201",
+        "202",
+        "203",
+        "204",
+        "205",
+        "206",
+        "207",
+        "208",
+        "209",
+        "210",
+        "211",
+        "212",
+        "213",
+        "214",
+        "215",
+        "216",
+        "217",
+        "218",
+        "219",
+        "220",
+        "221",
+        "grid-pending-1",
+        "grid-pending-2"
+      ]
+    },
+    {
+      "id": "grid-row-1",
+      "name": "Grid row 1 · back to front",
+      "fixtures": [
+        "201",
+        "202",
+        "203",
+        "204",
+        "205"
+      ]
+    },
+    {
+      "id": "grid-row-2",
+      "name": "Grid row 2 · back to front",
+      "fixtures": [
+        "206",
+        "207",
+        "208"
+      ]
+    },
+    {
+      "id": "grid-row-3",
+      "name": "Grid row 3 · back to front",
+      "fixtures": [
+        "209",
+        "210",
+        "211",
+        "212"
+      ]
+    },
+    {
+      "id": "grid-row-4",
+      "name": "Grid row 4 · back to front",
+      "fixtures": [
+        "213",
+        "214",
+        "215"
+      ]
+    },
+    {
+      "id": "grid-row-5",
+      "name": "Grid row 5 · back to front",
+      "fixtures": [
+        "216",
+        "217",
+        "218",
+        "219",
+        "220"
+      ]
+    },
+    {
+      "id": "grid-row-6",
+      "name": "Grid row 6 · back to front",
+      "fixtures": [
+        "221",
+        "grid-pending-1",
+        "grid-pending-2"
+      ]
+    },
+    {
+      "id": "dance-r3",
+      "name": "R3 dance · left to right",
+      "fixtures": [
+        "305",
+        "301",
+        "303",
+        "304",
+        "302",
+        "306"
+      ]
+    },
+    {
+      "id": "dance-mh7",
+      "name": "MH7 dance · left to right",
+      "fixtures": [
+        "3103",
+        "3102",
+        "705",
+        "707",
+        "708",
+        "706",
+        "3101",
+        "3104"
+      ]
+    },
+    {
+      "id": "rear-heads",
+      "name": "Rear heads",
+      "fixtures": [
+        "4104",
+        "4102",
+        "3901",
+        "4103",
+        "4101"
+      ]
+    },
+    {
+      "id": "rig-check-rogue",
+      "name": "Rig check · rogue",
+      "fixtures": [
+        "305",
+        "301",
+        "303",
+        "304",
+        "302",
+        "306"
+      ]
+    },
+    {
+      "id": "rig-check-mh7",
+      "name": "Rig check · mh7",
+      "fixtures": [
+        "3103",
+        "3102",
+        "705",
+        "707",
+        "708",
+        "706",
+        "3101",
+        "3104"
+      ]
+    },
+    {
+      "id": "rig-check-beam7r",
+      "name": "Rig check · beam7r",
+      "fixtures": [
+        "4104",
+        "4102",
+        "4103",
+        "4101"
+      ]
+    },
+    {
+      "id": "rig-check-beam200",
+      "name": "Rig check · beam200",
+      "fixtures": [
+        "3901"
+      ]
+    }
+  ],
+  "palettes": [
+    {
+      "id": "midnight",
+      "name": "Midnight",
+      "color": "#335dff"
+    },
+    {
+      "id": "orchid",
+      "name": "Orchid",
+      "color": "#d949f3"
+    },
+    {
+      "id": "gold",
+      "name": "Gold",
+      "color": "#ffb84a"
+    },
+    {
+      "id": "ice",
+      "name": "Ice",
+      "color": "#72e5ff"
+    },
+    {
+      "id": "palette-e7783a52-afc2-4247-ba5e-7d9ca128db30",
+      "name": "Red",
+      "color": "#ff2600"
+    },
+    {
+      "id": "white",
+      "name": "White",
+      "color": "#ffffff"
+    },
+    {
+      "id": "wheel-ffffff",
+      "name": "White",
+      "color": "#ffffff"
+    },
+    {
+      "id": "wheel-ff0000",
+      "name": "Red",
+      "color": "#ff0000"
+    },
+    {
+      "id": "wheel-ff7800",
+      "name": "Red + yellow",
+      "color": "#ff7800"
+    },
+    {
+      "id": "wheel-ffff00",
+      "name": "Yellow · 24",
+      "color": "#ffff00"
+    },
+    {
+      "id": "wheel-0040ff",
+      "name": "Blue",
+      "color": "#0040ff"
+    },
+    {
+      "id": "wheel-20a0b0",
+      "name": "Blue + green",
+      "color": "#20a0b0"
+    },
+    {
+      "id": "wheel-00ff40",
+      "name": "Green",
+      "color": "#00ff40"
+    },
+    {
+      "id": "wheel-a070ac",
+      "name": "Green + purple",
+      "color": "#a070ac"
+    },
+    {
+      "id": "wheel-ed60c4",
+      "name": "Pinkish purple",
+      "color": "#ed60c4"
+    },
+    {
+      "id": "wheel-e87800",
+      "name": "Gold / deep orange",
+      "color": "#e87800"
+    },
+    {
+      "id": "wheel-c0aaa0",
+      "name": "Deep orange + very light blue",
+      "color": "#c0aaa0"
+    },
+    {
+      "id": "wheel-e4f7ff",
+      "name": "Very light blue / almost white",
+      "color": "#e4f7ff"
+    },
+    {
+      "id": "wheel-b8d4ad",
+      "name": "Light blue + amber yellow",
+      "color": "#b8d4ad"
+    },
+    {
+      "id": "wheel-ffe040",
+      "name": "Yellow · 82",
+      "color": "#ffe040"
+    },
+    {
+      "id": "wheel-a284a8",
+      "name": "Yellow + deep purple",
+      "color": "#a284a8"
+    },
+    {
+      "id": "wheel-6600bb",
+      "name": "Deep purple",
+      "color": "#6600bb"
+    },
+    {
+      "id": "wheel-a6a170",
+      "name": "Deep purple + yellowish green",
+      "color": "#a6a170"
+    },
+    {
+      "id": "wheel-caff30",
+      "name": "Yellowish green",
+      "color": "#caff30"
+    },
+    {
+      "id": "wheel-dac78d",
+      "name": "Yellowish green + pink",
+      "color": "#dac78d"
+    },
+    {
+      "id": "wheel-ff80bd",
+      "name": "Pink",
+      "color": "#ff80bd"
+    }
+  ],
+  "points": [
+    {
+      "id": "point-d0a6dbb3",
+      "name": "Study A (preview)",
+      "positions": {
+        "301": {
+          "pan": 0.4977585804898333,
+          "tilt": 0.5765946821052799
+        }
+      }
+    },
+    {
+      "id": "tidal-dance-center",
+      "name": "Tidal dance · calibrated centers",
+      "positions": {
+        "301": {
+          "pan": 0.3672113289760348,
+          "tilt": 0.16666666666666669
+        },
+        "302": {
+          "pan": 0.5,
+          "tilt": 0.8333333333333333
+        },
+        "303": {
+          "pan": 0.6867102396514161,
+          "tilt": 0.8333333333333333
+        },
+        "304": {
+          "pan": 0.6425925925925926,
+          "tilt": 0.8333333333333334
+        },
+        "305": {
+          "pan": 0.37745098039215685,
+          "tilt": 0.16666666666666669
+        },
+        "306": {
+          "pan": 0.633115468409586,
+          "tilt": 0.8333333333333334
+        },
+        "705": {
+          "pan": 0.18927015250544663,
+          "tilt": 0.74
+        },
+        "706": {
+          "pan": 0.14384531590413943,
+          "tilt": 0.7845490196078432
+        },
+        "707": {
+          "pan": 0.16666666666666669,
+          "tilt": 0.25999999999999995
+        },
+        "708": {
+          "pan": 0.20408496732026143,
+          "tilt": 0.8079999999999999
+        },
+        "3101": {
+          "pan": 0.5,
+          "tilt": 0.98
+        },
+        "3102": {
+          "pan": 0.5,
+          "tilt": 0.98
+        },
+        "3103": {
+          "pan": 0.5,
+          "tilt": 0.74
+        },
+        "3104": {
+          "pan": 0.5,
+          "tilt": 0.74
+        }
+      }
+    },
+    {
+      "id": "rig-check-a",
+      "name": "Rig check · fan A",
+      "positions": {
+        "301": {
+          "pan": 0.3592113289760348,
+          "tilt": 0.1726666666666667
+        },
+        "302": {
+          "pan": 0.508,
+          "tilt": 0.8393333333333333
+        },
+        "303": {
+          "pan": 0.6787102396514161,
+          "tilt": 0.8393333333333333
+        },
+        "304": {
+          "pan": 0.6505925925925926,
+          "tilt": 0.8393333333333334
+        },
+        "305": {
+          "pan": 0.36945098039215685,
+          "tilt": 0.1726666666666667
+        },
+        "306": {
+          "pan": 0.641115468409586,
+          "tilt": 0.8393333333333334
+        },
+        "705": {
+          "pan": 0.18127015250544662,
+          "tilt": 0.746
+        },
+        "706": {
+          "pan": 0.15184531590413944,
+          "tilt": 0.7905490196078432
+        },
+        "707": {
+          "pan": 0.15866666666666668,
+          "tilt": 0.26599999999999996
+        },
+        "708": {
+          "pan": 0.21208496732026144,
+          "tilt": 0.814
+        },
+        "3101": {
+          "pan": 0.508,
+          "tilt": 0.986
+        },
+        "3102": {
+          "pan": 0.492,
+          "tilt": 0.986
+        },
+        "3103": {
+          "pan": 0.492,
+          "tilt": 0.746
+        },
+        "3104": {
+          "pan": 0.508,
+          "tilt": 0.746
+        },
+        "3901": {
+          "pan": 0.49819607843137254,
+          "tilt": 0.7550196078431373
+        },
+        "4101": {
+          "pan": 0.6981960784313725,
+          "tilt": 0.3314901960784314
+        },
+        "4102": {
+          "pan": 0.6821960784313725,
+          "tilt": 0.3314901960784314
+        },
+        "4103": {
+          "pan": 0.6746666666666666,
+          "tilt": 0.3314901960784314
+        },
+        "4104": {
+          "pan": 0.6665098039215687,
+          "tilt": 0.3314901960784314
+        }
+      }
+    },
+    {
+      "id": "rig-check-b",
+      "name": "Rig check · fan B",
+      "positions": {
+        "301": {
+          "pan": 0.3732113289760348,
+          "tilt": 0.1826666666666667
+        },
+        "302": {
+          "pan": 0.494,
+          "tilt": 0.8493333333333333
+        },
+        "303": {
+          "pan": 0.6927102396514161,
+          "tilt": 0.8493333333333333
+        },
+        "304": {
+          "pan": 0.6365925925925926,
+          "tilt": 0.8493333333333334
+        },
+        "305": {
+          "pan": 0.38345098039215686,
+          "tilt": 0.1826666666666667
+        },
+        "306": {
+          "pan": 0.627115468409586,
+          "tilt": 0.8493333333333334
+        },
+        "705": {
+          "pan": 0.19527015250544663,
+          "tilt": 0.756
+        },
+        "706": {
+          "pan": 0.13784531590413943,
+          "tilt": 0.8005490196078432
+        },
+        "707": {
+          "pan": 0.1726666666666667,
+          "tilt": 0.27599999999999997
+        },
+        "708": {
+          "pan": 0.19808496732026143,
+          "tilt": 0.824
+        },
+        "3101": {
+          "pan": 0.494,
+          "tilt": 0.996
+        },
+        "3102": {
+          "pan": 0.506,
+          "tilt": 0.996
+        },
+        "3103": {
+          "pan": 0.506,
+          "tilt": 0.756
+        },
+        "3104": {
+          "pan": 0.494,
+          "tilt": 0.756
+        },
+        "3901": {
+          "pan": 0.4841960784313725,
+          "tilt": 0.7650196078431373
+        },
+        "4101": {
+          "pan": 0.6841960784313725,
+          "tilt": 0.3414901960784314
+        },
+        "4102": {
+          "pan": 0.6961960784313725,
+          "tilt": 0.3414901960784314
+        },
+        "4103": {
+          "pan": 0.6606666666666666,
+          "tilt": 0.3414901960784314
+        },
+        "4104": {
+          "pan": 0.6805098039215687,
+          "tilt": 0.3414901960784314
+        }
+      }
+    }
+  ],
+  "effects": [
+    {
+      "id": "ocean-comet",
+      "name": "Ocean comet",
+      "group": "backlights",
+      "effect": "chase",
+      "params": {
+        "color": "#58ceff",
+        "secondary": "#6946e8",
+        "speed": 1,
+        "brightness": 0.85,
+        "width": 0.25
+      }
+    },
+    {
+      "id": "scattered-grid-wave",
+      "name": "Scattered grid wave",
+      "group": "grid",
+      "effect": "strobe",
+      "params": {
+        "color": "#21d9ff",
+        "secondary": "#a85cff",
+        "frequency": 2.5,
+        "duty": 0.38,
+        "travelSpeed": 0.12,
+        "strobePattern": "scatter",
+        "spatialAxis": "z",
+        "width": 0.4,
+        "brightness": 0.68
+      }
+    }
+  ],
+  "cues": [
+    {
+      "id": "first-light",
+      "name": "First light",
+      "description": "A quiet blue wash with a gentle beam fan.",
+      "duration": 20,
+      "loop": true,
+      "tracks": [
+        {
+          "group": "backlights",
+          "effect": "wave",
+          "start": 0,
+          "duration": 20,
+          "params": {
+            "color": "#4285ff",
+            "secondary": "#aa5cf5",
+            "brightness": 0.5,
+            "speed": 0.35
+          },
+          "fadeIn": 1,
+          "fadeOut": 1
+        },
+        {
+          "group": "rogues",
+          "effect": "sweep",
+          "start": 0,
+          "duration": 20,
+          "params": {
+            "color": "#73dcff",
+            "brightness": 0.32,
+            "speed": 0.3,
+            "panAmplitude": 0.025,
+            "tiltAmplitude": 0.01
+          },
+          "fadeIn": 1,
+          "fadeOut": 1
+        }
+      ]
+    },
+    {
+      "id": "prism-dance",
+      "name": "Prism dance",
+      "description": "Six beams answer eight washes. A one-minute choreography.",
+      "duration": 60,
+      "loop": false,
+      "tracks": [
+        {
+          "group": "backlights",
+          "effect": "chase",
+          "start": 0,
+          "duration": 10,
+          "params": {
+            "color": "#52d3ff",
+            "secondary": "#6833e8",
+            "brightness": 0.85,
+            "speed": 1.2,
+            "width": 0.25
+          },
+          "fadeIn": 1,
+          "fadeOut": 1
+        },
+        {
+          "group": "rogues",
+          "effect": "sweep",
+          "start": 0,
+          "duration": 10,
+          "params": {
+            "color": "#53d5ff",
+            "brightness": 0.55,
+            "speed": 0.4,
+            "panAmplitude": 0.025,
+            "tiltAmplitude": 0.01
+          },
+          "fadeIn": 1,
+          "fadeOut": 1
+        },
+        {
+          "group": "backlights",
+          "effect": "wave",
+          "start": 10,
+          "duration": 10,
+          "params": {
+            "color": "#24dbd9",
+            "secondary": "#ee4ace",
+            "brightness": 0.8,
+            "speed": 1
+          },
+          "fadeIn": 1,
+          "fadeOut": 1
+        },
+        {
+          "group": "rogues",
+          "effect": "orbit",
+          "start": 10,
+          "duration": 10,
+          "params": {
+            "color": "#de40ef",
+            "brightness": 0.6,
+            "speed": 0.45,
+            "panAmplitude": 0.03,
+            "tiltAmplitude": 0.018,
+            "prism": 1
+          },
+          "fadeIn": 1,
+          "fadeOut": 1
+        },
+        {
+          "group": "backlights",
+          "effect": "pulse",
+          "start": 20,
+          "duration": 10,
+          "params": {
+            "color": "#ffb84a",
+            "secondary": "#326dff",
+            "brightness": 0.85,
+            "speed": 0.8
+          },
+          "fadeIn": 1,
+          "fadeOut": 1
+        },
+        {
+          "group": "rogues",
+          "effect": "sweep",
+          "start": 20,
+          "duration": 10,
+          "params": {
+            "color": "#ffb84a",
+            "brightness": 0.55,
+            "speed": 0.55,
+            "panAmplitude": 0.035,
+            "tiltAmplitude": 0.015,
+            "prism": 2,
+            "gobo": 2
+          },
+          "fadeIn": 1,
+          "fadeOut": 1
+        },
+        {
+          "group": "backlights",
+          "effect": "mirror",
+          "start": 30,
+          "duration": 10,
+          "params": {
+            "color": "#dd54f1",
+            "secondary": "#4a5cf5",
+            "brightness": 0.9,
+            "speed": 0.8
+          },
+          "fadeIn": 1,
+          "fadeOut": 1
+        },
+        {
+          "group": "rogues",
+          "effect": "sweep",
+          "start": 30,
+          "duration": 10,
+          "params": {
+            "color": "#b75aff",
+            "brightness": 0.65,
+            "speed": 0.4,
+            "panAmplitude": 0.035,
+            "tiltAmplitude": 0.02,
+            "prism": 1
+          },
+          "fadeIn": 1,
+          "fadeOut": 1
+        },
+        {
+          "group": "backlights",
+          "effect": "rainbow",
+          "start": 40,
+          "duration": 10,
+          "params": {
+            "brightness": 0.8,
+            "speed": 1.1
+          },
+          "fadeIn": 1,
+          "fadeOut": 1
+        },
+        {
+          "group": "rogues",
+          "effect": "orbit",
+          "start": 40,
+          "duration": 10,
+          "params": {
+            "color": "#5bdcff",
+            "brightness": 0.7,
+            "speed": 0.6,
+            "panAmplitude": 0.03,
+            "tiltAmplitude": 0.018,
+            "prism": 2
+          },
+          "fadeIn": 1,
+          "fadeOut": 1
+        },
+        {
+          "group": "backlights",
+          "effect": "wave",
+          "start": 50,
+          "duration": 7,
+          "params": {
+            "color": "#dee9ff",
+            "secondary": "#5864ff",
+            "brightness": 1,
+            "speed": 1.2
+          },
+          "fadeIn": 1,
+          "fadeOut": 1
+        },
+        {
+          "group": "rogues",
+          "effect": "sweep",
+          "start": 50,
+          "duration": 7,
+          "params": {
+            "color": "#ffffff",
+            "brightness": 0.75,
+            "speed": 0.45,
+            "panAmplitude": 0.025,
+            "tiltAmplitude": 0.01,
+            "prism": 1,
+            "frost": 0.08
+          },
+          "fadeIn": 1,
+          "fadeOut": 1
+        },
+        {
+          "group": "backlights",
+          "effect": "static",
+          "start": 57,
+          "duration": 3,
+          "params": {
+            "color": "#ffe2ba",
+            "brightness": 0.8
+          },
+          "fadeIn": 0.3,
+          "fadeOut": 2.5
+        },
+        {
+          "group": "rogues",
+          "effect": "static",
+          "start": 57,
+          "duration": 3,
+          "params": {
+            "color": "#fff0d7",
+            "brightness": 0.65
+          },
+          "fadeIn": 0.3,
+          "fadeOut": 2.5
+        }
+      ]
+    },
+    {
+      "id": "afterglow",
+      "name": "Afterglow",
+      "description": "A slow gold and lavender breathing look.",
+      "duration": 30,
+      "loop": true,
+      "tracks": [
+        {
+          "group": "backlights",
+          "effect": "wave",
+          "start": 0,
+          "duration": 30,
+          "params": {
+            "color": "#f1b65b",
+            "secondary": "#9f72e8",
+            "brightness": 0.45,
+            "speed": 0.25
+          },
+          "fadeIn": 1,
+          "fadeOut": 1
+        },
+        {
+          "group": "rogues",
+          "effect": "static",
+          "start": 0,
+          "duration": 30,
+          "params": {
+            "color": "#ffb54a",
+            "brightness": 0.22,
+            "prism": 1,
+            "frost": 0.3
+          },
+          "fadeIn": 1,
+          "fadeOut": 1
+        }
+      ]
+    },
+    {
+      "id": "agent-aurora",
+      "name": "Agent · Aurora",
+      "description": "Created and played through the MCP adapter.",
+      "duration": 24,
+      "loop": false,
+      "tracks": [
+        {
+          "group": "backlights",
+          "effect": "wave",
+          "start": 0,
+          "duration": 24,
+          "params": {
+            "color": "#43d7db",
+            "secondary": "#bc6aff",
+            "brightness": 0.75,
+            "speed": 0.55
+          },
+          "fadeIn": 2,
+          "fadeOut": 3
+        },
+        {
+          "group": "rogues",
+          "effect": "sweep",
+          "start": 0,
+          "duration": 24,
+          "params": {
+            "color": "#88ccff",
+            "brightness": 0.6,
+            "speed": 0.4,
+            "panAmplitude": 0.03,
+            "tiltAmplitude": 0.015,
+            "prism": 1
+          },
+          "fadeIn": 2,
+          "fadeOut": 3
+        }
+      ]
+    },
+    {
+      "id": "moonlit-garden",
+      "name": "Moonlit Garden",
+      "description": "Peach ceiling washes, rose/lavender backlights and complementary patterned prism blooms. Uses verified MH7 beam mode and current calibrated positions.",
+      "duration": 120,
+      "loop": true,
+      "tracks": [],
+      "look": [
+        {
+          "id": "401",
+          "values": {
+            "intensity": 0.57,
+            "color": "#9c4dff",
+            "white": 0.025,
+            "movementSpeed": 1,
+            "pan": 0.5,
+            "tilt": 0.53,
+            "opticalMode": "spot",
+            "zoom": 0.8,
+            "gobo": 0,
+            "prism": 0,
+            "prismRotation": 0,
+            "frost": 0,
+            "focus": 0.5
+          }
+        },
+        {
+          "id": "402",
+          "values": {
+            "intensity": 0.57,
+            "color": "#e06fc7",
+            "white": 0.025,
+            "movementSpeed": 1,
+            "pan": 0.5,
+            "tilt": 0.53,
+            "opticalMode": "spot",
+            "zoom": 0.8,
+            "gobo": 0,
+            "prism": 0,
+            "prismRotation": 0,
+            "frost": 0,
+            "focus": 0.5
+          }
+        },
+        {
+          "id": "403",
+          "values": {
+            "intensity": 0.57,
+            "color": "#fc9acb",
+            "white": 0.025,
+            "movementSpeed": 1,
+            "pan": 0.5,
+            "tilt": 0.53,
+            "opticalMode": "spot",
+            "zoom": 0.8,
+            "gobo": 0,
+            "prism": 0,
+            "prismRotation": 0,
+            "frost": 0,
+            "focus": 0.5
+          }
+        },
+        {
+          "id": "404",
+          "values": {
+            "intensity": 0.57,
+            "color": "#d47cff",
+            "white": 0.025,
+            "movementSpeed": 1,
+            "pan": 0.5,
+            "tilt": 0.53,
+            "opticalMode": "spot",
+            "zoom": 0.8,
+            "gobo": 0,
+            "prism": 0,
+            "prismRotation": 0,
+            "frost": 0,
+            "focus": 0.5
+          }
+        },
+        {
+          "id": "405",
+          "values": {
+            "intensity": 0.57,
+            "color": "#d47cff",
+            "white": 0.025,
+            "movementSpeed": 1,
+            "pan": 0.5,
+            "tilt": 0.53,
+            "opticalMode": "spot",
+            "zoom": 0.8,
+            "gobo": 0,
+            "prism": 0,
+            "prismRotation": 0,
+            "frost": 0,
+            "focus": 0.5
+          }
+        },
+        {
+          "id": "406",
+          "values": {
+            "intensity": 0.57,
+            "color": "#fc9acb",
+            "white": 0.025,
+            "movementSpeed": 1,
+            "pan": 0.5,
+            "tilt": 0.53,
+            "opticalMode": "spot",
+            "zoom": 0.8,
+            "gobo": 0,
+            "prism": 0,
+            "prismRotation": 0,
+            "frost": 0,
+            "focus": 0.5
+          }
+        },
+        {
+          "id": "407",
+          "values": {
+            "intensity": 0.57,
+            "color": "#e06fc7",
+            "white": 0.025,
+            "movementSpeed": 1,
+            "pan": 0.5,
+            "tilt": 0.53,
+            "opticalMode": "spot",
+            "zoom": 0.8,
+            "gobo": 0,
+            "prism": 0,
+            "prismRotation": 0,
+            "frost": 0,
+            "focus": 0.5
+          }
+        },
+        {
+          "id": "408",
+          "values": {
+            "intensity": 0.57,
+            "color": "#9c4dff",
+            "white": 0.025,
+            "movementSpeed": 1,
+            "pan": 0.5,
+            "tilt": 0.53,
+            "opticalMode": "spot",
+            "zoom": 0.8,
+            "gobo": 0,
+            "prism": 0,
+            "prismRotation": 0,
+            "frost": 0,
+            "focus": 0.5
+          }
+        },
+        {
+          "id": "301",
+          "values": {
+            "intensity": 0.68,
+            "color": "#bb88ff",
+            "white": 0,
+            "movementSpeed": 1,
+            "pan": 0.3672113289760348,
+            "tilt": 0.16666666666666669,
+            "opticalMode": "spot",
+            "zoom": 0.5,
+            "gobo": 6,
+            "prism": 1,
+            "prismRotation": -0.1,
+            "frost": 0,
+            "focus": 0.5
+          }
+        },
+        {
+          "id": "302",
+          "values": {
+            "intensity": 0.68,
+            "color": "#ff88bb",
+            "white": 0,
+            "movementSpeed": 1,
+            "pan": 0.5,
+            "tilt": 0.8333333333333333,
+            "opticalMode": "spot",
+            "zoom": 0.5,
+            "gobo": 4,
+            "prism": 1,
+            "prismRotation": -0.1,
+            "frost": 0,
+            "focus": 0.5
+          }
+        },
+        {
+          "id": "303",
+          "values": {
+            "intensity": 0.68,
+            "color": "#ffff99",
+            "white": 0,
+            "movementSpeed": 1,
+            "pan": 0.6867102396514161,
+            "tilt": 0.8333333333333333,
+            "opticalMode": "spot",
+            "zoom": 0.5,
+            "gobo": 6,
+            "prism": 1,
+            "prismRotation": -0.1,
+            "frost": 0,
+            "focus": 0.5
+          }
+        },
+        {
+          "id": "304",
+          "values": {
+            "intensity": 0.68,
+            "color": "#ffff99",
+            "white": 0,
+            "movementSpeed": 1,
+            "pan": 0.6425925925925926,
+            "tilt": 0.8333333333333334,
+            "opticalMode": "spot",
+            "zoom": 0.5,
+            "gobo": 4,
+            "prism": 1,
+            "prismRotation": -0.1,
+            "frost": 0,
+            "focus": 0.5
+          }
+        },
+        {
+          "id": "305",
+          "values": {
+            "intensity": 0.68,
+            "color": "#ff88bb",
+            "white": 0,
+            "movementSpeed": 1,
+            "pan": 0.37745098039215685,
+            "tilt": 0.16666666666666669,
+            "opticalMode": "spot",
+            "zoom": 0.5,
+            "gobo": 6,
+            "prism": 1,
+            "prismRotation": -0.1,
+            "frost": 0,
+            "focus": 0.5
+          }
+        },
+        {
+          "id": "306",
+          "values": {
+            "intensity": 0.68,
+            "color": "#bb88ff",
+            "white": 0,
+            "movementSpeed": 1,
+            "pan": 0.633115468409586,
+            "tilt": 0.8333333333333334,
+            "opticalMode": "spot",
+            "zoom": 0.5,
+            "gobo": 4,
+            "prism": 1,
+            "prismRotation": -0.1,
+            "frost": 0,
+            "focus": 0.5
+          }
+        },
+        {
+          "id": "705",
+          "values": {
+            "intensity": 0.78,
+            "color": "#ff88bb",
+            "white": 0,
+            "movementSpeed": 1,
+            "pan": 0.18927015250544663,
+            "tilt": 0.74,
+            "opticalMode": "beam",
+            "zoom": 0.85,
+            "gobo": 3,
+            "prism": 1,
+            "prismRotation": 0.12,
+            "frost": 0,
+            "focus": 0.5
+          }
+        },
+        {
+          "id": "706",
+          "values": {
+            "intensity": 0.78,
+            "color": "#ff88bb",
+            "white": 0,
+            "movementSpeed": 1,
+            "pan": 0.14384531590413943,
+            "tilt": 0.7845490196078432,
+            "opticalMode": "beam",
+            "zoom": 0.85,
+            "gobo": 5,
+            "prism": 1,
+            "prismRotation": 0.12,
+            "frost": 0,
+            "focus": 0.5
+          }
+        },
+        {
+          "id": "707",
+          "values": {
+            "intensity": 0.78,
+            "color": "#b0d2ff",
+            "white": 0,
+            "movementSpeed": 1,
+            "pan": 0.16666666666666669,
+            "tilt": 0.25999999999999995,
+            "opticalMode": "beam",
+            "zoom": 0.85,
+            "gobo": 5,
+            "prism": 1,
+            "prismRotation": 0.12,
+            "frost": 0,
+            "focus": 0.5
+          }
+        },
+        {
+          "id": "708",
+          "values": {
+            "intensity": 0.78,
+            "color": "#ffcf99",
+            "white": 0,
+            "movementSpeed": 1,
+            "pan": 0.20408496732026143,
+            "tilt": 0.8079999999999999,
+            "opticalMode": "beam",
+            "zoom": 0.85,
+            "gobo": 3,
+            "prism": 1,
+            "prismRotation": 0.12,
+            "frost": 0,
+            "focus": 0.5
+          }
+        },
+        {
+          "id": "3101",
+          "values": {
+            "intensity": 0.78,
+            "color": "#ff88bb",
+            "white": 0,
+            "movementSpeed": 1,
+            "pan": 0.5,
+            "tilt": 0.98,
+            "opticalMode": "beam",
+            "zoom": 0.85,
+            "gobo": 3,
+            "prism": 1,
+            "prismRotation": 0.12,
+            "frost": 0,
+            "focus": 0.5
+          }
+        },
+        {
+          "id": "3102",
+          "values": {
+            "intensity": 0.78,
+            "color": "#b0d2ff",
+            "white": 0,
+            "movementSpeed": 1,
+            "pan": 0.5,
+            "tilt": 0.98,
+            "opticalMode": "beam",
+            "zoom": 0.85,
+            "gobo": 5,
+            "prism": 1,
+            "prismRotation": 0.12,
+            "frost": 0,
+            "focus": 0.5
+          }
+        },
+        {
+          "id": "3103",
+          "values": {
+            "intensity": 0.78,
+            "color": "#b0d2ff",
+            "white": 0,
+            "movementSpeed": 1,
+            "pan": 0.5,
+            "tilt": 0.74,
+            "opticalMode": "beam",
+            "zoom": 0.85,
+            "gobo": 3,
+            "prism": 1,
+            "prismRotation": 0.12,
+            "frost": 0,
+            "focus": 0.5
+          }
+        },
+        {
+          "id": "3104",
+          "values": {
+            "intensity": 0.78,
+            "color": "#ffcf99",
+            "white": 0,
+            "movementSpeed": 1,
+            "pan": 0.5,
+            "tilt": 0.74,
+            "opticalMode": "beam",
+            "zoom": 0.85,
+            "gobo": 5,
+            "prism": 1,
+            "prismRotation": 0.12,
+            "frost": 0,
+            "focus": 0.5
+          }
+        },
+        {
+          "id": "201",
+          "values": {
+            "intensity": 0.29,
+            "color": "#ffb487",
+            "white": 0.07,
+            "movementSpeed": 1,
+            "pan": 0.5,
+            "tilt": 0.5,
+            "opticalMode": "spot",
+            "zoom": 0.5,
+            "gobo": 0,
+            "prism": 0,
+            "prismRotation": 0,
+            "frost": 0,
+            "focus": 0.5
+          }
+        },
+        {
+          "id": "202",
+          "values": {
+            "intensity": 0.3009504125528161,
+            "color": "#ffb88a",
+            "white": 0.07,
+            "movementSpeed": 1,
+            "pan": 0.5,
+            "tilt": 0.5,
+            "opticalMode": "spot",
+            "zoom": 0.5,
+            "gobo": 0,
+            "prism": 0,
+            "prismRotation": 0,
+            "frost": 0,
+            "focus": 0.5
+          }
+        },
+        {
+          "id": "203",
+          "values": {
+            "intensity": 0.3116311896062463,
+            "color": "#ffbc8d",
+            "white": 0.07,
+            "movementSpeed": 1,
+            "pan": 0.5,
+            "tilt": 0.5,
+            "opticalMode": "spot",
+            "zoom": 0.5,
+            "gobo": 0,
+            "prism": 0,
+            "prismRotation": 0,
+            "frost": 0,
+            "focus": 0.5
+          }
+        },
+        {
+          "id": "204",
+          "values": {
+            "intensity": 0.32177933498176825,
+            "color": "#ffbf8f",
+            "white": 0.07,
+            "movementSpeed": 1,
+            "pan": 0.5,
+            "tilt": 0.5,
+            "opticalMode": "spot",
+            "zoom": 0.5,
+            "gobo": 0,
+            "prism": 0,
+            "prismRotation": 0,
+            "frost": 0,
+            "focus": 0.5
+          }
+        },
+        {
+          "id": "205",
+          "values": {
+            "intensity": 0.3311449676604731,
+            "color": "#ffc392",
+            "white": 0.07,
+            "movementSpeed": 1,
+            "pan": 0.5,
+            "tilt": 0.5,
+            "opticalMode": "spot",
+            "zoom": 0.5,
+            "gobo": 0,
+            "prism": 0,
+            "prismRotation": 0,
+            "frost": 0,
+            "focus": 0.5
+          }
+        },
+        {
+          "id": "206",
+          "values": {
+            "intensity": 0.3394974746830583,
+            "color": "#ffc695",
+            "white": 0.07,
+            "movementSpeed": 1,
+            "pan": 0.5,
+            "tilt": 0.5,
+            "opticalMode": "spot",
+            "zoom": 0.5,
+            "gobo": 0,
+            "prism": 0,
+            "prismRotation": 0,
+            "frost": 0,
+            "focus": 0.5
+          }
+        },
+        {
+          "id": "207",
+          "values": {
+            "intensity": 0.3466311896062463,
+            "color": "#ffc898",
+            "white": 0.07,
+            "movementSpeed": 1,
+            "pan": 0.5,
+            "tilt": 0.5,
+            "opticalMode": "spot",
+            "zoom": 0.5,
+            "gobo": 0,
+            "prism": 0,
+            "prismRotation": 0,
+            "frost": 0,
+            "focus": 0.5
+          }
+        },
+        {
+          "id": "208",
+          "values": {
+            "intensity": 0.35237045669318573,
+            "color": "#ffca9a",
+            "white": 0.07,
+            "movementSpeed": 1,
+            "pan": 0.5,
+            "tilt": 0.5,
+            "opticalMode": "spot",
+            "zoom": 0.5,
+            "gobo": 0,
+            "prism": 0,
+            "prismRotation": 0,
+            "frost": 0,
+            "focus": 0.5
+          }
+        },
+        {
+          "id": "209",
+          "values": {
+            "intensity": 0.35657395614066073,
+            "color": "#ffcc9d",
+            "white": 0.07,
+            "movementSpeed": 1,
+            "pan": 0.5,
+            "tilt": 0.5,
+            "opticalMode": "spot",
+            "zoom": 0.5,
+            "gobo": 0,
+            "prism": 0,
+            "prismRotation": 0,
+            "frost": 0,
+            "focus": 0.5
+          }
+        },
+        {
+          "id": "210",
+          "values": {
+            "intensity": 0.35913818384165963,
+            "color": "#ffcda0",
+            "white": 0.07,
+            "movementSpeed": 1,
+            "pan": 0.5,
+            "tilt": 0.5,
+            "opticalMode": "spot",
+            "zoom": 0.5,
+            "gobo": 0,
+            "prism": 0,
+            "prismRotation": 0,
+            "frost": 0,
+            "focus": 0.5
+          }
+        },
+        {
+          "id": "211",
+          "values": {
+            "intensity": 0.36,
+            "color": "#ffcda3",
+            "white": 0.07,
+            "movementSpeed": 1,
+            "pan": 0.5,
+            "tilt": 0.5,
+            "opticalMode": "spot",
+            "zoom": 0.5,
+            "gobo": 0,
+            "prism": 0,
+            "prismRotation": 0,
+            "frost": 0,
+            "focus": 0.5
+          }
+        },
+        {
+          "id": "212",
+          "values": {
+            "intensity": 0.35913818384165963,
+            "color": "#ffcda5",
+            "white": 0.07,
+            "movementSpeed": 1,
+            "pan": 0.5,
+            "tilt": 0.5,
+            "opticalMode": "spot",
+            "zoom": 0.5,
+            "gobo": 0,
+            "prism": 0,
+            "prismRotation": 0,
+            "frost": 0,
+            "focus": 0.5
+          }
+        },
+        {
+          "id": "213",
+          "values": {
+            "intensity": 0.35657395614066073,
+            "color": "#ffcca8",
+            "white": 0.07,
+            "movementSpeed": 1,
+            "pan": 0.5,
+            "tilt": 0.5,
+            "opticalMode": "spot",
+            "zoom": 0.5,
+            "gobo": 0,
+            "prism": 0,
+            "prismRotation": 0,
+            "frost": 0,
+            "focus": 0.5
+          }
+        },
+        {
+          "id": "214",
+          "values": {
+            "intensity": 0.35237045669318573,
+            "color": "#ffcaab",
+            "white": 0.07,
+            "movementSpeed": 1,
+            "pan": 0.5,
+            "tilt": 0.5,
+            "opticalMode": "spot",
+            "zoom": 0.5,
+            "gobo": 0,
+            "prism": 0,
+            "prismRotation": 0,
+            "frost": 0,
+            "focus": 0.5
+          }
+        },
+        {
+          "id": "215",
+          "values": {
+            "intensity": 0.3466311896062463,
+            "color": "#ffc8ae",
+            "white": 0.07,
+            "movementSpeed": 1,
+            "pan": 0.5,
+            "tilt": 0.5,
+            "opticalMode": "spot",
+            "zoom": 0.5,
+            "gobo": 0,
+            "prism": 0,
+            "prismRotation": 0,
+            "frost": 0,
+            "focus": 0.5
+          }
+        },
+        {
+          "id": "216",
+          "values": {
+            "intensity": 0.3394974746830583,
+            "color": "#ffc6b0",
+            "white": 0.07,
+            "movementSpeed": 1,
+            "pan": 0.5,
+            "tilt": 0.5,
+            "opticalMode": "spot",
+            "zoom": 0.5,
+            "gobo": 0,
+            "prism": 0,
+            "prismRotation": 0,
+            "frost": 0,
+            "focus": 0.5
+          }
+        },
+        {
+          "id": "217",
+          "values": {
+            "intensity": 0.33114496766047313,
+            "color": "#ffc3b3",
+            "white": 0.07,
+            "movementSpeed": 1,
+            "pan": 0.5,
+            "tilt": 0.5,
+            "opticalMode": "spot",
+            "zoom": 0.5,
+            "gobo": 0,
+            "prism": 0,
+            "prismRotation": 0,
+            "frost": 0,
+            "focus": 0.5
+          }
+        },
+        {
+          "id": "218",
+          "values": {
+            "intensity": 0.32177933498176825,
+            "color": "#ffbfb6",
+            "white": 0.07,
+            "movementSpeed": 1,
+            "pan": 0.5,
+            "tilt": 0.5,
+            "opticalMode": "spot",
+            "zoom": 0.5,
+            "gobo": 0,
+            "prism": 0,
+            "prismRotation": 0,
+            "frost": 0,
+            "focus": 0.5
+          }
+        },
+        {
+          "id": "219",
+          "values": {
+            "intensity": 0.3116311896062463,
+            "color": "#ffbcb9",
+            "white": 0.07,
+            "movementSpeed": 1,
+            "pan": 0.5,
+            "tilt": 0.5,
+            "opticalMode": "spot",
+            "zoom": 0.5,
+            "gobo": 0,
+            "prism": 0,
+            "prismRotation": 0,
+            "frost": 0,
+            "focus": 0.5
+          }
+        },
+        {
+          "id": "220",
+          "values": {
+            "intensity": 0.3009504125528161,
+            "color": "#ffb8bb",
+            "white": 0.07,
+            "movementSpeed": 1,
+            "pan": 0.5,
+            "tilt": 0.5,
+            "opticalMode": "spot",
+            "zoom": 0.5,
+            "gobo": 0,
+            "prism": 0,
+            "prismRotation": 0,
+            "frost": 0,
+            "focus": 0.5
+          }
+        },
+        {
+          "id": "221",
+          "values": {
+            "intensity": 0.29,
+            "color": "#ffb4be",
+            "white": 0.07,
+            "movementSpeed": 1,
+            "pan": 0.5,
+            "tilt": 0.5,
+            "opticalMode": "spot",
+            "zoom": 0.5,
+            "gobo": 0,
+            "prism": 0,
+            "prismRotation": 0,
+            "frost": 0,
+            "focus": 0.5
+          }
+        }
+      ]
+    },
+    {
+      "id": "neon-tidal-dance",
+      "name": "Neon Tidal Dance",
+      "description": "Scattered grid flashes travel back/front/back, backlights answer left/right/left, and staggered gobo/prism flashes ride opposing moving-head fans. Four color chapters, 60-second loop. Stop to fade out.",
+      "duration": 60,
+      "loop": true,
+      "tracks": [
+        {
+          "group": "grid",
+          "effect": "strobe",
+          "start": 0,
+          "duration": 15,
+          "fadeIn": 0.65,
+          "fadeOut": 0.65,
+          "params": {
+            "color": "#21d9ff",
+            "secondary": "#a85cff",
+            "frequency": 2.5,
+            "duty": 0.38,
+            "travelSpeed": 0.12,
+            "strobePattern": "scatter",
+            "spatialAxis": "z",
+            "width": 0.4,
+            "brightness": 0.68
+          }
+        },
+        {
+          "group": "backlights",
+          "effect": "strobe",
+          "start": 0,
+          "duration": 15,
+          "fadeIn": 0.65,
+          "fadeOut": 0.65,
+          "params": {
+            "color": "#a85cff",
+            "secondary": "#21d9ff",
+            "frequency": 2,
+            "duty": 0.58,
+            "travelSpeed": 0.09,
+            "strobePattern": "wave",
+            "spatialAxis": "x",
+            "width": 0.45,
+            "brightness": 0.8,
+            "zoom": 0.85
+          }
+        },
+        {
+          "group": "dance-r3",
+          "effect": "strobe",
+          "start": 0,
+          "duration": 15,
+          "fadeIn": 0.65,
+          "fadeOut": 0.65,
+          "params": {
+            "color": "#21d9ff",
+            "secondary": "#a85cff",
+            "frequency": 2.125,
+            "duty": 0.5,
+            "travelSpeed": 0.08399999999999999,
+            "strobePattern": "scatter",
+            "spatialAxis": "x",
+            "width": 0.55,
+            "brightness": 0.8,
+            "speed": 0.8,
+            "pointA": "tidal-dance-center",
+            "panAmplitude": 0.035,
+            "tiltAmplitude": 0.018,
+            "opticalMode": "beam",
+            "gobo": 4,
+            "prism": 1,
+            "prismRotation": -0.12,
+            "frost": 0,
+            "zoom": 0.8,
+            "focus": 0.5,
+            "movementSpeed": 1
+          }
+        },
+        {
+          "group": "dance-mh7",
+          "effect": "strobe",
+          "start": 0,
+          "duration": 15,
+          "fadeIn": 0.65,
+          "fadeOut": 0.65,
+          "params": {
+            "color": "#a85cff",
+            "secondary": "#21d9ff",
+            "frequency": 2.125,
+            "duty": 0.5,
+            "travelSpeed": 0.08399999999999999,
+            "strobePattern": "scatter",
+            "spatialAxis": "x",
+            "width": 0.55,
+            "brightness": 0.8,
+            "speed": 0.8,
+            "pointA": "tidal-dance-center",
+            "panAmplitude": 0.025,
+            "tiltAmplitude": 0.012,
+            "opticalMode": "beam",
+            "gobo": 3,
+            "prism": 1,
+            "prismRotation": 0.15,
+            "frost": 0,
+            "zoom": 0.8,
+            "focus": 0.5,
+            "movementSpeed": 1
+          }
+        },
+        {
+          "group": "grid",
+          "effect": "strobe",
+          "start": 15,
+          "duration": 20,
+          "fadeIn": 0.65,
+          "fadeOut": 0.65,
+          "params": {
+            "color": "#ff63bd",
+            "secondary": "#ffc35f",
+            "frequency": 3.3,
+            "duty": 0.38,
+            "travelSpeed": 0.18,
+            "strobePattern": "scatter",
+            "spatialAxis": "z",
+            "width": 0.4,
+            "brightness": 0.68
+          }
+        },
+        {
+          "group": "backlights",
+          "effect": "strobe",
+          "start": 15,
+          "duration": 20,
+          "fadeIn": 0.65,
+          "fadeOut": 0.65,
+          "params": {
+            "color": "#ffc35f",
+            "secondary": "#ff63bd",
+            "frequency": 2.64,
+            "duty": 0.58,
+            "travelSpeed": 0.135,
+            "strobePattern": "wave",
+            "spatialAxis": "x",
+            "width": 0.45,
+            "brightness": 0.8,
+            "zoom": 0.85
+          }
+        },
+        {
+          "group": "dance-r3",
+          "effect": "strobe",
+          "start": 15,
+          "duration": 20,
+          "fadeIn": 0.65,
+          "fadeOut": 0.65,
+          "params": {
+            "color": "#ff63bd",
+            "secondary": "#ffc35f",
+            "frequency": 2.8049999999999997,
+            "duty": 0.5,
+            "travelSpeed": 0.126,
+            "strobePattern": "scatter",
+            "spatialAxis": "x",
+            "width": 0.55,
+            "brightness": 0.8,
+            "speed": 1.1,
+            "pointA": "tidal-dance-center",
+            "panAmplitude": 0.035,
+            "tiltAmplitude": 0.018,
+            "opticalMode": "beam",
+            "gobo": 4,
+            "prism": 1,
+            "prismRotation": -0.12,
+            "frost": 0,
+            "zoom": 0.8,
+            "focus": 0.5,
+            "movementSpeed": 1
+          }
+        },
+        {
+          "group": "dance-mh7",
+          "effect": "strobe",
+          "start": 15,
+          "duration": 20,
+          "fadeIn": 0.65,
+          "fadeOut": 0.65,
+          "params": {
+            "color": "#ffc35f",
+            "secondary": "#ff63bd",
+            "frequency": 2.8049999999999997,
+            "duty": 0.5,
+            "travelSpeed": 0.126,
+            "strobePattern": "scatter",
+            "spatialAxis": "x",
+            "width": 0.55,
+            "brightness": 0.8,
+            "speed": 1.1,
+            "pointA": "tidal-dance-center",
+            "panAmplitude": 0.025,
+            "tiltAmplitude": 0.012,
+            "opticalMode": "beam",
+            "gobo": 3,
+            "prism": 1,
+            "prismRotation": 0.15,
+            "frost": 0,
+            "zoom": 0.8,
+            "focus": 0.5,
+            "movementSpeed": 1
+          }
+        },
+        {
+          "group": "grid",
+          "effect": "strobe",
+          "start": 35,
+          "duration": 15,
+          "fadeIn": 0.65,
+          "fadeOut": 0.65,
+          "params": {
+            "color": "#94f5ff",
+            "secondary": "#f3c3ff",
+            "frequency": 3.8,
+            "duty": 0.38,
+            "travelSpeed": 0.24,
+            "strobePattern": "scatter",
+            "spatialAxis": "z",
+            "width": 0.4,
+            "brightness": 0.68
+          }
+        },
+        {
+          "group": "backlights",
+          "effect": "strobe",
+          "start": 35,
+          "duration": 15,
+          "fadeIn": 0.65,
+          "fadeOut": 0.65,
+          "params": {
+            "color": "#f3c3ff",
+            "secondary": "#94f5ff",
+            "frequency": 3.04,
+            "duty": 0.58,
+            "travelSpeed": 0.18,
+            "strobePattern": "wave",
+            "spatialAxis": "x",
+            "width": 0.45,
+            "brightness": 0.8,
+            "zoom": 0.85
+          }
+        },
+        {
+          "group": "dance-r3",
+          "effect": "strobe",
+          "start": 35,
+          "duration": 15,
+          "fadeIn": 0.65,
+          "fadeOut": 0.65,
+          "params": {
+            "color": "#94f5ff",
+            "secondary": "#f3c3ff",
+            "frequency": 3.23,
+            "duty": 0.5,
+            "travelSpeed": 0.16799999999999998,
+            "strobePattern": "scatter",
+            "spatialAxis": "x",
+            "width": 0.55,
+            "brightness": 0.8,
+            "speed": 1.35,
+            "pointA": "tidal-dance-center",
+            "panAmplitude": 0.035,
+            "tiltAmplitude": 0.018,
+            "opticalMode": "beam",
+            "gobo": 4,
+            "prism": 1,
+            "prismRotation": -0.12,
+            "frost": 0,
+            "zoom": 0.8,
+            "focus": 0.5,
+            "movementSpeed": 1
+          }
+        },
+        {
+          "group": "dance-mh7",
+          "effect": "strobe",
+          "start": 35,
+          "duration": 15,
+          "fadeIn": 0.65,
+          "fadeOut": 0.65,
+          "params": {
+            "color": "#f3c3ff",
+            "secondary": "#94f5ff",
+            "frequency": 3.23,
+            "duty": 0.5,
+            "travelSpeed": 0.16799999999999998,
+            "strobePattern": "scatter",
+            "spatialAxis": "x",
+            "width": 0.55,
+            "brightness": 0.8,
+            "speed": 1.35,
+            "pointA": "tidal-dance-center",
+            "panAmplitude": 0.025,
+            "tiltAmplitude": 0.012,
+            "opticalMode": "beam",
+            "gobo": 3,
+            "prism": 1,
+            "prismRotation": 0.15,
+            "frost": 0,
+            "zoom": 0.8,
+            "focus": 0.5,
+            "movementSpeed": 1
+          }
+        },
+        {
+          "group": "grid",
+          "effect": "strobe",
+          "start": 50,
+          "duration": 10,
+          "fadeIn": 0.65,
+          "fadeOut": 0.65,
+          "params": {
+            "color": "#ffb86b",
+            "secondary": "#685cff",
+            "frequency": 2.8,
+            "duty": 0.38,
+            "travelSpeed": 0.16,
+            "strobePattern": "scatter",
+            "spatialAxis": "z",
+            "width": 0.4,
+            "brightness": 0.68
+          }
+        },
+        {
+          "group": "backlights",
+          "effect": "strobe",
+          "start": 50,
+          "duration": 10,
+          "fadeIn": 0.65,
+          "fadeOut": 0.65,
+          "params": {
+            "color": "#685cff",
+            "secondary": "#ffb86b",
+            "frequency": 2.2399999999999998,
+            "duty": 0.58,
+            "travelSpeed": 0.12,
+            "strobePattern": "wave",
+            "spatialAxis": "x",
+            "width": 0.45,
+            "brightness": 0.8,
+            "zoom": 0.85
+          }
+        },
+        {
+          "group": "dance-r3",
+          "effect": "strobe",
+          "start": 50,
+          "duration": 10,
+          "fadeIn": 0.65,
+          "fadeOut": 0.65,
+          "params": {
+            "color": "#ffb86b",
+            "secondary": "#685cff",
+            "frequency": 2.38,
+            "duty": 0.5,
+            "travelSpeed": 0.11199999999999999,
+            "strobePattern": "scatter",
+            "spatialAxis": "x",
+            "width": 0.55,
+            "brightness": 0.8,
+            "speed": 0.9,
+            "pointA": "tidal-dance-center",
+            "panAmplitude": 0.035,
+            "tiltAmplitude": 0.018,
+            "opticalMode": "beam",
+            "gobo": 4,
+            "prism": 1,
+            "prismRotation": -0.12,
+            "frost": 0,
+            "zoom": 0.8,
+            "focus": 0.5,
+            "movementSpeed": 1
+          }
+        },
+        {
+          "group": "dance-mh7",
+          "effect": "strobe",
+          "start": 50,
+          "duration": 10,
+          "fadeIn": 0.65,
+          "fadeOut": 0.65,
+          "params": {
+            "color": "#685cff",
+            "secondary": "#ffb86b",
+            "frequency": 2.38,
+            "duty": 0.5,
+            "travelSpeed": 0.11199999999999999,
+            "strobePattern": "scatter",
+            "spatialAxis": "x",
+            "width": 0.55,
+            "brightness": 0.8,
+            "speed": 0.9,
+            "pointA": "tidal-dance-center",
+            "panAmplitude": 0.025,
+            "tiltAmplitude": 0.012,
+            "opticalMode": "beam",
+            "gobo": 3,
+            "prism": 1,
+            "prismRotation": 0.15,
+            "frost": 0,
+            "zoom": 0.8,
+            "focus": 0.5,
+            "movementSpeed": 1
+          }
+        }
+      ]
+    },
+    {
+      "id": "rig-check-all-lights",
+      "name": "Rig Check · All Lights",
+      "description": "All 48 mapped lights: steady warm/cool grid, violet/rose backlights, contrasting gobo/prism fans and gentle 65-second position drift. No flashes or lamp commands. Stop fades out.",
+      "duration": 900,
+      "loop": true,
+      "look": [
+        {
+          "id": "401",
+          "values": {
+            "intensity": 0.55,
+            "color": "#6d46ff",
+            "white": 0,
+            "movementSpeed": 1,
+            "pan": 0.5,
+            "tilt": 0.53,
+            "opticalMode": "beam",
+            "zoom": 0.72,
+            "gobo": 0,
+            "goboShake": 0,
+            "prism": 0,
+            "prismRotation": 0,
+            "frost": 0,
+            "focus": 0.5
+          }
+        },
+        {
+          "id": "402",
+          "values": {
+            "intensity": 0.55,
+            "color": "#ff55af",
+            "white": 0,
+            "movementSpeed": 1,
+            "pan": 0.5,
+            "tilt": 0.53,
+            "opticalMode": "beam",
+            "zoom": 0.72,
+            "gobo": 0,
+            "goboShake": 0,
+            "prism": 0,
+            "prismRotation": 0,
+            "frost": 0,
+            "focus": 0.5
+          }
+        },
+        {
+          "id": "403",
+          "values": {
+            "intensity": 0.55,
+            "color": "#6d46ff",
+            "white": 0,
+            "movementSpeed": 1,
+            "pan": 0.5,
+            "tilt": 0.53,
+            "opticalMode": "beam",
+            "zoom": 0.72,
+            "gobo": 0,
+            "goboShake": 0,
+            "prism": 0,
+            "prismRotation": 0,
+            "frost": 0,
+            "focus": 0.5
+          }
+        },
+        {
+          "id": "404",
+          "values": {
+            "intensity": 0.55,
+            "color": "#ff55af",
+            "white": 0,
+            "movementSpeed": 1,
+            "pan": 0.5,
+            "tilt": 0.53,
+            "opticalMode": "beam",
+            "zoom": 0.72,
+            "gobo": 0,
+            "goboShake": 0,
+            "prism": 0,
+            "prismRotation": 0,
+            "frost": 0,
+            "focus": 0.5
+          }
+        },
+        {
+          "id": "405",
+          "values": {
+            "intensity": 0.55,
+            "color": "#6d46ff",
+            "white": 0,
+            "movementSpeed": 1,
+            "pan": 0.5,
+            "tilt": 0.53,
+            "opticalMode": "beam",
+            "zoom": 0.72,
+            "gobo": 0,
+            "goboShake": 0,
+            "prism": 0,
+            "prismRotation": 0,
+            "frost": 0,
+            "focus": 0.5
+          }
+        },
+        {
+          "id": "406",
+          "values": {
+            "intensity": 0.55,
+            "color": "#ff55af",
+            "white": 0,
+            "movementSpeed": 1,
+            "pan": 0.5,
+            "tilt": 0.53,
+            "opticalMode": "beam",
+            "zoom": 0.72,
+            "gobo": 0,
+            "goboShake": 0,
+            "prism": 0,
+            "prismRotation": 0,
+            "frost": 0,
+            "focus": 0.5
+          }
+        },
+        {
+          "id": "407",
+          "values": {
+            "intensity": 0.55,
+            "color": "#6d46ff",
+            "white": 0,
+            "movementSpeed": 1,
+            "pan": 0.5,
+            "tilt": 0.53,
+            "opticalMode": "beam",
+            "zoom": 0.72,
+            "gobo": 0,
+            "goboShake": 0,
+            "prism": 0,
+            "prismRotation": 0,
+            "frost": 0,
+            "focus": 0.5
+          }
+        },
+        {
+          "id": "408",
+          "values": {
+            "intensity": 0.55,
+            "color": "#ff55af",
+            "white": 0,
+            "movementSpeed": 1,
+            "pan": 0.5,
+            "tilt": 0.53,
+            "opticalMode": "beam",
+            "zoom": 0.72,
+            "gobo": 0,
+            "goboShake": 0,
+            "prism": 0,
+            "prismRotation": 0,
+            "frost": 0,
+            "focus": 0.5
+          }
+        },
+        {
+          "id": "301",
+          "values": {
+            "intensity": 0.68,
+            "color": "#00ffff",
+            "white": 0,
+            "movementSpeed": 1,
+            "pan": 0.3592113289760348,
+            "tilt": 0.1726666666666667,
+            "opticalMode": "beam",
+            "zoom": 0.65,
+            "gobo": 4,
+            "goboShake": 0,
+            "prism": 1,
+            "prismRotation": 0,
+            "frost": 0,
+            "focus": 0.55
+          }
+        },
+        {
+          "id": "302",
+          "values": {
+            "intensity": 0.68,
+            "color": "#00ffff",
+            "white": 0,
+            "movementSpeed": 1,
+            "pan": 0.508,
+            "tilt": 0.8393333333333333,
+            "opticalMode": "beam",
+            "zoom": 0.65,
+            "gobo": 4,
+            "goboShake": 0,
+            "prism": 1,
+            "prismRotation": 0,
+            "frost": 0,
+            "focus": 0.55
+          }
+        },
+        {
+          "id": "303",
+          "values": {
+            "intensity": 0.68,
+            "color": "#00ffff",
+            "white": 0,
+            "movementSpeed": 1,
+            "pan": 0.6787102396514161,
+            "tilt": 0.8393333333333333,
+            "opticalMode": "beam",
+            "zoom": 0.65,
+            "gobo": 4,
+            "goboShake": 0,
+            "prism": 1,
+            "prismRotation": 0,
+            "frost": 0,
+            "focus": 0.55
+          }
+        },
+        {
+          "id": "304",
+          "values": {
+            "intensity": 0.68,
+            "color": "#00ffff",
+            "white": 0,
+            "movementSpeed": 1,
+            "pan": 0.6505925925925926,
+            "tilt": 0.8393333333333334,
+            "opticalMode": "beam",
+            "zoom": 0.65,
+            "gobo": 4,
+            "goboShake": 0,
+            "prism": 1,
+            "prismRotation": 0,
+            "frost": 0,
+            "focus": 0.55
+          }
+        },
+        {
+          "id": "305",
+          "values": {
+            "intensity": 0.68,
+            "color": "#00ffff",
+            "white": 0,
+            "movementSpeed": 1,
+            "pan": 0.36945098039215685,
+            "tilt": 0.1726666666666667,
+            "opticalMode": "beam",
+            "zoom": 0.65,
+            "gobo": 4,
+            "goboShake": 0,
+            "prism": 1,
+            "prismRotation": 0,
+            "frost": 0,
+            "focus": 0.55
+          }
+        },
+        {
+          "id": "306",
+          "values": {
+            "intensity": 0.68,
+            "color": "#00ffff",
+            "white": 0,
+            "movementSpeed": 1,
+            "pan": 0.641115468409586,
+            "tilt": 0.8393333333333334,
+            "opticalMode": "beam",
+            "zoom": 0.65,
+            "gobo": 4,
+            "goboShake": 0,
+            "prism": 1,
+            "prismRotation": 0,
+            "frost": 0,
+            "focus": 0.55
+          }
+        },
+        {
+          "id": "705",
+          "values": {
+            "intensity": 0.72,
+            "color": "#ff88bb",
+            "white": 0,
+            "movementSpeed": 1,
+            "pan": 0.18127015250544662,
+            "tilt": 0.746,
+            "opticalMode": "beam",
+            "zoom": 0.65,
+            "gobo": 3,
+            "goboShake": 0,
+            "prism": 1,
+            "prismRotation": 0,
+            "frost": 0,
+            "focus": 0.55
+          }
+        },
+        {
+          "id": "706",
+          "values": {
+            "intensity": 0.72,
+            "color": "#ff88bb",
+            "white": 0,
+            "movementSpeed": 1,
+            "pan": 0.15184531590413944,
+            "tilt": 0.7905490196078432,
+            "opticalMode": "beam",
+            "zoom": 0.65,
+            "gobo": 3,
+            "goboShake": 0,
+            "prism": 1,
+            "prismRotation": 0,
+            "frost": 0,
+            "focus": 0.55
+          }
+        },
+        {
+          "id": "707",
+          "values": {
+            "intensity": 0.72,
+            "color": "#ff88bb",
+            "white": 0,
+            "movementSpeed": 1,
+            "pan": 0.15866666666666668,
+            "tilt": 0.26599999999999996,
+            "opticalMode": "beam",
+            "zoom": 0.65,
+            "gobo": 3,
+            "goboShake": 0,
+            "prism": 1,
+            "prismRotation": 0,
+            "frost": 0,
+            "focus": 0.55
+          }
+        },
+        {
+          "id": "708",
+          "values": {
+            "intensity": 0.72,
+            "color": "#ff88bb",
+            "white": 0,
+            "movementSpeed": 1,
+            "pan": 0.21208496732026144,
+            "tilt": 0.814,
+            "opticalMode": "beam",
+            "zoom": 0.65,
+            "gobo": 3,
+            "goboShake": 0,
+            "prism": 1,
+            "prismRotation": 0,
+            "frost": 0,
+            "focus": 0.55
+          }
+        },
+        {
+          "id": "3101",
+          "values": {
+            "intensity": 0.72,
+            "color": "#ff88bb",
+            "white": 0,
+            "movementSpeed": 1,
+            "pan": 0.508,
+            "tilt": 0.986,
+            "opticalMode": "beam",
+            "zoom": 0.65,
+            "gobo": 3,
+            "goboShake": 0,
+            "prism": 1,
+            "prismRotation": 0,
+            "frost": 0,
+            "focus": 0.55
+          }
+        },
+        {
+          "id": "3102",
+          "values": {
+            "intensity": 0.72,
+            "color": "#ff88bb",
+            "white": 0,
+            "movementSpeed": 1,
+            "pan": 0.492,
+            "tilt": 0.986,
+            "opticalMode": "beam",
+            "zoom": 0.65,
+            "gobo": 3,
+            "goboShake": 0,
+            "prism": 1,
+            "prismRotation": 0,
+            "frost": 0,
+            "focus": 0.55
+          }
+        },
+        {
+          "id": "3103",
+          "values": {
+            "intensity": 0.72,
+            "color": "#ff88bb",
+            "white": 0,
+            "movementSpeed": 1,
+            "pan": 0.492,
+            "tilt": 0.746,
+            "opticalMode": "beam",
+            "zoom": 0.65,
+            "gobo": 3,
+            "goboShake": 0,
+            "prism": 1,
+            "prismRotation": 0,
+            "frost": 0,
+            "focus": 0.55
+          }
+        },
+        {
+          "id": "3104",
+          "values": {
+            "intensity": 0.72,
+            "color": "#ff88bb",
+            "white": 0,
+            "movementSpeed": 1,
+            "pan": 0.508,
+            "tilt": 0.746,
+            "opticalMode": "beam",
+            "zoom": 0.65,
+            "gobo": 3,
+            "goboShake": 0,
+            "prism": 1,
+            "prismRotation": 0,
+            "frost": 0,
+            "focus": 0.55
+          }
+        },
+        {
+          "id": "201",
+          "values": {
+            "intensity": 0.34,
+            "color": "#40bfff",
+            "white": 0.025,
+            "movementSpeed": 1,
+            "pan": 0.5,
+            "tilt": 0.5,
+            "opticalMode": "beam",
+            "zoom": 0.5,
+            "gobo": 0,
+            "goboShake": 0,
+            "prism": 0,
+            "prismRotation": 0,
+            "frost": 0,
+            "focus": 0.5
+          }
+        },
+        {
+          "id": "202",
+          "values": {
+            "intensity": 0.34,
+            "color": "#40bfff",
+            "white": 0.025,
+            "movementSpeed": 1,
+            "pan": 0.5,
+            "tilt": 0.5,
+            "opticalMode": "beam",
+            "zoom": 0.5,
+            "gobo": 0,
+            "goboShake": 0,
+            "prism": 0,
+            "prismRotation": 0,
+            "frost": 0,
+            "focus": 0.5
+          }
+        },
+        {
+          "id": "203",
+          "values": {
+            "intensity": 0.34,
+            "color": "#40bfff",
+            "white": 0.025,
+            "movementSpeed": 1,
+            "pan": 0.5,
+            "tilt": 0.5,
+            "opticalMode": "beam",
+            "zoom": 0.5,
+            "gobo": 0,
+            "goboShake": 0,
+            "prism": 0,
+            "prismRotation": 0,
+            "frost": 0,
+            "focus": 0.5
+          }
+        },
+        {
+          "id": "204",
+          "values": {
+            "intensity": 0.34,
+            "color": "#40bfff",
+            "white": 0.025,
+            "movementSpeed": 1,
+            "pan": 0.5,
+            "tilt": 0.5,
+            "opticalMode": "beam",
+            "zoom": 0.5,
+            "gobo": 0,
+            "goboShake": 0,
+            "prism": 0,
+            "prismRotation": 0,
+            "frost": 0,
+            "focus": 0.5
+          }
+        },
+        {
+          "id": "205",
+          "values": {
+            "intensity": 0.34,
+            "color": "#40bfff",
+            "white": 0.025,
+            "movementSpeed": 1,
+            "pan": 0.5,
+            "tilt": 0.5,
+            "opticalMode": "beam",
+            "zoom": 0.5,
+            "gobo": 0,
+            "goboShake": 0,
+            "prism": 0,
+            "prismRotation": 0,
+            "frost": 0,
+            "focus": 0.5
+          }
+        },
+        {
+          "id": "206",
+          "values": {
+            "intensity": 0.34,
+            "color": "#40bfff",
+            "white": 0.025,
+            "movementSpeed": 1,
+            "pan": 0.5,
+            "tilt": 0.5,
+            "opticalMode": "beam",
+            "zoom": 0.5,
+            "gobo": 0,
+            "goboShake": 0,
+            "prism": 0,
+            "prismRotation": 0,
+            "frost": 0,
+            "focus": 0.5
+          }
+        },
+        {
+          "id": "207",
+          "values": {
+            "intensity": 0.34,
+            "color": "#40bfff",
+            "white": 0.025,
+            "movementSpeed": 1,
+            "pan": 0.5,
+            "tilt": 0.5,
+            "opticalMode": "beam",
+            "zoom": 0.5,
+            "gobo": 0,
+            "goboShake": 0,
+            "prism": 0,
+            "prismRotation": 0,
+            "frost": 0,
+            "focus": 0.5
+          }
+        },
+        {
+          "id": "208",
+          "values": {
+            "intensity": 0.34,
+            "color": "#40bfff",
+            "white": 0.025,
+            "movementSpeed": 1,
+            "pan": 0.5,
+            "tilt": 0.5,
+            "opticalMode": "beam",
+            "zoom": 0.5,
+            "gobo": 0,
+            "goboShake": 0,
+            "prism": 0,
+            "prismRotation": 0,
+            "frost": 0,
+            "focus": 0.5
+          }
+        },
+        {
+          "id": "209",
+          "values": {
+            "intensity": 0.34,
+            "color": "#40bfff",
+            "white": 0.025,
+            "movementSpeed": 1,
+            "pan": 0.5,
+            "tilt": 0.5,
+            "opticalMode": "beam",
+            "zoom": 0.5,
+            "gobo": 0,
+            "goboShake": 0,
+            "prism": 0,
+            "prismRotation": 0,
+            "frost": 0,
+            "focus": 0.5
+          }
+        },
+        {
+          "id": "210",
+          "values": {
+            "intensity": 0.34,
+            "color": "#40bfff",
+            "white": 0.025,
+            "movementSpeed": 1,
+            "pan": 0.5,
+            "tilt": 0.5,
+            "opticalMode": "beam",
+            "zoom": 0.5,
+            "gobo": 0,
+            "goboShake": 0,
+            "prism": 0,
+            "prismRotation": 0,
+            "frost": 0,
+            "focus": 0.5
+          }
+        },
+        {
+          "id": "211",
+          "values": {
+            "intensity": 0.34,
+            "color": "#40bfff",
+            "white": 0.025,
+            "movementSpeed": 1,
+            "pan": 0.5,
+            "tilt": 0.5,
+            "opticalMode": "beam",
+            "zoom": 0.5,
+            "gobo": 0,
+            "goboShake": 0,
+            "prism": 0,
+            "prismRotation": 0,
+            "frost": 0,
+            "focus": 0.5
+          }
+        },
+        {
+          "id": "212",
+          "values": {
+            "intensity": 0.34,
+            "color": "#40bfff",
+            "white": 0.025,
+            "movementSpeed": 1,
+            "pan": 0.5,
+            "tilt": 0.5,
+            "opticalMode": "beam",
+            "zoom": 0.5,
+            "gobo": 0,
+            "goboShake": 0,
+            "prism": 0,
+            "prismRotation": 0,
+            "frost": 0,
+            "focus": 0.5
+          }
+        },
+        {
+          "id": "213",
+          "values": {
+            "intensity": 0.34,
+            "color": "#ffb875",
+            "white": 0.025,
+            "movementSpeed": 1,
+            "pan": 0.5,
+            "tilt": 0.5,
+            "opticalMode": "beam",
+            "zoom": 0.5,
+            "gobo": 0,
+            "goboShake": 0,
+            "prism": 0,
+            "prismRotation": 0,
+            "frost": 0,
+            "focus": 0.5
+          }
+        },
+        {
+          "id": "214",
+          "values": {
+            "intensity": 0.34,
+            "color": "#ffb875",
+            "white": 0.025,
+            "movementSpeed": 1,
+            "pan": 0.5,
+            "tilt": 0.5,
+            "opticalMode": "beam",
+            "zoom": 0.5,
+            "gobo": 0,
+            "goboShake": 0,
+            "prism": 0,
+            "prismRotation": 0,
+            "frost": 0,
+            "focus": 0.5
+          }
+        },
+        {
+          "id": "215",
+          "values": {
+            "intensity": 0.34,
+            "color": "#ffb875",
+            "white": 0.025,
+            "movementSpeed": 1,
+            "pan": 0.5,
+            "tilt": 0.5,
+            "opticalMode": "beam",
+            "zoom": 0.5,
+            "gobo": 0,
+            "goboShake": 0,
+            "prism": 0,
+            "prismRotation": 0,
+            "frost": 0,
+            "focus": 0.5
+          }
+        },
+        {
+          "id": "216",
+          "values": {
+            "intensity": 0.34,
+            "color": "#ffb875",
+            "white": 0.025,
+            "movementSpeed": 1,
+            "pan": 0.5,
+            "tilt": 0.5,
+            "opticalMode": "beam",
+            "zoom": 0.5,
+            "gobo": 0,
+            "goboShake": 0,
+            "prism": 0,
+            "prismRotation": 0,
+            "frost": 0,
+            "focus": 0.5
+          }
+        },
+        {
+          "id": "217",
+          "values": {
+            "intensity": 0.34,
+            "color": "#ffb875",
+            "white": 0.025,
+            "movementSpeed": 1,
+            "pan": 0.5,
+            "tilt": 0.5,
+            "opticalMode": "beam",
+            "zoom": 0.5,
+            "gobo": 0,
+            "goboShake": 0,
+            "prism": 0,
+            "prismRotation": 0,
+            "frost": 0,
+            "focus": 0.5
+          }
+        },
+        {
+          "id": "218",
+          "values": {
+            "intensity": 0.34,
+            "color": "#ffb875",
+            "white": 0.025,
+            "movementSpeed": 1,
+            "pan": 0.5,
+            "tilt": 0.5,
+            "opticalMode": "beam",
+            "zoom": 0.5,
+            "gobo": 0,
+            "goboShake": 0,
+            "prism": 0,
+            "prismRotation": 0,
+            "frost": 0,
+            "focus": 0.5
+          }
+        },
+        {
+          "id": "219",
+          "values": {
+            "intensity": 0.34,
+            "color": "#ffb875",
+            "white": 0.025,
+            "movementSpeed": 1,
+            "pan": 0.5,
+            "tilt": 0.5,
+            "opticalMode": "beam",
+            "zoom": 0.5,
+            "gobo": 0,
+            "goboShake": 0,
+            "prism": 0,
+            "prismRotation": 0,
+            "frost": 0,
+            "focus": 0.5
+          }
+        },
+        {
+          "id": "220",
+          "values": {
+            "intensity": 0.34,
+            "color": "#ffb875",
+            "white": 0.025,
+            "movementSpeed": 1,
+            "pan": 0.5,
+            "tilt": 0.5,
+            "opticalMode": "beam",
+            "zoom": 0.5,
+            "gobo": 0,
+            "goboShake": 0,
+            "prism": 0,
+            "prismRotation": 0,
+            "frost": 0,
+            "focus": 0.5
+          }
+        },
+        {
+          "id": "221",
+          "values": {
+            "intensity": 0.34,
+            "color": "#ffb875",
+            "white": 0.025,
+            "movementSpeed": 1,
+            "pan": 0.5,
+            "tilt": 0.5,
+            "opticalMode": "beam",
+            "zoom": 0.5,
+            "gobo": 0,
+            "goboShake": 0,
+            "prism": 0,
+            "prismRotation": 0,
+            "frost": 0,
+            "focus": 0.5
+          }
+        },
+        {
+          "id": "4101",
+          "values": {
+            "intensity": 0.65,
+            "color": "#ffffff",
+            "white": 0,
+            "movementSpeed": 1,
+            "pan": 0.6981960784313725,
+            "tilt": 0.3314901960784314,
+            "opticalMode": "beam",
+            "zoom": 0.65,
+            "gobo": 5,
+            "goboShake": 0,
+            "prism": 1,
+            "prismRotation": 0,
+            "frost": 0,
+            "focus": 0.55,
+            "colorWheel": 92
+          }
+        },
+        {
+          "id": "4102",
+          "values": {
+            "intensity": 0.65,
+            "color": "#ffffff",
+            "white": 0,
+            "movementSpeed": 1,
+            "pan": 0.6821960784313725,
+            "tilt": 0.3314901960784314,
+            "opticalMode": "beam",
+            "zoom": 0.65,
+            "gobo": 5,
+            "goboShake": 0,
+            "prism": 1,
+            "prismRotation": 0,
+            "frost": 0,
+            "focus": 0.55,
+            "colorWheel": 36
+          }
+        },
+        {
+          "id": "4103",
+          "values": {
+            "intensity": 0.65,
+            "color": "#ffffff",
+            "white": 0,
+            "movementSpeed": 1,
+            "pan": 0.6746666666666666,
+            "tilt": 0.3314901960784314,
+            "opticalMode": "beam",
+            "zoom": 0.65,
+            "gobo": 5,
+            "goboShake": 0,
+            "prism": 1,
+            "prismRotation": 0,
+            "frost": 0,
+            "focus": 0.55,
+            "colorWheel": 74
+          }
+        },
+        {
+          "id": "4104",
+          "values": {
+            "intensity": 0.65,
+            "color": "#ffffff",
+            "white": 0,
+            "movementSpeed": 1,
+            "pan": 0.6665098039215687,
+            "tilt": 0.3314901960784314,
+            "opticalMode": "beam",
+            "zoom": 0.65,
+            "gobo": 5,
+            "goboShake": 0,
+            "prism": 1,
+            "prismRotation": 0,
+            "frost": 0,
+            "focus": 0.55,
+            "colorWheel": 18
+          }
+        },
+        {
+          "id": "3901",
+          "values": {
+            "intensity": 0.7,
+            "color": "#ff40ff",
+            "white": 0,
+            "movementSpeed": 1,
+            "pan": 0.49819607843137254,
+            "tilt": 0.7550196078431373,
+            "opticalMode": "beam",
+            "zoom": 0.65,
+            "gobo": 7,
+            "goboShake": 0,
+            "prism": 1,
+            "prismRotation": 0,
+            "frost": 0,
+            "focus": 0.55,
+            "colorWheel": 71,
+            "colorWheel2": 0
+          }
+        }
+      ],
+      "tracks": [
+        {
+          "group": "rig-check-rogue",
+          "effect": "static",
+          "start": 0,
+          "duration": 900,
+          "fadeIn": 2,
+          "fadeOut": 2,
+          "params": {
+            "color": "#00ffff",
+            "brightness": 0.68,
+            "gobo": 4,
+            "prism": 1,
+            "speed": 0.12,
+            "pointA": "rig-check-a",
+            "pointB": "rig-check-b",
+            "opticalMode": "beam",
+            "focus": 0.55,
+            "frost": 0,
+            "zoom": 0.65,
+            "movementSpeed": 1
+          }
+        },
+        {
+          "group": "rig-check-mh7",
+          "effect": "static",
+          "start": 0,
+          "duration": 900,
+          "fadeIn": 2,
+          "fadeOut": 2,
+          "params": {
+            "color": "#ff88bb",
+            "brightness": 0.72,
+            "gobo": 3,
+            "prism": 1,
+            "speed": 0.12,
+            "pointA": "rig-check-a",
+            "pointB": "rig-check-b",
+            "opticalMode": "beam",
+            "focus": 0.55,
+            "frost": 0,
+            "zoom": 0.65,
+            "movementSpeed": 1
+          }
+        },
+        {
+          "group": "rig-check-beam7r",
+          "effect": "static",
+          "start": 0,
+          "duration": 900,
+          "fadeIn": 2,
+          "fadeOut": 2,
+          "params": {
+            "color": "#ffffff",
+            "brightness": 0.65,
+            "gobo": 5,
+            "prism": 1,
+            "speed": 0.12,
+            "pointA": "rig-check-a",
+            "pointB": "rig-check-b",
+            "opticalMode": "beam",
+            "focus": 0.55,
+            "frost": 0,
+            "zoom": 0.65,
+            "movementSpeed": 1
+          }
+        },
+        {
+          "group": "rig-check-beam200",
+          "effect": "static",
+          "start": 0,
+          "duration": 900,
+          "fadeIn": 2,
+          "fadeOut": 2,
+          "params": {
+            "color": "#ff40ff",
+            "brightness": 0.7,
+            "gobo": 7,
+            "prism": 1,
+            "speed": 0.12,
+            "pointA": "rig-check-a",
+            "pointB": "rig-check-b",
+            "opticalMode": "beam",
+            "focus": 0.55,
+            "frost": 0,
+            "zoom": 0.65,
+            "movementSpeed": 1
+          }
+        }
+      ]
+    }
+  ],
+  "settings": {
+    "source": "10.0.0.50",
+    "target": "10.0.0.1",
+    "port": 6454,
+    "fps": 30,
+    "mappings": {
+      "1": 0,
+      "3": 2,
+      "4": 3,
+      "5": 4,
+      "6": 5
+    }
+  },
+  "stage": {
+    "width": 19,
+    "depth": 10,
+    "height": 7,
+    "estimated": true,
+    "notes": "Approximate geometry traced from the stage photo. Fixture order for Rogue IDs is provisional; calibrate in the room."
+  }
+}

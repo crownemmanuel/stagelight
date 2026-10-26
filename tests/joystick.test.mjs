@@ -1,0 +1,5 @@
+import test from 'node:test';import assert from 'node:assert/strict';import {advancePosition} from '../public/joystick.js';
+const limits={panRange:[0,1],tiltRange:[0,1]};
+test('Joystick neutral holds position and dead zone prevents drift',()=>{const p={pan:.3,tilt:.6};assert.deepEqual(advancePosition(p,{x:0,y:0},10,.1,limits),p);assert.deepEqual(advancePosition(p,{x:.02,y:.02},10,.1,limits),p)});
+test('Joystick steers both axes relative to each fixture and limits diagonal speed',()=>{const p=advancePosition({pan:.3,tilt:.6},{x:1,y:0},1,.1,limits);assert.ok(Math.abs(p.pan-.4)<1e-9);assert.equal(p.tilt,.6);const up=advancePosition(p,{x:0,y:-1},1,.1,limits);assert.ok(Math.abs(up.tilt-.7)<1e-9);const d=advancePosition({pan:.5,tilt:.5},{x:1,y:1},1,.1,limits);assert.ok(Math.abs(Math.hypot(d.pan-.5,d.tilt-.5)-.1)<1e-9)});
+test('Joystick respects individual ranges and full travel endpoints',()=>{assert.deepEqual(advancePosition({pan:.99,tilt:.01},{x:1,y:1},10,1,limits),{pan:1,tilt:0});assert.deepEqual(advancePosition({pan:.5,tilt:.5},{x:1,y:-1},10,1,{panRange:[.4,.6],tiltRange:[.3,.7]}),{pan:.6,tilt:.7})});

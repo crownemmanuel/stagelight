@@ -1,0 +1,71 @@
+// StageLight's OSC namespace for sister apps (LiveStage, the Sound app, camera control…).
+// Pure routing: (address, args, show, runtime) → {command, args} for the engine, or {reply} for ping.
+// Pages and cues may be named by ID, by name (case-insensitive) or by 1-based number, as string or int.
+export const OSC_VERSION='0.3.0';
+export const OSC_ADDRESSES=[
+ ['/stagelight/ping','[i:replyPort]','Reply /stagelight/hello s:StageLight s:version i:armed s:page s:cue i:catalogRevision'],
+ ['/stagelight/catalog','[i:replyPort]','Reply with every page, cue, named trigger and library cue (/stagelight/catalog/begin … /end), so another app can offer them in pickers'],
+ ['/stagelight/go','[s:page] [s:requestId]','GO the next cue on a page (default: the running page)'],
+ ['/stagelight/go/cue','s:page s|i:cue [s:requestId]','GO a specific cue of a page cue list; auto-follow continues from it'],
+ ['/stagelight/back','','Previous cue on the running page'],
+ ['/stagelight/stop','[f:fade]','Stop playback, fade to dark'],
+ ['/stagelight/clear','[f:fade]','Release manual changes back to the cue (Clear)'],
+ ['/stagelight/blackout','i:0|1','Blackout on or off'],
+ ['/stagelight/master','f:0..1','Master level'],
+ ['/stagelight/play','s:cue [f:fade]','Play a library cue outside any page'],
+ ['/stagelight/ledwall','s:media','Show media on the LED wall preview (off = blank)'],
+ ['/stagelight/trigger','s:name [s:requestId]','Fire a named trigger mapped in StageLight']
+];
+const text=v=>typeof v==='number'?String(v):typeof v==='string'?v:'';
+const num=(v,fallback)=>typeof v==='number'?v:typeof v==='string'&&v.trim()!==''&&Number.isFinite(+v)?+v:fallback;
+export function findPage(show,ref){
+ const r=text(ref).trim();if(!r)return null;const n=/^\d+$/.test(r)?+r:0;
+ return show.pages.find(p=>p.id===r)??show.pages.find(p=>p.name.toLowerCase()===r.toLowerCase())??(n?show.pages[n-1]:null)??null;
+}
+export function findEntry(show,page,ref){
+ const r=text(ref).trim();if(!r)return null;const n=/^\d+$/.test(r)?+r:0,low=r.toLowerCase(),name=e=>e.label??show.cues.find(c=>c.id===e.cue)?.name??'';
+ return page.cues.find(e=>e.id===r)??(n?page.cues[n-1]:null)??page.cues.find(e=>name(e).toLowerCase()===low)??null;
+}
+const findTrigger=(show,ref)=>{const r=text(ref).trim().toLowerCase();return (show.triggers??[]).find(t=>t.id.toLowerCase()===r||t.name.toLowerCase()===r)};
+const replyPort=v=>Number.isInteger(v)&&v>0&&v<65536?v:null;
+const cueName=(show,e)=>e.label??show.cues.find(c=>c.id===e.cue)?.name??e.cue;
+/** What a named trigger does, in words (for pickers in other apps). */
+export function triggerSummary(show,t){
+ const a=t.args??{};
+ switch(t.command){
+  case 'page.go':{const p=show.pages.find(x=>x.id===a.id),i=p&&a.entry?p.cues.findIndex(e=>e.id===a.entry):-1;return `GO ${p?.name??a.id}${i>=0?` · cue ${i+1} ${cueName(show,p.cues[i])}`:' · next cue'}`}
+  case 'page.back':return 'Back';case 'cue.stop':return 'Stop';case 'override.release':return 'Clear changes';
+  case 'blackout.set':return a.enabled?'Blackout on':'Blackout off';case 'master.set':return `Master ${Math.round((a.value??0)*100)}%`;
+  case 'ledwall.set':return 'LED wall · '+(a.media??'off');case 'cue.play':return 'Play '+(show.cues.find(c=>c.id===a.id)?.name??a.id);
+  default:return t.command;
+ }
+}
+/** The show's pages, cues, named triggers and library cues as small OSC messages, one per item (like StageMics' /sound/mic). */
+export function catalog(show,revision){
+ const triggers=show.triggers??[],out=[['/stagelight/catalog/begin',[revision,show.pages.length,triggers.length,show.cues.length]]];
+ show.pages.forEach((p,i)=>{out.push(['/stagelight/catalog/page',[p.id,p.name,i+1,p.cues.length,p.color??'']]);
+  p.cues.forEach((e,j)=>out.push(['/stagelight/catalog/cue',[p.id,j+1,e.id,cueName(show,e),e.follow==='auto'?'auto':'manual',{t:'f',v:e.fade??0}]]))});
+ for(const t of triggers)out.push(['/stagelight/catalog/trigger',[t.id,t.name,triggerSummary(show,t)]]);
+ for(const c of show.cues)out.push(['/stagelight/catalog/library',[c.id,c.name]]);
+ out.push(['/stagelight/catalog/end',[revision]]);return out;
+}
+const requestId=v=>{const r=text(v).trim();return /^[a-zA-Z0-9_-]{1,64}$/.test(r)?{requestId:r}:{}};
+export function routeOSC(address,args,show,runtime){
+ const a=args,need=(page)=>{if(!page)throw Error('Unknown page');return page};
+ switch(address.replace(/\/+$/,'')){
+  case '/stagelight/ping':{const pg=runtime.stack&&show.pages.find(p=>p.id===runtime.stack.page),e=pg?.cues.find(x=>x.id===runtime.stack.entry);
+   return {reply:['/stagelight/hello',['StageLight',OSC_VERSION,runtime.output.armed?1:0,pg?.name??'',e?(e.label??show.cues.find(c=>c.id===e.cue)?.name??''):'',runtime.revision??0]],replyPort:replyPort(a[0])}}
+  case '/stagelight/catalog':return {replies:catalog(show,runtime.revision??0),replyPort:replyPort(a[0])};
+  case '/stagelight/go':{const page=a.length&&text(a[0]).trim()?need(findPage(show,a[0])):show.pages.find(p=>p.id===runtime.stack?.page);if(!page)throw Error('Name a page: /stagelight/go "<page>"');return {command:'page.go',args:{id:page.id,...requestId(a[1])}}}
+  case '/stagelight/go/cue':{const page=need(findPage(show,a[0])),entry=findEntry(show,page,a[1]);if(!entry)throw Error(`No cue ${text(a[1])} on ${page.name}`);return {command:'page.go',args:{id:page.id,entry:entry.id,...requestId(a[2])}}}
+  case '/stagelight/back':return {command:'page.back',args:{}};
+  case '/stagelight/stop':{const f=num(a[0]);return {command:'cue.stop',args:f===undefined?{}:{fade:Math.max(0,Math.min(10,f))}}}
+  case '/stagelight/clear':{const f=num(a[0]);return {command:'override.release',args:f===undefined?{}:{fade:Math.max(0,Math.min(30,f))}}}
+  case '/stagelight/blackout':{const v=a[0]===true||num(a[0])===1?true:a[0]===false||num(a[0])===0?false:null;if(v===null)throw Error('Blackout needs 0 or 1');return {command:'blackout.set',args:{enabled:v}}}
+  case '/stagelight/master':{let v=num(a[0]);if(v===undefined)throw Error('Master needs a level 0..1');if(v>1)v/=100;return {command:'master.set',args:{value:Math.max(0,Math.min(1,v))}}}
+  case '/stagelight/play':{const r=text(a[0]).trim(),cue=show.cues.find(c=>c.id===r)??show.cues.find(c=>c.name.toLowerCase()===r.toLowerCase());if(!cue)throw Error('Unknown cue '+r);const f=num(a[1]);return {command:'cue.play',args:{id:cue.id,...(f===undefined?{}:{fade:Math.max(0,Math.min(60,f))})}}}
+  case '/stagelight/ledwall':return {command:'ledwall.set',args:{media:text(a[0]).trim()||'off'}};
+  case '/stagelight/trigger':{const t=findTrigger(show,a[0]);if(!t)throw Error('Unknown trigger '+text(a[0]));return {command:'trigger.fire',args:{id:t.id,...requestId(a[1])}}}
+ }
+ throw Error('Unknown StageLight address '+address);
+}
