@@ -24,8 +24,9 @@ test('Every GO announces and sends the look summary, including auto-follow; warm
  const p=structuredClone(e.show.pages.find(p=>p.id==='act'));p.cues.forEach(c=>c.send=[{target:'cam',message:'look'}]);await e.command('page.save',{page:p});
  await e.command('page.go',{id:'act'});await flush();
  const live=sent.find(s=>s.target==='ls'),look1=sent.find(s=>s.target==='cam');assert.equal(live.osc.address,'/stagelight/cue/live');assert.deepEqual(live.osc.args.slice(0,4),['act','Act One',1,'amber']);
- assert.equal(look1.osc.address,'/stagelight/look');const k1=look1.osc.args[2].v;assert.equal(look1.osc.args[3].t,'f');
- at(2);await flush();const look2=sent.filter(s=>s.target==='cam')[1];assert.ok(look2,'auto-follow sent too');assert.ok(look2.osc.args[2].v>k1+1500,`cool ${look2.osc.args[2].v}K vs amber ${k1}K`);
+ // The 0.3.0 six-argument message travels unchanged inside the v1 burst.
+ const legacy=b=>b.osc.find(([a])=>a==='/stagelight/look')[1],l1=legacy(look1);assert.deepEqual(look1.osc.map(([a])=>a),['/stagelight/look/begin','/stagelight/look','/stagelight/look/end']);assert.equal(l1.length,6);const k1=l1[2].v;assert.equal(l1[3].t,'f');
+ at(2);await flush();const look2=sent.filter(s=>s.target==='cam')[1];assert.ok(look2,'auto-follow sent too');assert.ok(legacy(look2)[2].v>k1+1500,`cool ${legacy(look2)[2].v}K vs amber ${k1}K`);
  const summary=e.lookSummary(e.show.cues.find(c=>c.id==='amber'));assert.ok(summary.kelvin<3500&&summary.groups.some(g=>g.id==='backlights'));
  await e.command('target.delete',{id:'cam'});assert.ok(e.show.pages.find(p=>p.id==='act').cues.every(c=>!c.send));
 });

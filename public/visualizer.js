@@ -1,5 +1,6 @@
 import {Stage} from './stage.js?v=ui-2';
 import {icon} from './icons.js?v=ui-3';
+import {visibleFixtures} from './visibility.js';
 // Pop-out visualizer: a second window (e.g. on another screen) with its own 3D stage, fed by the same
 // engine stream. It is a view only; selection goes through selection.set like the main window.
 const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
@@ -17,7 +18,7 @@ function frames(r){
 }
 async function refresh(){
  const v=await fetch('/api/state').then(r=>r.json());show=v.show;rev=v.runtime.revision;
- stage.setFixtures(show.fixtures);stage.setLedWall(show.ledWall,mediaList().find(m=>m.id===show.ledWall?.media));selectionRevision=-1;paint(v.runtime);
+ stage.setFixtures(visibleFixtures(show));stage.setLedWall(show.ledWall,mediaList().find(m=>m.id===show.ledWall?.media));selectionRevision=-1;paint(v.runtime);
 }
 function paint(r){
  runtime=r;const shown=frames(r),preview=shown!==r.frames;stage.update(shown);stage.setLedPlaying(!r.output.armed);

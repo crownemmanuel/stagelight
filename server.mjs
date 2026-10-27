@@ -83,7 +83,11 @@ async function onOSC(msg,rinfo){
    if(address==='/lights/ping'){reply('/lights/hello',['0.1.0',engine.output.armed?1:0],rinfo);row.ok=true;row.result='hello';continue}
    const route=address.startsWith('/stagelight/')||address==='/stagelight'?routeOSC(address,args,engine.show,{stack:engine.stack,output:{armed:engine.output.armed},revision:engine.revision}):legacy(address,args);
    if(route.reply){reply(...route.reply,rinfo,route.replyPort);row.ok=true;row.result='hello';continue}
-   if(route.replies){for(const r of route.replies)reply(...r,rinfo,route.replyPort);row.ok=true;row.result=`catalog · ${route.replies.length} messages`;continue}
+   if(route.replies){for(const r of route.replies)reply(...r,rinfo,route.replyPort);row.ok=true;row.result=`${address.split('/')[2]} · ${route.replies.length} messages`;continue}
+   // Look Link: an untargeted look request is answered to the sender; feedback and preset lists are recorded, never executed.
+   if(route.lookReply){const burst=engine.lookReply(route.requestId);for(const r of burst)reply(...r,rinfo,route.replyPort);row.ok=true;row.result=`look · ${burst.length} messages`;continue}
+   if(route.feedback){row.result=engine.feedback(route.feedback,rinfo.address);row.ok=true;continue}
+   if(route.presets){row.result=engine.receivePresets(route.presets,rinfo);row.ok=true;continue}
    const result=await execute(route.command,route.args,{lean:true});row.ok=true;row.result=result.duplicate?'duplicate':route.command;
    if(address.startsWith('/lights/'))reply('/lights/ack',[String(args[1]??''),route.command,result.duplicate?'duplicate':'accepted'],rinfo);
   }catch(e){row.ok=false;row.result=e.message;engine.log('OSC rejected: '+e.message);reply(address.startsWith('/lights/')?'/lights/error':'/stagelight/error',[address,e.message.slice(0,200)],rinfo)}
@@ -98,9 +102,12 @@ function listenOSC(cfg){
 }
 engine.onNetworkChange=cfg=>listenOSC(cfg);
 // Outbound: OSC over the same socket (fire and forget) or HTTP JSON with a short timeout. Never awaited by playback.
+// A packet's osc is one message or a burst ([address,args] pairs) sent in order. HTTP resolves with the reply's JSON body, if any.
 engine.sendHook=async(target,packet)=>{
- if(packet.osc){if(!osc)throw Error('OSC socket not ready');const buf=encodeOSC(packet.osc.address,packet.osc.args);await new Promise((res,rej)=>osc.send(buf,target.port,target.host,e=>e?rej(e):res()));return}
- const r=await fetch(target.url,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({app:'StageLight',at:new Date().toISOString(),...packet.http}),signal:AbortSignal.timeout(1000)});if(!r.ok)throw Error('HTTP '+r.status);
+ if(packet.osc){if(!osc)throw Error('OSC socket not ready');for(const [address,args] of Array.isArray(packet.osc)?packet.osc:[[packet.osc.address,packet.osc.args]]){const buf=encodeOSC(address,args);await new Promise((res,rej)=>osc.send(buf,target.port,target.host,e=>e?rej(e):res()))}return null}
+ const r=await fetch(target.url,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({app:'StageLight',at:new Date().toISOString(),...packet.http}),signal:AbortSignal.timeout(1000)});
+ let body=null;try{const t=await r.text();body=t&&t.length<200000?JSON.parse(t):null}catch{}
+ if(!r.ok)throw Error('HTTP '+r.status+(typeof body?.summary==='string'?' · '+body.summary.slice(0,200):''));return body;
 };
 server.on('error',e=>{console.error(e.message);process.exitCode=1;osc?.close();clearInterval(streamTimer);engine.close()});
 server.listen(port,'127.0.0.1',()=>{engine.start();console.log(`LIGHTS_READY http://127.0.0.1:${port} · preview only · data ${dataDir}`)});

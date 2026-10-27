@@ -85,7 +85,7 @@ When you're ready: arm output (**Output off → Arm physical output**), switch t
 
 ## Triggers from other apps
 
-Other apps can GO cues and fire named triggers over **OSC** (UDP port 1461): a show-control app, a sound app, a camera app, a Stream Deck, QLab. StageLight also announces every GO, and can send a look summary (colour temperature, level, colour) to keep a camera's white balance right. Another app can ask for StageLight's scenes, cues and triggers (`/stagelight/catalog`) and offer them in a picker instead of typed commands. That is how [LiveStage](https://github.com/crownemmanuel/livestage) drives StageLight from its cues and video time markers.
+Other apps can GO cues and fire named triggers over **OSC** (UDP port 1461): a show-control app, a sound app, a camera app, a Stream Deck, QLab. StageLight also announces every GO, and can send the look of each **zone** you define (colour temperature, tint, level, colour, and whether it is white light) to keep a camera's white balance right, on GO or whenever the live look changes, and recall the other app's presets from a cue ([docs/LOOK-LINK.md](docs/LOOK-LINK.md), protocol `stagelight.look/1`). Another app can ask for StageLight's scenes, cues and triggers (`/stagelight/catalog`) and offer them in a picker instead of typed commands. That is how [LiveStage](https://github.com/crownemmanuel/livestage) drives StageLight from its cues and video time markers.
 
 Setup is in the app under **☰ → Guides → Triggers from other apps**. The full message reference is [docs/SISTER-APPS.md](docs/SISTER-APPS.md).
 

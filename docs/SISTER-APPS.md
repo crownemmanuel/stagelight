@@ -28,6 +28,10 @@ Arguments are OSC strings, int32 or float32 (bundles are accepted). Pages and cu
 | `/stagelight/play` | `s:cue [f:fade]` | Play a library cue outside any page |
 | `/stagelight/ledwall` | `s:media` | LED wall preview media (`off`) |
 | `/stagelight/trigger` | `s:name [s:requestId]` | Fire a **named trigger** (below) |
+| `/stagelight/look/get` | `[s:target] [i:replyPort] [s:requestId]` | Look Link: send the live look now ([LOOK-LINK.md](LOOK-LINK.md) §4) |
+| `/stagelight/zones` | `[i:replyPort]` | Look Link: list zones (`/stagelight/zones/begin i:count`, `/stagelight/zone s:id s:name s:role i:fixtures`, `/stagelight/zones/end`) |
+| `/stagelight/feedback` | `s:messageId s:status s:summary` | Look Link: log the app's decision about a message StageLight sent |
+| `/stagelight/presets/begin` · `/item` · `/end` | `i:count [s:target]` · `s:id s:name [s:description]` · | Look Link: publish the app's preset list to StageLight's pickers |
 
 Errors are answered with `/stagelight/error s:address s:message`. Legacy `/lights/*` addresses still work. OSC can never arm physical output or edit the patch.
 
@@ -46,6 +50,7 @@ So another app can offer StageLight's scenes, cues and triggers in a list instea
 | `/stagelight/catalog/cue` | `s:pageId i:cueNumber s:entryId s:cueName s:follow (manual\|auto) f:fadeSeconds`, one per cue-list entry, after its page |
 | `/stagelight/catalog/trigger` | `s:triggerId s:triggerName s:whatItDoes` (e.g. `GO Act One · cue 2 Sunrise`) |
 | `/stagelight/catalog/library` | `s:cueId s:cueName` (for `/stagelight/play`) |
+| `/stagelight/catalog/zone` | `s:zoneId s:zoneName s:role i:fixtureCount` (Look Link zones) |
 | `/stagelight/catalog/end` | `i:revision` |
 
 `revision` goes up whenever the show changes. `/stagelight/hello` carries it as its 6th argument, so an app that pings every few seconds re-reads the catalog only when it changed. Apps should store **IDs** (page, entry, trigger) and send those: names can be renamed, IDs keep working. Builds before OSC version 0.3.0 send a 5-argument hello and no catalog.
@@ -57,11 +62,17 @@ Targets (☰ → Network & triggers → *Send to*; MCP `lights_target_save`) are
 | When | OSC | HTTP JSON |
 |---|---|---|
 | Every GO, to targets with **announce** | `/stagelight/cue/live s:pageId s:pageName i:cueNumber s:cueName s:entryId` | `{type:"cue", page:{id,name}, cue:{entry,id,name,number}}` |
-| A cue's **look summary** (cue-list entry → *When this cue GOes, send → Look summary*) | `/stagelight/look s:page s:cue i:kelvin f:level s:#rrggbb f:saturation` | `{type:"look", page, cue, kelvin, level, color, saturation, lit, fixtures, groups:[{id,name,kelvin,level,color,saturation}]}` |
+| A cue's **look summary** (cue-list entry → *When this cue GOes, send → Look summary*), every GO for targets whose look mode is *Every GO* or *GO + live changes*, and live changes in that mode | burst: `/stagelight/look/begin …`, `/stagelight/look s:page s:cue i:kelvin f:level s:#rrggbb f:saturation` (unchanged), one `/stagelight/look/zone …` per zone, `/stagelight/look/end i:seq` | `{protocol:"stagelight.look/1", type:"look", reason, id, seq, page, cue, timing, state, output, kelvin, level, color, saturation, lit, fixtures, zones:[…], groups:[…]}` |
+| A cue's **preset send** (*Preset in that app*), before its look | `/stagelight/preset s:presetId f:fade (-1 = not set) i:seq` | `{type:"preset", preset, fade?, page, cue}` |
 | Custom (*Custom OSC message*) | the address and args you set | `{type:"message", address, args}` |
 | Target test | `/stagelight/hello s:"StageLight" s:"test"` | `{type:"hello"}` |
+| Preset list request (picker opened or *Refresh*) | `/stagelight/presets/request i:replyPort` | `{type:"presets.request"}`; reply `{presets:[{id,name,description}]}` |
 
-The look summary is the intensity-weighted color of every lit fixture (using what the fixtures can actually make: wheel slots, calibrated wheel colors), its correlated color temperature in Kelvin (McCamy), the average level and a saturation figure (0 = white light, 1 = pure color) so a camera app can tell "warm white 3000 K" from "deep amber" and only re-balance on white light. Per-group summaries are included in JSON.
+Every HTTP body also carries the Look Link envelope (`protocol`, `version`, `id`, `seq`, `at`, `target`, `test`). An HTTP reply body `{ok, status, summary}` is shown next to the send in Recent messages and `lights_network_status` (`outbound[].reply`); `/stagelight/feedback` lands in `outbound[].feedback`.
+
+**Look Link.** The full camera colour-temperature contract (zones with roles such as *face*, Duv/tint, `white`, change mode, presets, feedback) is [LOOK-LINK.md](LOOK-LINK.md), protocol `stagelight.look/1`. Zones: ☰ → Network & triggers → *Look Link zones* (MCP `lights_zone_save`); per-target settings: *Look* on the target (`lights_target_save` `look:{zones, mode, members, heartbeat}`); what would be sent: `lights_look_report`; send now: `lights_look_send`.
+
+The overall look summary is the intensity-weighted color of every lit fixture (or, when the target receives zones, of the fixtures in those zones) (using what the fixtures can actually make: wheel slots, calibrated wheel colors), its correlated color temperature in Kelvin (McCamy), the average level and a saturation figure (0 = white light, 1 = pure color) so a camera app can tell "warm white 3000 K" from "deep amber" and only re-balance on white light. Per-group summaries are included in JSON.
 
 ### Example: camera white balance
 1. Camera app listens for OSC on, say, 9100. Add a target *Camera control* → OSC 127.0.0.1:9100.

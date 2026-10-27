@@ -1,23 +1,31 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import {performance} from 'node:perf_hooks';
-import {defaults,migrate,EFFECTS,PROFILE_DEFS,EFFECT_PRESETS,BUILTIN_MEDIA} from './model.mjs';
+import {defaults,migrate,zoneFixtures,EFFECTS,PROFILE_DEFS,EFFECT_PRESETS,BUILTIN_MEDIA} from './model.mjs';
+import {LOOK_PROTOCOL,measure,lookSnap,lookDiffers,CHANGE,STILL} from './look.mjs';
 import crypto from 'node:crypto';
 import {ICONS} from '../public/icons.js';
 import {outputRGB} from '../public/fixture-colors.js';
+import {hiddenFixtureIds} from '../public/visibility.js';
 import {OSC_ADDRESSES} from './osc-routes.mjs';
 import {COMMANDS,validate,validateShow,validateWheelAttributes} from './spec.mjs';
 import {render,compose,applyOverrides,finish,blend,blendState,encode,layerEffect} from './render.mjs';
 import {Output,validateNetwork} from './output.mjs';
 const copy=x=>structuredClone(x);
 const shortId=prefix=>prefix+'-'+crypto.randomUUID().slice(0,8);
+const VERSION=(()=>{try{return JSON.parse(fs.readFileSync(new URL('../package.json',import.meta.url),'utf8')).version}catch{return '0.0.0'}})();
+// Look Link sequence numbers count tenths of a second since 2026 (and at least +1 per message), so they keep rising across restarts; int32 until 2032.
+const SEQ_EPOCH=Date.UTC(2026,0,1),REPLY_STATUS=['applied','queued','ignored','failed'];
+const iso=ms=>new Date(ms).toISOString(),text=(v,n)=>typeof v==='string'?v.replace(/[\u0000-\u001f]/g,' ').slice(0,n):'';
+const sameHost=(a,b)=>{const n=h=>String(h??'').toLowerCase().replace(/^::ffff:/,'').replace(/^\[|\]$/g,'').replace(/^(localhost|::1)$/,'127.0.0.1');return n(a)===n(b)};
+const targetHost=t=>{if(t.kind==='osc')return t.host;try{return new URL(t.url).hostname}catch{return ''}};
 export const MOVING=['rogue','mh7','beam200','beam7r'];
 export const MEDIA_TYPES={'.png':'image','.jpg':'image','.jpeg':'image','.webp':'image','.gif':'image','.mp4':'video','.webm':'video','.mov':'video','.m4v':'video'};
 export class Engine{
  constructor({dataDir,output,clock=()=>performance.now()/1000}={}){
   this.dir=dataDir;this.clock=clock;this.logs=[];this.output=output??new Output(m=>this.log(m));this.show=defaults();const seed=new URL('../show-template.json',import.meta.url);if(fs.existsSync(seed)){this.show=migrate(JSON.parse(fs.readFileSync(seed,'utf8')));validateShow(this.show)}
   if(dataDir){fs.mkdirSync(dataDir,{recursive:true});const file=path.join(dataDir,'show.json');if(fs.existsSync(file)){const raw=JSON.parse(fs.readFileSync(file,'utf8')),added=!raw.pages;this.show=migrate(raw);validateShow(this.show);if(added)this.save()}else this.save();}
-  this.agents=new Map();this.net={in:[],out:[],count:{in:0,out:0,rejected:0},listener:{listening:false}};this.sendHook=null;this.onNetworkChange=null;this.selection={ids:[],group:'backlights',revision:0};this.lampCommands=new Map();this.revision=1;this.playback=null;this.overrides={};this.fx=[];this.master=.8;this.blackout=false;this.held=null;this.fading=null;this.transition=null;this.stack=null;this.release=null;this.programmed=null;this.raw=null;this.preview=null;this.previewFrames=null;this.blind=false;this.blindOverrides={};this.blindRelease=null;this.blindStates=null;this.fxPreview=null;this.requests=new Map();this.listeners=new Set();this.tickCount=0;this.dropped=0;this.lastTick=null;this.frames=render(this.show,null,0);this.log('Engine ready in preview. Physical output is disarmed.');
+  this.agents=new Map();this.net={in:[],out:[],count:{in:0,out:0,rejected:0},listener:{listening:false},presets:{}};this.looks=new Map();this.presetBursts=new Map();this.presetAsks=new Map();this.sendHook=null;this.onNetworkChange=null;this.selection={ids:[],group:'backlights',revision:0};this.lampCommands=new Map();this.revision=1;this.playback=null;this.overrides={};this.fx=[];this.master=.8;this.blackout=false;this.held=null;this.fading=null;this.transition=null;this.stack=null;this.release=null;this.programmed=null;this.raw=null;this.preview=null;this.previewFrames=null;this.blind=false;this.blindOverrides={};this.blindRelease=null;this.blindStates=null;this.fxPreview=null;this.requests=new Map();this.listeners=new Set();this.tickCount=0;this.dropped=0;this.lastTick=null;this.frames=render(this.show,null,0);this.log('Engine ready in preview. Physical output is disarmed.');
  }
  save(){if(!this.dir)return;const f=path.join(this.dir,'show.json');fs.writeFileSync(f+'.tmp',JSON.stringify(this.show,null,2));fs.renameSync(f+'.tmp',f)}
  // Audit log is append-only and asynchronous so a GO never waits on the disk; rotates at ~2 MB.
@@ -48,6 +56,7 @@ export class Engine{
    if(packet)packet[fixture.address+control.channel-2]=control[pulse.action];
   }
   this.output.send(packets);
+  this.watchLooks();
   for(const f of this.listeners)f();
  }
  sourceTime(p){const cue=p.cue,t=p.paused?p.offset:p.offset+this.clock()-p.started;return cue.loop?t%cue.duration:Math.min(t,cue.duration-1e-6)}
@@ -90,33 +99,139 @@ export class Engine{
  goEntry(page,index,fade){
   const entry=page.cues[index],cue=this.show.cues.find(c=>c.id===entry.cue);if(!cue)throw Error('Unknown cue '+entry.cue);
   this.startCue(cue,{fade:fade??entry.fade});this.stack={page:page.id,entry:entry.id,index};
-  this.fireSends(page,entry,index,cue);
+  this.fireSends(page,entry,index,cue,fade??entry.fade);
  }
  // Every GO (UI, MCP, OSC, auto-follow) tells announce targets and runs the entry's sends. Never blocks: the server's sendHook is async.
- fireSends(page,entry,index,cue){
-  const targets=this.show.targets.filter(t=>t.enabled!==false),name=entry.label??cue.name;if(!targets.length)return;
-  const info={page:{id:page.id,name:page.name},cue:{entry:entry.id,id:cue.id,name,number:index+1}};let look;
-  const lookMsg=t=>{look??=this.lookSummary(cue);return t.kind==='osc'?{osc:{address:'/stagelight/look',args:[page.name,name,{t:'i',v:look.kelvin??0},{t:'f',v:look.level},look.color,{t:'f',v:look.saturation}]}}:{http:{type:'look',...info,...look}}};
-  const cueMsg=t=>t.kind==='osc'?{osc:{address:'/stagelight/cue/live',args:[page.id,page.name,index+1,name,entry.id]}}:{http:{type:'cue',...info}};
-  for(const t of targets.filter(t=>t.announce))this.emit(t,cueMsg(t),'announce');
-  for(const x of entry.send??[]){const t=targets.find(t=>t.id===x.target);if(!t)continue;
-   this.emit(t,x.message==='look'?lookMsg(t):x.message==='cue'?cueMsg(t):t.kind==='osc'?{osc:{address:x.address,args:x.args??[]}}:{http:{type:'message',...info,address:x.address,args:x.args??[]}},x.message)}
+ // Preset sends go before the look; a target gets one look per GO (explicit look send, or its look mode cue/change).
+ fireSends(page,entry,index,cue,fade=entry.fade){
+  const targets=this.show.targets.filter(t=>t.enabled!==false);if(!targets.length)return;
+  const info=this.cueInfo(page,entry,index,cue),sends=(entry.send??[]).map(x=>({x,t:targets.find(t=>t.id===x.target)})).filter(s=>s.t),looked=new Set();
+  for(const t of targets.filter(t=>t.announce))this.emitCue(t,info,'announce');
+  for(const {x,t} of sends.filter(s=>s.x.message==='preset'))this.emitPreset(t,x,info);
+  for(const {x,t} of sends){
+   if(x.message==='look'){if(!looked.has(t.id)){looked.add(t.id);this.cueLook(t,cue,info,fade)}}
+   else if(x.message==='cue')this.emitCue(t,info,'cue');
+   else if(x.message==='osc'){const m=this.envelope(t,'message');this.emit(t,t.kind==='osc'?{osc:{address:x.address,args:x.args??[]}}:{http:{...m,...info,address:x.address,args:x.args??[]}},'osc',m)}}
+  for(const t of targets)if(!looked.has(t.id)&&['cue','change'].includes(t.look?.mode))this.cueLook(t,cue,info,fade);
  }
- emit(target,packet,label){const row={at:new Date().toISOString(),target:target.name,kind:target.kind,label,summary:packet.osc?packet.osc.address+' '+packet.osc.args.map(a=>a&&typeof a==='object'?a.v:a).join(' '):packet.http.type};this.net.count.out++;
+ cueInfo(page,entry,index,cue){return {page:{id:page.id,name:page.name},cue:{entry:entry.id,id:cue.id,name:entry.label??cue.name,number:index+1}}}
+ emitCue(t,info,label){const m=this.envelope(t,'cue');this.emit(t,t.kind==='osc'?{osc:{address:'/stagelight/cue/live',args:[info.page.id,info.page.name,info.cue.number,info.cue.name,info.cue.entry]}}:{http:{...m,...info}},label,m)}
+ emitPreset(t,x,info){const m={...this.envelope(t,'preset'),preset:x.preset,...(x.fade===undefined?{}:{fade:x.fade}),page:info?.page??null,cue:info?.cue??null};
+  this.emit(t,t.kind==='osc'?{osc:[['/stagelight/preset',[x.preset,{t:'f',v:x.fade??-1},{t:'i',v:m.seq}]]]}:{http:m},'preset',m)}
+ // label is what the log shows; msg (an enveloped message) lets replies and /stagelight/feedback find the row by id or seq.
+ emit(target,packet,label,msg){
+  const list=Array.isArray(packet.osc)?packet.osc:null,summary=list?(list.length>1?`${list[1][0]}/* · ${list.length} messages`:list[0][0]+' '+list[0][1].map(a=>a&&typeof a==='object'?a.v:a).join(' ')):packet.osc?packet.osc.address+' '+packet.osc.args.map(a=>a&&typeof a==='object'?a.v:a).join(' '):[packet.http.type,packet.http.reason,packet.http.preset].filter(Boolean).join(' · ');
+  const row={at:new Date().toISOString(),target:target.name,targetId:target.id,kind:target.kind,label,summary,...(msg?{id:msg.id,seq:msg.seq}:{})};this.net.count.out++;
   if(!this.sendHook){row.result='no network transport';this.netOut(row);return}
-  const t0=performance.now();setImmediate(()=>this.sendHook(target,packet).then(()=>{row.result='sent';row.ms=+(performance.now()-t0).toFixed(2)},e=>{row.result='failed: '+e.message}).finally(()=>this.netOut(row)))}
+  const t0=performance.now();setImmediate(()=>this.sendHook(target,packet).then(reply=>{row.result='sent';row.ms=+(performance.now()-t0).toFixed(2);this.takeReply(target,row,reply)},e=>{row.result='failed: '+e.message}).finally(()=>this.netOut(row)))}
+ // An HTTP target may answer {ok, status, summary, presets}: the summary is shown with the send; presets fill the pickers.
+ takeReply(target,row,reply){
+  if(!reply||typeof reply!=='object'||Array.isArray(reply))return;const r={};
+  if(typeof reply.ok==='boolean')r.ok=reply.ok;if(REPLY_STATUS.includes(reply.status))r.status=reply.status;if(typeof reply.summary==='string'&&reply.summary.trim())r.summary=text(reply.summary,200);
+  if(Object.keys(r).length)row.reply=r;if(Array.isArray(reply.presets))this.storePresets(target,reply.presets,'http');
+ }
  netOut(row){this.net.out.unshift(row);this.net.out.length=Math.min(this.net.out.length,40)}
  netIn(row){this.net.count.in++;if(!row.ok)this.net.count.rejected++;this.net.in.unshift(row);this.net.in.length=Math.min(this.net.in.length,40)}
- // What a camera wants to know: intensity-weighted color, its correlated color temperature (McCamy) and saturation, overall and per group.
- lookSummary(cue){
-  const states=finish(this.show,compose(this.show,cue,Math.min(cue.duration*.5,2)),this.master,false),byId=new Map(states.map(s=>[s.id,s]));
-  const hex=c=>'#'+c.map(v=>Math.round(Math.max(0,Math.min(1,v))*255).toString(16).padStart(2,'0')).join('');
-  const kelvin=([r,g,b])=>{const lin=c=>c<=.04045?c/12.92:((c+.055)/1.055)**2.4,R=lin(r),G=lin(g),B=lin(b),X=.4124*R+.3576*G+.1805*B,Y=.2126*R+.7152*G+.0722*B,Z=.0193*R+.1192*G+.9505*B,sum=X+Y+Z;if(sum<=0)return null;const x=X/sum,y=Y/sum,n=(x-.332)/(.1858-y);return Math.round(Math.max(1000,Math.min(20000,449*n**3+3525*n**2+6823.3*n+5520.33)))};
-  const sum=ids=>{let w=0,n=0,level=0,lit=0;const rgb=[0,0,0];for(const id of ids){const f=this.show.fixtures.find(x=>x.id===id),s=byId.get(id);if(!f?.enabled||!s)continue;n++;level+=s.intensity;if(s.intensity<.02)continue;lit++;const c=outputRGB(f.profile,s.color,s.white??0,f,s);for(let i=0;i<3;i++)rgb[i]+=c[i]*s.intensity;w+=s.intensity}
-   if(!n)return null;const col=w?rgb.map(v=>v/w):[0,0,0],max=Math.max(...col),min=Math.min(...col);return {level:+(level/n).toFixed(3),lit,fixtures:n,color:hex(col),kelvin:w?kelvin(col):null,saturation:max?+((max-min)/max).toFixed(3):0}};
-  return {...sum(this.show.fixtures.map(f=>f.id)),groups:this.show.groups.map(g=>({id:g.id,name:g.name,...sum(g.fixtures)})).filter(g=>g.lit)};
+ // ── Look Link (protocol stagelight.look/1, docs/LOOK-LINK.md) ──
+ lookState(key){let st=this.looks.get(key);if(!st){st={seq:0,at:this.clock(),sent:null,prev:null,changedAt:-Infinity,pending:false,settle:null};this.looks.set(key,st)}return st}
+ // Every JSON message to a target carries this; consume:false peeks (look.report).
+ envelope(t,type,{test=false,consume=true}={}){
+  const st=this.lookState(t?.id??''),seq=Math.max(st.seq+1,Math.floor((Date.now()-SEQ_EPOCH)/100));if(consume)st.seq=seq;
+  return {protocol:LOOK_PROTOCOL,app:'StageLight',version:VERSION,type,id:'msg_'+crypto.randomUUID().replaceAll('-','').slice(0,8),seq,at:new Date().toISOString(),target:t?.id??null,test};
  }
- networkStatus(){const o=this.show.settings.osc??{bind:'loopback',allow:[]};return {listener:{...o,...this.net.listener},addresses:OSC_ADDRESSES.map(([address,args,does])=>({address,args,does})),triggers:this.show.triggers,targets:this.show.targets,count:this.net.count,inbound:this.net.in,outbound:this.net.out}}
+ targetById(ref){const t=this.show.targets.find(t=>t.id===ref);if(!t)throw Error('Unknown target '+ref);return t}
+ // A target's zones in its order (none chosen = every zone, in show order).
+ targetZones(t,ids){const all=this.show.zones??[],pick=ids??t?.look?.zones;if(!pick?.length)return all;return pick.map(id=>{const z=all.find(z=>z.id===id);if(!z)throw Error('Unknown zone '+id);return z})}
+ // A cue's end state as GO will leave it: the cue (sampled like the 0.3.0 summary) under the current manual changes, master and blackout.
+ cueEndStates(cue){return finish(this.show,applyOverrides(this.show,compose(this.show,cue,Math.min(cue.duration*.5,2)),this.overrides),this.master,this.blackout)}
+ // Zones and overall figures from a cue's end state or the live frames (what the stage shows now). Overall covers the zones sent, or every fixture without zones.
+ lookData(t,{cue=null,zones,members}={}){
+  const states=cue?this.cueEndStates(cue):this.frames,list=this.targetZones(t,zones),m=members??!!t?.look?.members;
+  const ids=list.length?[...new Set(list.flatMap(z=>zoneFixtures(this.show,z)))]:this.show.fixtures.map(f=>f.id);
+  return {states,overall:measure(this.show,states,ids)??{level:0,lit:0,fixtures:0,color:'#000000',kelvin:null,saturation:0},zones:list.map(z=>({id:z.id,name:z.name,role:z.role,...measure(this.show,states,zoneFixtures(this.show,z),{chroma:true,members:m})}))};
+ }
+ timing(fade,startedMs=Date.now()){return {fade:+(+fade).toFixed(3),startedAt:iso(startedMs),settlesAt:iso(startedMs+fade*1000)}}
+ liveTiming(){const f=this.transition??this.fading;if(!f)return this.timing(0);return this.timing(f.duration,Date.now()-(this.clock()-f.start)*1000)}
+ liveInfo(){const page=this.activePage();if(page&&this.playback){const i=this.stackIndex(page),e=page.cues[i],c=e&&this.show.cues.find(x=>x.id===e.cue);if(c)return this.cueInfo(page,e,i,c)}const p=this.playback?.cue;return p?{page:null,cue:{entry:null,id:p.id,name:p.name,number:null}}:null}
+ lookMessage(t,data,{reason,info=null,timing,test=false,requestId,consume=true}){
+  const settles=Date.parse(timing.settlesAt)>Date.now();
+  return {...this.envelope(t,'look',{test,consume}),reason,...(requestId?{requestId}:{}),page:info?.page??null,cue:info?.cue??null,timing,state:reason!=='settled'&&timing.fade>0&&settles?'fading':'settled',
+   output:{armed:this.output.armed,blackout:this.blackout,master:this.master},...data.overall,zones:data.zones,groups:this.show.groups.map(g=>({id:g.id,name:g.name,...measure(this.show,data.states,g.fixtures)})).filter(g=>g.lit)};
+ }
+ // The OSC burst for a look (§3.6): begin, the 0.3.0 /stagelight/look, one /look/zone per zone, end.
+ lookOSC(m){const f=v=>({t:'f',v}),i=v=>({t:'i',v}),pageName=m.test?'test':m.page?.name??'',cueName=m.cue?.name??'';
+  return [['/stagelight/look/begin',[i(m.seq),m.reason,pageName,cueName,f(m.timing.fade),i(m.zones.length),i(m.output.armed?1:0)]],
+   ['/stagelight/look',[pageName,cueName,i(m.kelvin??0),f(m.level),m.color,f(m.saturation)]],
+   ...m.zones.map(z=>['/stagelight/look/zone',[i(m.seq),z.id,z.role,z.name,i(z.kelvin??0),f(z.duv??0),f(z.level),z.color,f(z.saturation),i(z.white?1:0),i(z.lit),i(z.fixtures),i(z.colorUnknown)]]),
+   ['/stagelight/look/end',[i(m.seq)]]]}
+ sendLook(t,msg,label){this.emit(t,t.kind==='osc'?{osc:this.lookOSC(msg)}:{http:msg},label,msg);const st=this.lookState(t.id);st.at=this.clock();st.sent=lookSnap(msg);st.prev??=st.sent}
+ cueLook(t,cue,info,fade){
+  this.sendLook(t,this.lookMessage(t,this.lookData(t,{cue}),{reason:'cue',info,timing:this.timing(fade)}),'look');
+  const st=this.lookState(t.id);st.pending=false;st.settle=t.look?.mode==='change'&&fade>0?{until:this.clock()+fade,cue,info,fade,startedMs:Date.now(),playback:this.playback,master:this.master,blackout:this.blackout}:null;
+ }
+ liveLook(t,reason,extra={}){return this.lookMessage(t,this.lookData(t),{reason,info:this.liveInfo(),timing:this.liveTiming(),...extra})}
+ // Change mode and heartbeats, checked from the engine tick (at most every 50 ms). A GO's fade is announced once; while it runs,
+ // changes are not re-sent unless playback, master or blackout change; when it ends a settled look follows.
+ watchLooks(){
+  const now=this.clock();if(now-(this.lastWatch??-Infinity)<.04)return;this.lastWatch=now;
+  for(const t of this.show.targets){const mode=t.look?.mode??'off',hb=t.look?.heartbeat??0;if(t.enabled===false||mode==='off')continue;
+   try{const st=this.lookState(t.id);
+    if(st.settle){const s=st.settle;
+     if(s.playback!==this.playback||s.master!==this.master||s.blackout!==this.blackout)st.settle=null;
+     else if(now>=s.until){st.settle=null;this.sendLook(t,this.lookMessage(t,this.lookData(t,{cue:s.cue}),{reason:'settled',info:s.info,timing:this.timing(s.fade,s.startedMs)}),'settled');st.prev=st.sent;st.changedAt=now;continue}
+     else continue}
+    if(mode==='change'){const cur=lookSnap(this.lookData(t));
+     if(!st.sent){st.sent=st.prev=cur;continue}
+     if(lookDiffers(cur,st.prev,STILL))st.changedAt=now;st.prev=cur;
+     const big=lookDiffers(cur,st.sent,CHANGE),quiet=now-st.changedAt>=.25,free=now-st.at>=.25;
+     if(big&&free){this.sendLook(t,this.liveLook(t,'change'),'change');st.pending=true;continue}
+     if(big)st.pending=true;
+     if(st.pending&&quiet&&free){st.pending=false;if(lookDiffers(cur,st.sent,STILL)){this.sendLook(t,this.liveLook(t,'change'),'change');continue}}}
+    if(hb>0&&now-st.at>=hb)this.sendLook(t,this.liveLook(t,'heartbeat'),'heartbeat');
+   }catch(e){if(this.lookError!==e.message){this.lookError=e.message;this.log('Look Link: '+e.message)}}}
+ }
+ // 0.3.0 compatibility: the look summary of a cue's end state, plus its zones.
+ lookSummary(cue){const d=this.lookData(null,{cue});return {...d.overall,zones:d.zones,groups:this.show.groups.map(g=>({id:g.id,name:g.name,...measure(this.show,d.states,g.fixtures)})).filter(g=>g.lit)}}
+ /** look.report: exactly what a target would be sent, without sending or using a sequence number. */
+ lookReport(args){
+  const t=args.target?this.targetById(args.target):null;let cue=null,info=null,fade=0;
+  if(args.page!==undefined||args.entry!==undefined){const page=this.show.pages.find(p=>p.id===args.page),i=page?.cues.findIndex(e=>e.id===args.entry)??-1;if(i<0)throw Error('Give a page and one of its cue list entries');const e=page.cues[i];cue=this.show.cues.find(c=>c.id===e.cue);info=this.cueInfo(page,e,i,cue);fade=e.fade}
+  else if(args.cue){cue=this.show.cues.find(c=>c.id===args.cue);if(!cue)throw Error('Unknown cue '+args.cue);info={page:null,cue:{entry:null,id:cue.id,name:cue.name,number:null}}}
+  const msg=this.lookMessage(t,this.lookData(t,{cue,zones:args.zones,members:args.members}),{reason:cue?'cue':'request',info:cue?info:this.liveInfo(),timing:cue?this.timing(fade):this.liveTiming(),consume:false});
+  return {target:t?.id??null,kind:t?.kind??null,mode:t?.look?.mode??'off',message:msg,osc:this.lookOSC(msg).map(([address,args])=>({address,types:','+args.map(a=>a&&typeof a==='object'?a.t:'s').join(''),args:args.map(a=>a&&typeof a==='object'?a.v:a)})),
+   note:'Nominal colour from what each fixture is told to output and can make; not metered. seq and id are previews: a real send uses the next sequence number.'};
+ }
+ /** /stagelight/look/get without a target: the OSC burst for every zone, for the sender. */
+ lookReply(requestId){return this.lookOSC(this.liveLook(null,'request',requestId?{requestId}:{}))}
+ // ── Preset lists published by target apps (kept in memory for the pickers) ──
+ storePresets(t,list,via){
+  const presets=list.filter(p=>p&&typeof p.id==='string'&&p.id.trim()).slice(0,200).map(p=>({id:text(p.id,100),name:text(p.name,100)||text(p.id,100),...(typeof p.description==='string'&&p.description?{description:text(p.description,300)}:{})}));
+  this.net.presets[t.id]={at:new Date().toISOString(),via,presets};return presets.length;
+ }
+ askPresets(t){this.presetAsks.set(t.id,this.clock());const m=this.envelope(t,'presets.request');
+  this.emit(t,t.kind==='osc'?{osc:{address:'/stagelight/presets/request',args:[{t:'i',v:this.net.listener.port??this.show.settings.osc?.port??1461}]}}:{http:m},'presets',m)}
+ // OSC /stagelight/presets/begin|item|end from an app, filed under the target it belongs to (explicit id, else host, port, then who was asked last).
+ receivePresets(p,from){
+  const key=from.address+':'+from.port;let b=this.presetBursts.get(key);
+  if(p.phase==='begin'){this.presetBursts.set(key,{target:p.target,items:[]});return `presets begin · ${p.count??'?'} expected`}
+  if(!b){b={items:[]};this.presetBursts.set(key,b)}
+  if(p.phase==='item'){if(b.items.length<200)b.items.push(p.item);return 'preset '+p.item.id}
+  this.presetBursts.delete(key);let t;
+  if(b.target){const r=b.target.toLowerCase();t=this.show.targets.find(t=>t.id.toLowerCase()===r||t.name.toLowerCase()===r);if(!t)throw Error('Unknown target '+b.target)}
+  else{const hosts=this.show.targets.filter(t=>sameHost(targetHost(t),from.address)),byPort=hosts.filter(t=>t.kind==='osc'&&t.port===from.port),asked=hosts.filter(t=>this.clock()-(this.presetAsks.get(t.id)??-Infinity)<30).sort((a,b)=>this.presetAsks.get(b.id)-this.presetAsks.get(a.id));
+   t=hosts.length===1?hosts[0]:byPort.length===1?byPort[0]:asked[0];
+   if(!t)throw Error(hosts.length?`Several targets use ${from.address}; send the target id as /stagelight/presets/begin i:count s:targetId`:`No target has host ${from.address}`)}
+  return `presets · ${this.storePresets(t,b.items,'osc')} for ${t.name}`;
+ }
+ // /stagelight/feedback: an app's decision about one of our messages, matched by message id (or seq for OSC targets).
+ feedback({id,status,summary},from){
+  const host=r=>{const t=this.show.targets.find(t=>t.id===r.targetId);return t&&sameHost(targetHost(t),from)};
+  const row=this.net.out.find(r=>r.id===id)??this.net.out.find(r=>String(r.seq)===id&&host(r))??this.net.out.find(r=>String(r.seq)===id);
+  if(row)row.feedback={status,summary,at:new Date().toISOString()};this.log(`Feedback ${status}${row?' · '+row.target:''}${summary?' · '+summary:''}`);
+  return `feedback · ${status}${row?' · '+row.target+' '+row.label:' · message not in the recent log'}`;
+ }
+ visualizerStatus(){const v=this.show.visualizer??{hiddenGroups:[],hiddenFixtures:[]},hidden=hiddenFixtureIds(this.show);return {hiddenGroups:v.hiddenGroups,hiddenFixtures:v.hiddenFixtures,hidden:[...hidden],drawn:this.show.fixtures.length-hidden.size,total:this.show.fixtures.length}}
+ networkStatus(){const o=this.show.settings.osc??{bind:'loopback',allow:[]};return {listener:{...o,...this.net.listener},addresses:OSC_ADDRESSES.map(([address,args,does])=>({address,args,does})),triggers:this.show.triggers,targets:this.show.targets,zones:this.show.zones.map(z=>({...z,members:zoneFixtures(this.show,z).filter(id=>this.show.fixtures.find(f=>f.id===id)?.enabled)})),presets:this.net.presets,looks:Object.fromEntries(this.show.targets.map(t=>{const st=this.looks.get(t.id);return [t.id,{mode:t.look?.mode??'off',seq:st?.seq??0,settling:!!st?.settle,lastSentAgo:st?+(this.clock()-st.at).toFixed(2):null}]})),count:this.net.count,inbound:this.net.in,outbound:this.net.out}}
  // Auto-follow: an entry marked follow:auto fires the next entry after its wait.
  follow(){
   const page=this.activePage();if(!page||!this.playback||this.playback.paused)return;
@@ -175,7 +290,9 @@ export class Engine{
  async command(name,args={},{lean=false}={}){
   if(!Object.hasOwn(COMMANDS,name))throw Error('Unknown command '+name);const def=COMMANDS[name];validate(def.schema,args);
   if(name==='agent.hello'){const known=this.agents.get(args.session);this.agents.set(args.session,{session:args.session,client:args.client,version:args.version??'',connectedAt:known?.connectedAt??this.clock(),lastSeen:this.clock()});if(!known)this.log(`Agent connected · ${args.client}${args.version?' '+args.version:''}`);return {ok:true}}
-  if(name==='status')return this.snapshot();if(name==='patch.report')return this.patchReport();if(name==='network.status')return this.networkStatus();if(name==='schema')return {version:1,commands:COMMANDS,profiles:PROFILE_DEFS,effects:EFFECTS,presets:this.allPresets(),icons:ICONS,media:BUILTIN_MEDIA};let created;
+  if(name==='status')return this.snapshot();if(name==='visualizer.status')return this.visualizerStatus();if(name==='patch.report')return this.patchReport();if(name==='network.status')return this.networkStatus();if(name==='look.report')return this.lookReport(args);
+  if(name==='target.presets'){const t=this.targetById(args.id);if(args.refresh)this.askPresets(t);return {target:t.id,requested:!!args.refresh,...(this.net.presets[t.id]??{at:null,presets:[]})}}
+ if(name==='schema')return {version:1,commands:COMMANDS,profiles:PROFILE_DEFS,effects:EFFECTS,presets:this.allPresets(),icons:ICONS,media:BUILTIN_MEDIA};let created;
   if(this.output.armed&&['show.import','fixture.patch','output.configure','cue.seek','effect.preview'].includes(name))throw Error('Disarm physical output before this operation.');
   switch(name){
    case 'selection.set':{
@@ -225,7 +342,7 @@ export class Engine{
     this.update(s=>{for(const entry of entries){const fixture=s.fixtures.find(f=>f.id===entry.id),slot={name:args.name,color:args.color,value:entry.value,...(entry.secondary===undefined?{}:{secondary:entry.secondary})};fixture.colorSlots=(fixture.colorSlots??[]).filter(c=>c.value!==slot.value||(c.secondary??0)!==(slot.secondary??0));fixture.colorSlots.push(slot)}if(name==='fixture.colors.save')this.upsert(s.palettes,{id:'wheel-'+args.color.slice(1).toLowerCase(),name:args.name,color:args.color})});break;
    }
    case 'fixture.clear':this.ensureIds(args.ids);for(const id of args.ids)delete (this.blind?this.blindOverrides:this.overrides)[id];break;
-   case 'fixture.place':this.ensureIds([args.id]);this.update(s=>{s.fixtures.find(f=>f.id===args.id).position=copy(args.position)});break;
+   case 'fixture.place':this.ensureIds([args.id]);this.update(s=>{const f=s.fixtures.find(f=>f.id===args.id);f.position=copy(args.position);if(args.aim)f.aim=copy(args.aim)});break;
    case 'calibration.hold':{
     this.ensureIds([args.id]);if(!['rogue','mh7','beam200','beam7r'].includes(this.show.fixtures.find(f=>f.id===args.id).profile))throw Error('Select a verified moving head');
     if(this.playback&&!this.playback.paused){this.playback.offset=this.elapsed();this.playback.paused=true;}
@@ -254,7 +371,7 @@ export class Engine{
     const drop=new Set(args.remove??[]),fixtures=[...g.fixtures,...(args.add??[]).filter(id=>!g.fixtures.includes(id))].filter((id,i,all)=>!drop.has(id)&&all.indexOf(id)===i);
     if(!fixtures.length)throw Error('A group needs at least one fixture; delete it instead');
     this.update(s=>this.upsert(s.groups,{id:g.id,name:args.name??g.name,fixtures}));break;}
-   case 'group.delete':if(this.show.effects.some(e=>e.group===args.id))throw Error('A saved effect uses this group');this.update(s=>{s.groups=s.groups.filter(g=>g.id!==args.id)});break;
+   case 'group.delete':if(this.show.effects.some(e=>e.group===args.id))throw Error('A saved effect uses this group');this.update(s=>{s.groups=s.groups.filter(g=>g.id!==args.id);if(s.visualizer)s.visualizer.hiddenGroups=s.visualizer.hiddenGroups.filter(g=>g!==args.id)});break;
    case 'palette.delete':this.update(s=>{s.palettes=s.palettes.filter(p=>p.id!==args.id)});break;
    case 'page.save':this.update(s=>this.upsert(s.pages,args.page));break;
    case 'page.delete':this.update(s=>{s.pages=s.pages.filter(p=>p.id!==args.id)});if(this.stack?.page===args.id)this.stack=null;break;
@@ -281,10 +398,13 @@ export class Engine{
     if(args.requestId){this.requests.set(args.requestId,this.clock());if(this.requests.size>1000)this.requests.delete(this.requests.keys().next().value)}
     const r=await this.command(t.command,copy(t.args??{}),{lean:true});created={trigger:t.id,command:t.command,...(r.created?{result:r.created}:{})};break;}
    case 'target.save':this.update(s=>this.upsert(s.targets,args.target));break;
-   case 'target.delete':this.update(s=>{s.targets=s.targets.filter(t=>t.id!==args.id);for(const p of s.pages)for(const e of p.cues)if(e.send){e.send=e.send.filter(x=>x.target!==args.id);if(!e.send.length)delete e.send}});break;
-   case 'target.test':{const t=this.show.targets.find(t=>t.id===args.id);if(!t)throw Error('Unknown target');const cue=this.playback?.cue??this.show.cues[0];
-    if((args.message??'ping')==='ping')this.emit(t,t.kind==='osc'?{osc:{address:'/stagelight/hello',args:['StageLight','test']}}:{http:{type:'hello',app:'StageLight'}},'test');
-    else{const look=this.lookSummary(cue);this.emit(t,t.kind==='osc'?{osc:{address:'/stagelight/look',args:['test',cue.name,{t:'i',v:look.kelvin??0},{t:'f',v:look.level},look.color,{t:'f',v:look.saturation}]}}:{http:{type:'look',test:true,cue:{name:cue.name},...look}},'test')}break;}
+   case 'target.delete':this.update(s=>{s.targets=s.targets.filter(t=>t.id!==args.id);for(const p of s.pages)for(const e of p.cues)if(e.send){e.send=e.send.filter(x=>x.target!==args.id);if(!e.send.length)delete e.send}});this.looks.delete(args.id);delete this.net.presets[args.id];break;
+   case 'zone.save':this.update(s=>this.upsert(s.zones,args.zone));break;
+   case 'zone.delete':if(!this.show.zones.some(z=>z.id===args.id))throw Error('Unknown zone');this.update(s=>{s.zones=s.zones.filter(z=>z.id!==args.id);for(const t of s.targets)if(t.look?.zones){t.look.zones=t.look.zones.filter(z=>z!==args.id);if(!t.look.zones.length)delete t.look.zones}});break;
+   case 'look.send':{const t=this.targetById(args.target),msg=this.liveLook(t,'request',args.requestId?{requestId:args.requestId}:{});this.sendLook(t,msg,'request');created={message:msg.id,seq:msg.seq};break;}
+   case 'target.test':{const t=this.targetById(args.id);
+    if((args.message??'ping')==='ping'){const m=this.envelope(t,'hello',{test:true});this.emit(t,t.kind==='osc'?{osc:{address:'/stagelight/hello',args:['StageLight','test']}}:{http:m},'test',m)}
+    else this.sendLook(t,this.liveLook(t,'test',{test:true}),'test');break;}
    case 'preset.save':{if(Object.hasOwn(EFFECT_PRESETS,args.preset.id))throw Error('Built-in presets cannot be changed — save under a new id');this.update(s=>this.upsert(s.presets,args.preset));created={preset:args.preset.id};break;}
    case 'preset.delete':{if(Object.hasOwn(EFFECT_PRESETS,args.id))throw Error('Built-in presets cannot be deleted');if(!this.show.presets.some(p=>p.id===args.id))throw Error('Unknown custom preset');this.update(s=>{s.presets=s.presets.filter(p=>p.id!==args.id)});if(this.fxPreview?.preset===args.id)this.fxPreview.preset=null;break;}
    case 'fx.cancel':this.fxPreview=null;break;
@@ -348,6 +468,11 @@ export class Engine{
     this.update(s=>{this.upsert(s.cues,cue);created={cue:id};if(args.page)created.entry=this.appendEntry(s,args.page,id,args.fade)});break;}
    case 'media.import':created={media:this.addMedia(args.path,args.name)};break;
    case 'media.delete':{const m=this.show.media.find(m=>m.id===args.id);if(!m)throw Error(BUILTIN_MEDIA.some(b=>b.id===args.id)?'Built-in media cannot be deleted':'Unknown media');this.update(s=>{s.media=s.media.filter(x=>x.id!==args.id);if(s.ledWall.media===args.id)s.ledWall.media='off'});if(this.dir)fs.rmSync(path.join(this.dir,'media',path.basename(m.src)),{force:true});break;}
+   case 'visualizer.hide':{if(!args.groups&&!args.fixtures)throw Error('Name groups and/or fixtures to hide or show');for(const g of args.groups??[])if(!this.show.groups.some(x=>x.id===g))throw Error('Unknown group '+g);this.ensureIds(args.fixtures??[]);
+    this.update(s=>{const v=s.visualizer??={hiddenGroups:[],hiddenFixtures:[]},apply=(list,items)=>args.hidden?[...new Set([...list,...items])]:list.filter(x=>!items.includes(x));
+     if(args.groups)v.hiddenGroups=apply(v.hiddenGroups,args.groups);if(args.fixtures)v.hiddenFixtures=apply(v.hiddenFixtures,args.fixtures);
+     if(!args.hidden&&args.groups){const members=new Set(args.groups.flatMap(g=>s.groups.find(x=>x.id===g).fixtures));v.hiddenFixtures=v.hiddenFixtures.filter(id=>!members.has(id))}});
+    created={visualizer:this.visualizerStatus()};break;}
    case 'ledwall.set':this.update(s=>Object.assign(s.ledWall,args));break;
    case 'master.set':this.master=args.value;break;
    case 'blackout.set':this.blackout=args.enabled;break;

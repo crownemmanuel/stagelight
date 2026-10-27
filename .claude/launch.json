@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "stagelight-dev",
+      "runtimeExecutable": "env",
+      "runtimeArgs": ["LIGHTS_PORT=1470", "LIGHTS_OSC_PORT=1471", "node", "server.mjs"],
+      "port": 1470
+    }
+  ]
+}

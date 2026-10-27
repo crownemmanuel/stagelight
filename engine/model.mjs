@@ -6,6 +6,10 @@ export const PROFILE_DEFS = {
   beam200:{colorPresets:BEAM200_COLOR_PRESETS,name:'200W Beam · Hog 16ch · observed colors',channels:16,moving:true,panTravel:450,tiltTravel:270,colorMapping:'fixture-calibrated',colorControls:{primary:{channel:9,min:0,max:127},secondary:{channel:10,min:0,max:255}},lampControl:{channel:16,strike:200,douse:100,neutral:0,pulseSeconds:5},attributes:['intensity','color','colorWheel','colorWheel2','pan','tilt','movementSpeed','frost','gobo','goboShake','focus','prism','prismRotation'],source:'Operator-provided Hog 200W Beam Advanced screenshots, 2026-10-25'},
   q120:{name:'MEGA-LITE Colorlite Q120 · 5ch',channels:5,moving:false,attributes:['intensity','color','white'],source:'https://goknight.com/content/documentation/Colorlite%20Q120%20Manual%20V4.pdf'},
   colorado:{name:'COLORado 2 Quad Zoom · AR2.Z',channels:7,moving:false,attributes:['intensity','color','white','zoom'],source:'https://chauvetprofessional.com/wp-content/uploads/2018/01/COLORado_2_Quad_Zoom_UM-Rev5.pdf'},
+  // Hog "Ovation Reve E-3 12ch" = Chauvet 12Ch: dimmer, dimmer fine, R, G, B, amber, mint, strobe, virtual color wheel, color temperature, hue, gobo rotator. Ch8–12 at 0 = off/no function/index 0.
+  reveE3:{name:'Ovation Rêve E-3 · 12ch',channels:12,moving:false,attributes:['intensity','color','white'],source:'https://chauvetprofessional.com/wp-content/uploads/2021/03/Ovation-Reve-E-3_UM_Rev14.pdf'},
+  // Hog "RGBW Pendant Light 4ch" house lights: generic label, no manufacturer found. Assumed R,G,B,W with no dimmer channel; fixtures stay disabled/unverified until the Hog personality confirms the layout.
+  pendant4:{name:'RGBW Pendant Light · Hog 4ch · layout unverified',channels:4,moving:false,attributes:['intensity','color','white']},
   rogue:{colorWheel:COLOR_WHEELS.rogue,name:'Rogue R3 Beam · 16ch',channels:16,moving:true,attributes:['intensity','color','pan','tilt','movementSpeed','gobo','prism','prismRotation','frost','focus'],source:'https://chauvetprofessional.com/wp-content/uploads/2021/04/Rogue_R3_Beam_UM_Rev6-1.pdf'},
   mh7:{colorWheel:COLOR_WHEELS.mh7,defaultOpticalMode:'beam',defaultGobo:0,opticalModes:['spot','beam'],lampControl:{channel:21,strike:50,douse:70,neutral:0,pulseSeconds:5},name:'Martin RUSH MH 7 Hybrid · 21ch',channels:21,moving:true,attributes:['intensity','color','pan','tilt','opticalMode','zoom','focus','frost','gobo','prism','prismRotation'],source:'https://www.fullcompass.com/common/files/27391-MartinProfessionalRUSHMH7HybridUserManual.pdf'},
   unknown:{name:'Unverified fixture · preview only',channels:0,moving:true,attributes:['intensity','color','pan','tilt']}
@@ -54,11 +58,13 @@ export const BUILTIN_MEDIA=[
   {id:'cross-glow',name:'Cross glow',kind:'image',src:'/led/cross-glow.svg'},
   {id:'ocean',name:'Ocean',kind:'image',src:'/led/ocean.svg'}
 ];
+// Look Link zone members: its groups' fixtures then its own, each once, in order (enabled or not).
+export const zoneFixtures=(show,zone)=>[...new Set([...(zone.groups??[]).flatMap(g=>show.groups.find(x=>x.id===g)?.fixtures??[]),...(zone.fixtures??[])])];
 // Shows saved before pages existed get one page holding every cue, in order.
 export function migrate(show){
  if(!show.pages)show.pages=[{id:'scene-1',name:'Scene 1',color:'#8bc9d0',cues:show.cues.map((c,i)=>({id:'entry-'+(i+1),cue:c.id,fade:2,follow:'manual'}))}];
  if(!show.groups.some(g=>g.id==='movers'))show.groups.push({id:'movers',name:'All moving heads',fixtures:show.fixtures.filter(f=>f.enabled&&['rogue','mh7','beam200','beam7r'].includes(f.profile)).map(f=>f.id)});
- show.media??=[];show.playback??={clearFade:3,blindFade:2};show.presets??=[];show.targets??=[];show.triggers??=[];show.ledWall??={media:'salvation-title',brightness:.85,fit:'cover'};
+ show.media??=[];show.playback??={clearFade:3,blindFade:2};show.presets??=[];show.targets??=[];show.triggers??=[];show.zones??=[];show.visualizer??={hiddenGroups:[],hiddenFixtures:[]};show.ledWall??={media:'salvation-title',brightness:.85,fit:'cover'};
  return show;
 }
 const track=(group,effect,start,duration,params={})=>({group,effect,start,duration,params,fadeIn:1,fadeOut:1});

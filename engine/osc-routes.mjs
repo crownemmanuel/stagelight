@@ -1,5 +1,6 @@
 // StageLight's OSC namespace for sister apps (LiveStage, the Sound app, camera control…).
 // Pure routing: (address, args, show, runtime) → {command, args} for the engine, or {reply} for ping.
+import {zoneFixtures} from './model.mjs';
 // Pages and cues may be named by ID, by name (case-insensitive) or by 1-based number, as string or int.
 export const OSC_VERSION='0.3.0';
 export const OSC_ADDRESSES=[
@@ -14,7 +15,13 @@ export const OSC_ADDRESSES=[
  ['/stagelight/master','f:0..1','Master level'],
  ['/stagelight/play','s:cue [f:fade]','Play a library cue outside any page'],
  ['/stagelight/ledwall','s:media','Show media on the LED wall preview (off = blank)'],
- ['/stagelight/trigger','s:name [s:requestId]','Fire a named trigger mapped in StageLight']
+ ['/stagelight/trigger','s:name [s:requestId]','Fire a named trigger mapped in StageLight'],
+ ['/stagelight/look/get','[s:target] [i:replyPort] [s:requestId]','Look Link: send the live look now (reason request). With a target id or name, through that target\'s own transport and zones; without, reply with the OSC look burst for every zone'],
+ ['/stagelight/zones','[i:replyPort]','Look Link: reply /stagelight/zones/begin i:count, /stagelight/zone s:id s:name s:role i:fixtures per zone, /stagelight/zones/end'],
+ ['/stagelight/feedback','s:messageId s:status s:summary','Look Link: log an app\'s decision (applied|queued|ignored|failed) against the message it answers (message id, or seq for OSC)'],
+ ['/stagelight/presets/begin','i:count [s:target]','Look Link: start publishing an app\'s preset list (filed under the target with the sender\'s host, or the target named)'],
+ ['/stagelight/presets/item','s:presetId s:name [s:description]','One preset of the list being published'],
+ ['/stagelight/presets/end','','Finish the preset list; it appears in StageLight\'s preset pickers']
 ];
 const text=v=>typeof v==='number'?String(v):typeof v==='string'?v:'';
 const num=(v,fallback)=>typeof v==='number'?v:typeof v==='string'&&v.trim()!==''&&Number.isFinite(+v)?+v:fallback;
@@ -27,6 +34,8 @@ export function findEntry(show,page,ref){
  return page.cues.find(e=>e.id===r)??(n?page.cues[n-1]:null)??page.cues.find(e=>name(e).toLowerCase()===low)??null;
 }
 const findTrigger=(show,ref)=>{const r=text(ref).trim().toLowerCase();return (show.triggers??[]).find(t=>t.id.toLowerCase()===r||t.name.toLowerCase()===r)};
+const FEEDBACK=['applied','queued','ignored','failed'];
+const findTarget=(show,ref)=>{const r=ref.toLowerCase();return (show.targets??[]).find(t=>t.id.toLowerCase()===r||t.name.toLowerCase()===r)};
 const replyPort=v=>Number.isInteger(v)&&v>0&&v<65536?v:null;
 const cueName=(show,e)=>e.label??show.cues.find(c=>c.id===e.cue)?.name??e.cue;
 /** What a named trigger does, in words (for pickers in other apps). */
@@ -40,6 +49,7 @@ export function triggerSummary(show,t){
   default:return t.command;
  }
 }
+const zoneArgs=(show,z)=>[z.id,z.name,z.role,zoneFixtures(show,z).filter(id=>show.fixtures.find(f=>f.id===id)?.enabled).length];
 /** The show's pages, cues, named triggers and library cues as small OSC messages, one per item (like StageMics' /sound/mic). */
 export function catalog(show,revision){
  const triggers=show.triggers??[],out=[['/stagelight/catalog/begin',[revision,show.pages.length,triggers.length,show.cues.length]]];
@@ -47,6 +57,7 @@ export function catalog(show,revision){
   p.cues.forEach((e,j)=>out.push(['/stagelight/catalog/cue',[p.id,j+1,e.id,cueName(show,e),e.follow==='auto'?'auto':'manual',{t:'f',v:e.fade??0}]]))});
  for(const t of triggers)out.push(['/stagelight/catalog/trigger',[t.id,t.name,triggerSummary(show,t)]]);
  for(const c of show.cues)out.push(['/stagelight/catalog/library',[c.id,c.name]]);
+ for(const z of show.zones??[])out.push(['/stagelight/catalog/zone',zoneArgs(show,z)]);
  out.push(['/stagelight/catalog/end',[revision]]);return out;
 }
 const requestId=v=>{const r=text(v).trim();return /^[a-zA-Z0-9_-]{1,64}$/.test(r)?{requestId:r}:{}};
@@ -65,6 +76,13 @@ export function routeOSC(address,args,show,runtime){
   case '/stagelight/master':{let v=num(a[0]);if(v===undefined)throw Error('Master needs a level 0..1');if(v>1)v/=100;return {command:'master.set',args:{value:Math.max(0,Math.min(1,v))}}}
   case '/stagelight/play':{const r=text(a[0]).trim(),cue=show.cues.find(c=>c.id===r)??show.cues.find(c=>c.name.toLowerCase()===r.toLowerCase());if(!cue)throw Error('Unknown cue '+r);const f=num(a[1]);return {command:'cue.play',args:{id:cue.id,...(f===undefined?{}:{fade:Math.max(0,Math.min(60,f))})}}}
   case '/stagelight/ledwall':return {command:'ledwall.set',args:{media:text(a[0]).trim()||'off'}};
+  case '/stagelight/look/get':{let i=0;const ref=typeof a[0]==='string'?text(a[i++]).trim():'';const port=replyPort(a[i]);if(typeof a[i]==='number'||a[i]==='')i++;const rid=requestId(a[i]);
+   if(!ref)return {lookReply:true,replyPort:port,...rid};const t=findTarget(show,ref);if(!t)throw Error('Unknown target '+ref);return {command:'look.send',args:{target:t.id,...rid}}}
+  case '/stagelight/zones':{const zones=show.zones??[];return {replies:[['/stagelight/zones/begin',[zones.length]],...zones.map(z=>['/stagelight/zone',zoneArgs(show,z)]),['/stagelight/zones/end',[]]],replyPort:replyPort(a[0])}}
+  case '/stagelight/feedback':{const id=text(a[0]).trim(),status=text(a[1]).trim().toLowerCase();if(!id)throw Error('Feedback needs the message id');if(!FEEDBACK.includes(status))throw Error('Feedback status is applied, queued, ignored or failed');return {feedback:{id:id.slice(0,64),status,summary:text(a[2]).replace(/[\u0000-\u001f]/g,' ').slice(0,200)}}}
+  case '/stagelight/presets/begin':return {presets:{phase:'begin',count:num(a[0]),target:text(a[1]).trim()||undefined}};
+  case '/stagelight/presets/item':{const id=text(a[0]).trim();if(!id)throw Error('A preset needs an id');return {presets:{phase:'item',item:{id,name:text(a[1]).trim()||id,...(text(a[2]).trim()?{description:text(a[2]).trim()}:{})}}}}
+  case '/stagelight/presets/end':return {presets:{phase:'end'}};
   case '/stagelight/trigger':{const t=findTrigger(show,a[0]);if(!t)throw Error('Unknown trigger '+text(a[0]));return {command:'trigger.fire',args:{id:t.id,...requestId(a[1])}}}
  }
  throw Error('Unknown StageLight address '+address);

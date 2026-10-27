@@ -522,3 +522,8 @@ button.save-option:hover{border-color:var(--go)}
 .net-row:nth-child(odd){background:#ffffff06}.net-row code{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.net-row small{grid-column:2;color:var(--muted)}
 .net-row.bad code,.net-row.bad small{color:var(--danger)}
 .send-list{display:flex;flex-direction:column;gap:6px}.send-add{display:flex;gap:6px;margin-top:6px}.send-add select,.send-add input{flex:1;min-width:0}
+
+/* Look Link: zone group pills, per-target look editor, report preview */
+.zone-groups{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}.zone-groups .pill{backdrop-filter:none;padding:5px 11px;font-size:12px}
+.look-edit{margin-top:12px;padding:10px 12px;border-radius:12px;background:var(--card2)}.look-report{margin-top:8px;max-height:260px;overflow:auto;font-size:11px;white-space:pre-wrap}
+#sendPreset{flex-wrap:wrap}#sendPresetId{flex:1 1 100%}

@@ -16,6 +16,8 @@ Draft cue edits save to disk but do not mutate the snapshot currently playing. A
 - `engine/engine.mjs`: playback, save transactions, command handlers and audit log.
 - `engine/output.mjs`: exclusive UDP source socket; never armed automatically.
 - `engine/osc.mjs`: strict OSC strings/int32/float32 codec.
+- `engine/osc-routes.mjs`: the `/stagelight/…` OSC namespace for sister apps (pure routing to engine commands).
+- `engine/look.mjs`: Look Link colour science (CCT, Duv, `white`, per-zone measures, change thresholds) for protocol `stagelight.look/1` ([LOOK-LINK.md](LOOK-LINK.md)).
 - `server.mjs`: loopback HTTP, session token, server-sent events, loopback OSC.
 - `mcp/server.mjs`: minimal MCP stdio transport with tools/list and tools/call.
 - `public/stage.js`: Three.js spatial study using the room photograph as reference.

@@ -26,8 +26,14 @@ export function outputRGB(profile,requested,white=0,fixture={},state={}){
   return slot?hexRGB(slot.color):[1,1,1]; // Unsaved wheel positions have no verified preview color.
  }
  const wheel=nearestWheel(profile,requested);if(wheel)return wheel.rgb;
- const tint=profile==='q120'?[1,.78,.5]:profile==='colorado'?[1,1,1]:[0,0,0];
+ const tint=profile==='q120'?[1,.78,.5]:profile==='colorado'?[1,1,1]:profile==='reveE3'?[1,.88,.6]:profile==='pendant4'?[1,.95,.85]:[0,0,0];
  return requested.map((c,i)=>Math.max(0,Math.min(1,c+white*tint[i])));
+}
+// False when a 200W/7R sits on a wheel position nobody has named yet (outputRGB then reports white).
+export function colorKnown(profile,requested,fixture={},state={}){
+ if(profile!=='beam200'&&profile!=='beam7r')return true;
+ const wheel=fixtureWheel({...fixture,profile},{...state,color:requested});
+ return !!fixture.colorSlots?.some(s=>s.value===wheel.value&&(s.secondary??0)===wheel.secondary);
 }
 
 // Use the same resolved DMX wheel position as the encoder, including raw overrides.
