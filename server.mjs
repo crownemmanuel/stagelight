@@ -112,7 +112,9 @@ engine.sendHook=async(target,packet)=>{
 server.on('error',e=>{console.error(e.message);process.exitCode=1;osc?.close();clearInterval(streamTimer);engine.close()});
 server.listen(port,'127.0.0.1',()=>{engine.start();console.log(`LIGHTS_READY http://127.0.0.1:${port} · preview only · data ${dataDir}`)});
 listenOSC(engine.show.settings.osc);
-const streamTimer=setInterval(()=>{const data='data: '+JSON.stringify(engine.runtime())+'\n\n';for(const client of clients){if(client.writableLength>500000){client.end();clients.delete(client)}else client.write(data)}},100);
+// 10 Hz runtime stream. A settled look repeats the same payload, so unchanged frames are not re-sent: idle desks then parse and paint nothing.
+// The tick counter alone does not count as a change; it is read from the diagnostics dialog when something else moves.
+let lastStream='';const streamTimer=setInterval(()=>{if(!clients.size)return;const runtime=engine.runtime(),key=JSON.stringify(runtime,(k,v)=>k==='tickCount'?undefined:v);if(key===lastStream)return;lastStream=key;const data='data: '+JSON.stringify(runtime)+'\n\n';for(const client of clients){if(client.writableLength>500000){client.end();clients.delete(client)}else client.write(data)}},100);
 let quitting=false;
 async function shutdown(){if(quitting)return;quitting=true;clearInterval(streamTimer);await engine.close();for(const c of clients)c.end();osc?.close();server.close(()=>process.exit(0));setTimeout(()=>process.exit(0),2000).unref()}
 process.on('SIGINT',shutdown);process.on('SIGTERM',shutdown);

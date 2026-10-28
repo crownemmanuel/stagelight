@@ -1,4 +1,4 @@
-import {PROFILE_DEFS} from './model.mjs';
+import {PROFILE_DEFS,fixtureIndex} from './model.mjs';
 import {nearestWheel,fixtureWheel} from '../public/fixture-colors.js';
 export const clamp=(x,a=0,b=1)=>Math.max(a,Math.min(b,x));
 export const rgb=hex=>[1,3,5].map(i=>parseInt(hex.slice(i,i+2),16)/255);
@@ -6,6 +6,9 @@ const mix=(a,b,t)=>a.map((v,i)=>v*(1-t)+b[i]*t);
 function hsv(h){return [0,4,2].map(n=>{const k=(n+h*6)%6;return 1-Math.max(0,Math.min(k,4-k,1))})}
 const smooth=x=>{x=clamp(x);return x*x*(3-2*x)};
 export function baseState(f){return {id:f.id,intensity:0,color:[1,1,1],white:0,movementSpeed:1,pan:f.calibration.home[0],tilt:f.calibration.home[1],opticalMode:'beam',zoom:.5,gobo:0,goboShake:0,prism:0,prismRotation:0,frost:0,focus:.5}}
+// Extent of a profile's enabled fixtures along an axis, once per show rather than once per fixture per tick.
+const bounds=new WeakMap();
+function spatialBounds(show,profile,axis){let m=bounds.get(show.fixtures);if(!m){m=new Map();bounds.set(show.fixtures,m)}const key=profile+axis;if(!m.has(key)){const c=show.fixtures.filter(x=>x.enabled&&x.profile===profile).map(x=>x.position[axis]);m.set(key,[Math.min(...c),Math.max(...c)])}return m.get(key)}
 function effectPose(f,i,n,type,p,time,show,length=1,center=null){
  let a=rgb(p.color??'#6ddcff'),b=rgb(p.secondary??'#9955ee');
  const speed=p.speed??1,phase=(n>1?i/(n-1):0),q=time*speed,spread=p.spread??1;
@@ -15,8 +18,7 @@ function effectPose(f,i,n,type,p,time,show,length=1,center=null){
  case 'strobe':{
   let position=phase;
   if(p.spatialAxis==='x'||p.spatialAxis==='z'){
-   const axis=p.spatialAxis==='x'?0:2,coordinates=show.fixtures.filter(x=>x.enabled&&x.profile===f.profile).map(x=>x.position[axis]);
-   const lo=Math.min(...coordinates),hi=Math.max(...coordinates);position=hi>lo?(f.position[axis]-lo)/(hi-lo):0;
+   const axis=p.spatialAxis==='x'?0:2,[lo,hi]=spatialBounds(show,f.profile,axis);position=hi>lo?(f.position[axis]-lo)/(hi-lo):0;
   }
   const head=.5-.5*Math.cos(time*(p.travelSpeed??.15)*Math.PI*2);
   const seed=[...f.id].reduce((v,c)=>(v*31+c.charCodeAt(0))>>>0,17),offset=p.strobePattern==='wave'?position*spread:(seed*.61803398875)%1;
@@ -63,9 +65,9 @@ export function compose(show,cue,seconds){
  const states=Object.fromEntries(show.fixtures.map(f=>[f.id,baseState(f)]));
  const look=over=>{for(const entry of cue?.look??[]){if(!!entry.over!==over||!states[entry.id])continue;Object.assign(states[entry.id],entry.values);if(entry.values.color)states[entry.id].color=rgb(entry.values.color)}};
  const tracks=layered=>{if(cue)for(const tr of cue.tracks){if(!!tr.layer!==layered||seconds<tr.start||seconds>=tr.start+tr.duration)continue;
-  const ids=trackFixtures(show,tr),t=seconds-tr.start;
+  const ids=trackFixtures(show,tr),t=seconds-tr.start,byId=fixtureIndex(show);
   const envelope=tr.effect==='fade'?1:smooth(t/Math.max(.001,tr.fadeIn??.5))*smooth((tr.duration-t)/Math.max(.001,tr.fadeOut??.5));
-  ids.forEach((id,i)=>{const f=show.fixtures.find(f=>f.id===id);if(!f||!states[id])return;
+  ids.forEach((id,i)=>{const f=byId.get(id);if(!f||!states[id])return;
    if(layered)states[id]=layerEffect(states[id],f,i,ids.length,tr.effect,tr.params,t,show,tr.layer,envelope,tr.duration);
    else{Object.assign(states[id],effectPose(f,i,ids.length,tr.effect,tr.params,t,show,tr.duration));states[id].intensity*=envelope}});
  }};
@@ -76,7 +78,7 @@ export function applyOverrides(show,states,overrides={}){
  return states.map(s=>{const o=overrides[s.id];if(!o)return s;const base={...s};if(typeof o.color==='string'){delete base.colorWheel;delete base.colorWheel2}const st={...base,...o};if(typeof o.color==='string')st.color=rgb(o.color);return st});
 }
 export function finish(show,states,master=1,blackout=false){
- const byId=new Map(show.fixtures.map(f=>[f.id,f]));
+ const byId=fixtureIndex(show);
  return states.map(s=>{const f=byId.get(s.id),st={...s};if(!f)return st;st.pan=clamp(st.pan,...f.calibration.panRange);st.tilt=clamp(st.tilt,...f.calibration.tiltRange);st.intensity=blackout||!f.enabled?0:clamp(st.intensity*master);return st});
 }
 export function render(show,cue,seconds,overrides={},master=1,blackout=false){return finish(show,applyOverrides(show,compose(show,cue,seconds),overrides),master,blackout)}
@@ -91,8 +93,8 @@ export function blend(from,to,k){const byId=new Map(from.map(s=>[s.id,s]));retur
 // Rogue wheel centers from Chauvet's 16-channel chart. Pick the nearest solid color.
 export function wheelColor(c){return nearestWheel('rogue',c).value}
 export function encode(show,states,{physical=false}={}){
- const universes=new Map();const byte=v=>Math.round(clamp(v)*255);
- for(const f of show.fixtures){if(!f.enabled||!f.verified||!PROFILE_DEFS[f.profile]?.channels)continue;let st=states.find(s=>s.id===f.id);if(!st)continue;
+ const universes=new Map();const byte=v=>Math.round(clamp(v)*255),byId=new Map(states.map(s=>[s.id,s]));
+ for(const f of show.fixtures){if(!f.enabled||!f.verified||!PROFILE_DEFS[f.profile]?.channels)continue;let st=byId.get(f.id);if(!st)continue;
   const u=show.settings.mappings[f.universe];if(u===undefined)continue;
   if(!universes.has(u))universes.set(u,Buffer.alloc(512));const d=universes.get(u),base=f.address-1;
   if(f.profile==='q120')d.set([byte(st.intensity),...st.color.map(byte),byte(st.white)],base);

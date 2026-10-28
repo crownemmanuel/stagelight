@@ -26,7 +26,10 @@ async function command(name,args={}){try{const r=await fetch('/api/command',{met
 const quiet=p=>p.catch(()=>{});
 async function refresh(){const v=await fetch('/api/state').then(r=>r.json());show=v.show;runtime=v.runtime;rev=runtime.revision;if(!show.pages.some(p=>p.id===pageId))pageId=runtime.stack?.page??show.pages[0]?.id??null;selected=selected.filter(id=>show.fixtures.some(f=>f.id===id));if(stage){stage.setFixtures(visibleFixtures(show));syncLedWall()}drawAll();paint(runtime)}
 function drawAll(){drawPages();drawGroups();drawChips();drawSide();drawSelectionBar();drawLedTray();setText($('#showName'),show.name.split('·')[0].trim())}
-const fixture=id=>show.fixtures.find(f=>f.id===id);
+// Fixture lookup indexed per show object: paint() asks for hundreds of fixtures ten times a second.
+let fixtureIndex=null,fixtureIndexFor=null;const fixture=id=>{if(fixtureIndexFor!==show?.fixtures){fixtureIndexFor=show?.fixtures;fixtureIndex=new Map((show?.fixtures??[]).map(f=>[f.id,f]))}return fixtureIndex.get(id)};
+// Styles cost layout and paint even when unchanged, so each live dot remembers what it last showed.
+const paintDot=(el,dot,shown,intensity,glow,overridden)=>{const sig=shown+'|'+intensity.toFixed(3)+'|'+(overridden?1:0);if(el.dataset.sig===sig)return;el.dataset.sig=sig;dot.style.background=shown;dot.style.opacity=.25+.75*intensity;dot.style.boxShadow=intensity>.1?`0 0 ${glow}px ${shown}80`:'none';if(overridden!==undefined)el.classList.toggle('overridden',overridden)};
 const page=()=>show.pages.find(p=>p.id===pageId);
 const cueOf=entry=>show.cues.find(c=>c.id===entry?.cue);
 const entryName=e=>e?.label??cueOf(e)?.name??e?.cue??'—';
@@ -81,8 +84,8 @@ function drawGroupGrid(){
 }
 function paintGroupGrid(frames){
  const byId=new Map(frames.map(f=>[f.id,f]));
- for(const el of $$('[data-tile-dot]')){const f=byId.get(el.dataset.tileDot);if(!f)continue;const shown=hexOf(outputRGB(fixture(f.id)?.profile,f.color,f.white,fixture(f.id),f));el.style.background=f.intensity>.01?shown:'';el.style.opacity=.35+.65*f.intensity;el.style.boxShadow=f.intensity>.1?`0 0 8px ${shown}90`:'none'}
- for(const el of $$('[data-tile-level]')){const id=el.dataset.tileLevel,ids=idsForGroup(id).filter(x=>fixture(x)?.enabled),avg=ids.length?ids.reduce((n,x)=>n+(byId.get(x)?.intensity??0),0)/ids.length:0;el.style.width=Math.round(avg*100)+'%';setText($(`[data-tile-pct="${CSS.escape(id)}"]`),Math.round(avg*100)+'%')}
+ for(const el of $$('[data-tile-dot]')){const f=byId.get(el.dataset.tileDot);if(!f)continue;const fx=fixture(f.id),shown=hexOf(outputRGB(fx?.profile,f.color,f.white,fx,f)),sig=shown+'|'+f.intensity.toFixed(3);if(el.dataset.sig===sig)continue;el.dataset.sig=sig;el.style.background=f.intensity>.01?shown:'';el.style.opacity=.35+.65*f.intensity;el.style.boxShadow=f.intensity>.1?`0 0 8px ${shown}90`:'none'}
+ for(const el of $$('[data-tile-level]')){const id=el.dataset.tileLevel,ids=idsForGroup(id).filter(x=>fixture(x)?.enabled),avg=ids.length?ids.reduce((n,x)=>n+(byId.get(x)?.intensity??0),0)/ids.length:0,pct=Math.round(avg*100)+'%';if(el.dataset.pct===pct)continue;el.dataset.pct=pct;el.style.width=pct;setText($(`[data-tile-pct="${CSS.escape(id)}"]`),pct)}
 }
 function drawGroups(){
  const groups=sortedGroups(),pills=groups.map(g=>`<button class="pill ${g.id===group?'active':''}" data-group="${esc(g.id)}" title="${esc(g.name)}">${esc(shortGroup(g))}<span>${g.fixtures.length}</span></button>`).join('');
@@ -730,8 +733,10 @@ function paint(r){
  const overrides=new Set([...Object.keys(progOverrides(r)),...(r.blind?.enabled?[]:r.fx.flatMap(x=>x.fixtures))]).size;$('#saveButton').disabled=!overrides;$('#saveButton').classList.toggle('active',overrides>0);$('#blindButton').classList.toggle('active',!!r.blind?.enabled);const prefs=show?.playback??{clearFade:3,blindFade:2},fadeText=s=>s?`over ${s} s`:'instantly';$('#releaseButton').title=r.blind?.enabled?`Clear the blind changes ${fadeText(prefs.blindFade)}`:`Fade manual changes back to the running cue ${fadeText(prefs.clearFade)}`;setText($('#overrideCount'),String(overrides));$('#releaseButton').disabled=!overrides;$('#releaseButton').classList.toggle('active',overrides>0);
  if(document.activeElement!==$('#master'))$('#master').value=Math.round(r.master*100);setText($('#masterValue'),Math.round(r.master*100)+'%');
  $('#blackout').classList.toggle('active',r.blackout);setText($('#blackout span:last-child'),r.blackout?'Blackout on':'Blackout');
- for(const el of $$('[data-fixture]')){const f=r.frames.find(f=>f.id===el.dataset.fixture);if(!f)continue;const dot=el.querySelector('i'),shown=hexOf(outputRGB(fixture(f.id)?.profile,f.color,f.white,fixture(f.id),f));dot.style.background=shown;dot.style.opacity=.25+.75*f.intensity;dot.style.boxShadow=f.intensity>.1?`0 0 9px ${shown}80`:'none';el.classList.toggle('overridden',!!progOverrides(r)[f.id])}
- stage?.update(viewSource==='preview'&&r.previewFrames?r.previewFrames:r.frames);if(document.body.classList.contains('grid-view'))paintGroupGrid(viewSource==='preview'&&r.previewFrames?r.previewFrames:r.frames);if(r.blind?.enabled&&r.previewFrames)for(const el of $$('[data-fixture]')){const f=r.previewFrames.find(x=>x.id===el.dataset.fixture),dot=el.querySelector('i');if(f&&dot){const shown=hexOf(outputRGB(fixture(f.id)?.profile,f.color,f.white,fixture(f.id),f));dot.style.background=shown;dot.style.opacity=.25+.75*f.intensity}}
+ // Chips show the blind buffer while blind (what the operator is editing), else the live frames.
+ const chipFrames=new Map((r.blind?.enabled&&r.previewFrames?r.previewFrames:r.frames).map(f=>[f.id,f])),chipOverrides=progOverrides(r);
+ for(const el of $$('[data-fixture]')){const f=chipFrames.get(el.dataset.fixture);if(!f)continue;const fx=fixture(f.id);paintDot(el,el.querySelector('i'),hexOf(outputRGB(fx?.profile,f.color,f.white,fx,f)),f.intensity,9,!!chipOverrides[f.id])}
+ stage?.update(viewSource==='preview'&&r.previewFrames?r.previewFrames:r.frames);if(document.body.classList.contains('grid-view'))paintGroupGrid(viewSource==='preview'&&r.previewFrames?r.previewFrames:r.frames);
  $$('[data-preview-entry]').forEach(b=>b.classList.toggle('active',!!r.preview&&r.preview.page===p?.id&&r.preview.entry===b.dataset.previewEntry));
  const state=progFrames(r).find(f=>f.id===selected[0]);
  if(state)for(const el of $$('[data-attr]')){if(document.activeElement===el||performance.now()-(+el.dataset.editedAt||0)<180)continue;const k=el.dataset.attr,f=fixture(selected[0]),wheel=k.startsWith('colorWheel')&&f&&WHEEL.includes(f.profile)?fixtureWheel(f,state):null,v=progOverrides(r)[selected[0]]?.[k]??(k==='intensity'?(r.master?state.intensity/r.master:0):wheel?(k==='colorWheel'?wheel.value:wheel.secondary):state[k]);if(typeof v!=='number')continue;el.value=v*(['pan','tilt'].includes(k)?255:1);setText($(`[data-read="${k}"]`),attrRead(k,v))}

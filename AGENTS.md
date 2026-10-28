@@ -15,6 +15,9 @@ This is an MCP-first lighting application. Every new user-facing capability must
 - Preserve existing patches and calibration when editing visualization placement. Read the current show rather than replacing it with defaults.
 - Verify fixture-specific DMX definitions against manufacturer documentation. Do not invent channel mappings or assume similarly named fixtures share profiles.
 
+## Performance budget — 2026-10-27
+The desk draws the whole rig while the engine ticks at 30 Hz, so keep both inside their budgets (docs/VISUALIZER-PERFORMANCE.md). Never add a scene light per fixture: `public/stage.js` shares a pool of 12 spot lights among the brightest heads, resolves fixture colours once per engine frame, shares geometry per shape and skips redrawing a settled look. In the engine, look fixtures up through `fixtureIndex(show)` instead of `show.fixtures.find` in anything that runs per tick; `tests/perf.test.mjs` fails when a full tick over the saved show exceeds 4 ms. The runtime stream only sends when something other than the tick counter changed.
+
 ## Desktop app and releases
 The desktop app is a Tauri shell in `src-tauri/` that runs this folder's engine with a bundled Node.js and loads the desk from it; releases are built by `.github/workflows/release.yml` from a `v*` tag and installed apps update themselves only when the operator presses Install (refused while output is armed). Read `docs/RELEASES.md` before touching packaging, versions or the updater. Keep `engine/`, `public/`, `mcp/` and `server.mjs` free of npm dependencies: they are copied into the app as they are. Ask before pushing tags or publishing releases.
 

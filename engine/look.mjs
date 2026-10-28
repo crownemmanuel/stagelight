@@ -1,6 +1,7 @@
 // Look Link colour science (protocol stagelight.look/1, docs/LOOK-LINK.md): what a set of fixtures looks like,
 // from what each one is told to output and can actually make (wheel slots, calibrated wheel colours). Nominal, not metered.
 import {outputRGB,colorKnown} from '../public/fixture-colors.js';
+import {fixtureIndex} from './model.mjs';
 export const LOOK_PROTOCOL='stagelight.look/1';
 export const ZONE_ROLES=['face','front','back','top','side','effect','audience','other'];
 // A camera should balance to light that is near the Planckian locus and in this range; anything else is a coloured look.
@@ -35,8 +36,8 @@ export function colorFigures(rgb){
  * chroma adds the v1 zone measures (peak, mired, duv, cie, white, colorUnknown); members adds per-fixture detail.
  */
 export function measure(show,states,ids,{chroma=false,members=false}={}){
- const byId=new Map(states.map(s=>[s.id,s])),list=[],rgb=[0,0,0];let w=0,n=0,level=0,peak=0,lit=0,unknown=0;
- for(const id of ids){const f=show.fixtures.find(x=>x.id===id),s=byId.get(id);if(!f?.enabled||!s)continue;n++;level+=s.intensity;peak=Math.max(peak,s.intensity);
+ const byId=new Map(states.map(s=>[s.id,s])),fixtures=fixtureIndex(show),list=[],rgb=[0,0,0];let w=0,n=0,level=0,peak=0,lit=0,unknown=0;
+ for(const id of ids){const f=fixtures.get(id),s=byId.get(id);if(!f?.enabled||!s)continue;n++;level+=s.intensity;peak=Math.max(peak,s.intensity);
   const c=outputRGB(f.profile,s.color,s.white??0,f,s),known=colorKnown(f.profile,s.color,f,s);
   if(members){const fig=colorFigures(c);list.push({id,name:f.name,profile:f.profile,level:r(s.intensity,3),color:hex(c),kelvin:fig.kelvin,duv:fig.duv,known})}
   if(s.intensity<.02)continue;lit++;if(!known)unknown++;for(let i=0;i<3;i++)rgb[i]+=c[i]*s.intensity;w+=s.intensity}

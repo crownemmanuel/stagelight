@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import {performance} from 'node:perf_hooks';
-import {defaults,migrate,zoneFixtures,EFFECTS,PROFILE_DEFS,EFFECT_PRESETS,BUILTIN_MEDIA} from './model.mjs';
+import {defaults,migrate,zoneFixtures,fixtureIndex,EFFECTS,PROFILE_DEFS,EFFECT_PRESETS,BUILTIN_MEDIA} from './model.mjs';
 import {LOOK_PROTOCOL,measure,lookSnap,lookDiffers,CHANGE,STILL} from './look.mjs';
 import crypto from 'node:crypto';
 import {ICONS} from '../public/icons.js';
@@ -47,7 +47,8 @@ export class Engine{
   this.programmed=states;this.frames=finish(this.show,states,this.master,this.blackout);
   this.previewFrames=this.preview||this.blind||this.fxPreview?this.renderPreview(now):null;
   if(this.fading){const factor=Math.max(0,1-(now-this.fading.start)/Math.max(.001,this.fading.duration));this.frames=this.fading.frames.map(f=>({...f,intensity:this.blackout?0:f.intensity*factor}));if(factor===0){this.held=copy(this.frames);this.fading=null}}
-  const packets=encode(this.show,this.frames,{physical:true});
+  // Packets are only built while they can be sent; the patch sheet encodes its own readback.
+  const packets=this.output.armed?encode(this.show,this.frames,{physical:true}):new Map();
   for(const [id,pulse] of this.lampCommands){
    if(!this.output.armed||now>=pulse.until){this.lampCommands.delete(id);continue}
    const fixture=this.show.fixtures.find(f=>f.id===id);
@@ -263,8 +264,8 @@ export class Engine{
  snapshotLook(){return (this.blind?this.previewFrames:this.frames).filter(f=>this.show.fixtures.some(x=>x.id===f.id&&x.enabled)).map(({id,...values})=>({id,values:{...values,intensity:this.master>0?Math.min(1,values.intensity/this.master):0,color:'#'+values.color.map(v=>Math.round(v*255).toString(16).padStart(2,'0')).join('')}}))}
  // Programmer effects: one per fixture per layer, layered on top of cue + overrides.
  applyFx(states,list,now){
-  if(!list.length)return states;const byId=new Map(states.map(s=>[s.id,s]));
-  for(const fx of list){const t=now-fx.started;fx.fixtures.forEach((id,i)=>{const f=this.show.fixtures.find(x=>x.id===id),st=byId.get(id);if(f&&st)byId.set(id,layerEffect(st,f,i,fx.fixtures.length,fx.effect,fx.params,t,this.show,fx.layer,1,fx.duration))})}
+  if(!list.length)return states;const byId=new Map(states.map(s=>[s.id,s])),fixtures=fixtureIndex(this.show);
+  for(const fx of list){const t=now-fx.started;fx.fixtures.forEach((id,i)=>{const f=fixtures.get(id),st=byId.get(id);if(f&&st)byId.set(id,layerEffect(st,f,i,fx.fixtures.length,fx.effect,fx.params,t,this.show,fx.layer,1,fx.duration))})}
   return states.map(s=>byId.get(s.id));
  }
  // Built-in presets plus the show's custom ones; custom presets get their category from the effect's layer.

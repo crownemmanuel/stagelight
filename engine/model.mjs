@@ -58,6 +58,10 @@ export const BUILTIN_MEDIA=[
   {id:'cross-glow',name:'Cross glow',kind:'image',src:'/led/cross-glow.svg'},
   {id:'ocean',name:'Ocean',kind:'image',src:'/led/ocean.svg'}
 ];
+// Fixtures by id, built once per fixtures array (the engine replaces the show object on every update). Render, encode,
+// effects and Look Link measures all run per tick over hundreds of fixtures; a linear find for each would be quadratic.
+const indexes=new WeakMap();
+export function fixtureIndex(show){const list=show.fixtures;let m=indexes.get(list);if(!m||m.size!==list.length){m=new Map(list.map(f=>[f.id,f]));indexes.set(list,m)}return m}
 // Look Link zone members: its groups' fixtures then its own, each once, in order (enabled or not).
 export const zoneFixtures=(show,zone)=>[...new Set([...(zone.groups??[]).flatMap(g=>show.groups.find(x=>x.id===g)?.fixtures??[]),...(zone.fixtures??[])])];
 // Shows saved before pages existed get one page holding every cue, in order.
