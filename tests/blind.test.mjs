@@ -40,8 +40,8 @@ test('Playback settings set Clear and Blind fades; blind clear fades the blind v
  const fs=await import('node:fs'),os=await import('node:os'),path=await import('node:path');const dir=fs.mkdtempSync(path.join(os.tmpdir(),'lights-settings-'));
  try{
   let time=0;const e=new Engine({dataDir:dir,output:output(),clock:()=>time});const at=t=>{time=t;e.tick()};await e.command('master.set',{value:1});
-  assert.deepEqual(e.show.playback,{clearFade:3,blindFade:2});
-  await e.command('settings.set',{clearFade:4,blindFade:1});assert.deepEqual(new Engine({dataDir:dir,output:output()}).show.playback,{clearFade:4,blindFade:1},'saved in the show');
+  assert.deepEqual(e.show.playback,{clearFade:3,blindFade:2,sceneFade:2});
+  await e.command('settings.set',{clearFade:4,blindFade:1});assert.deepEqual(new Engine({dataDir:dir,output:output()}).show.playback,{clearFade:4,blindFade:1,sceneFade:2},'saved in the show');
   // Clear uses clearFade when no fade is given.
   await e.command('fixture.set',{ids:['401'],values:{intensity:1}});await e.command('override.release',{});at(2);assert.ok(Math.abs(f(e.frames,'401').intensity-.5)<1e-9,'halfway through a 4 s clear');at(4);assert.equal(f(e.frames,'401').intensity,0);
   // Blind clear fades the blind view over blindFade instead of cutting.

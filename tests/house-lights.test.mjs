@@ -13,7 +13,10 @@ test('123 house pendants carry the Hog patch and are verified for output (Hog Fi
  // No pendant footprint overlaps any other fixture's patch.
  const used=new Map();for(const f of show.fixtures)for(let a=f.address;a<f.address+(PROFILE_DEFS[f.profile].channels||0);a++){const k=f.universe+':'+a;assert.ok(!used.has(k),`${f.id} overlaps ${used.get(k)} at ${k}`);used.set(k,f.id)}
  // Lowest number sits at the stage-right (+X) end of the front row, in the audience.
- const p=id=>show.fixtures.find(f=>f.id===id).position;assert.ok(p('1001')[0]>0&&p('1025')[0]<0);
+ const p=id=>show.fixtures.find(f=>f.id===id).position;assert.ok(p('1001')[0]>0&&p('1009')[0]<0&&p('1010')[0]>0&&p('1023')[0]<0);
+ // Operator rows (2026-10-28): row 1 = 1001–1009, row 2 = 1010–1023; rows 3–5 and the 3300s are provisional.
+ const row=n=>show.groups.find(g=>g.id==='house-row-'+n).fixtures,ids=(a,b)=>Array.from({length:b-a+1},(_,i)=>String(a+i));
+ assert.deepEqual(row(1),ids(1001,1009));assert.deepEqual(row(2),ids(1010,1023));assert.ok(Math.hypot(p('1010')[0],p('1010')[2])>Math.hypot(p('1001')[0],p('1001')[2]));
  // House rows start behind the last face-light row.
  const dist=f=>Math.hypot(f.position[0],f.position[2]),face=show.fixtures.filter(f=>f.profile==='reveE3');assert.ok(Math.min(...house.map(dist))>Math.max(...face.map(dist))+1);
  assert.ok(show.fixtures.length>128);validateShow(show);

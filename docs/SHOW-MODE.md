@@ -2,7 +2,7 @@
 
 ## Data model (portable show)
 
-- `pages[]`: `{id, name, color?, cues: [entry]}`. A page is a scene.
+- `pages[]`: `{id, name, color?, cues: [entry]}`. A page is a cue list; base looks under every cue are scenes (docs/MASTERS-AND-SCENES.md).
 - entry: `{id, cue, label?, fade, follow: 'manual'|'auto', wait?}`. `cue` references `cues[]`; one cue may sit on several pages. `fade` = seconds to crossfade *into* the entry (0 = cut). `follow: 'auto'` fires the next entry after `wait` seconds (default: the cue duration).
 - `cues[].hold` (optional): a non-looping cue holds its last frame instead of going dark.
 - `media[]`: imported LED wall media `{id, name, kind: image|video, src: /media/<file>}`; files live in `data/media/` and are **not** inside an exported show file.

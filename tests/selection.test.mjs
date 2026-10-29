@@ -10,3 +10,10 @@ test('Select all replaces a partial selection and exposes the same group to UI/M
 test('Invalid selection leaves existing selection intact',async()=>{
  const e=make();await e.command('selection.group',{group:'backlights'});const before=e.runtime().selection;await assert.rejects(e.command('selection.group',{group:'missing'}));await assert.rejects(e.command('selection.set',{ids:['missing']}));assert.deepEqual(e.runtime().selection,before);
 });
+test('Clearing the selection or picking outside the group drops the group; picks inside it keep it',async()=>{
+ const e=make(),mh7s=e.show.groups.find(g=>g.id==='mh7s').fixtures,other=e.show.fixtures.find(f=>!mh7s.includes(f.id)).id;
+ await e.command('selection.group',{group:'mh7s'});await e.command('selection.set',{ids:[mh7s[0]]});assert.equal(e.runtime().selection.group,'mh7s');
+ await e.command('selection.set',{ids:[]});assert.equal(e.runtime().selection.group,null);
+ await e.command('selection.group',{group:'mh7s'});await e.command('selection.set',{ids:[mh7s[0],other]});assert.equal(e.runtime().selection.group,null);
+ await e.command('selection.group',{group:'all'});await e.command('selection.set',{ids:[other]});assert.equal(e.runtime().selection.group,'all');
+});

@@ -66,7 +66,8 @@ export function compose(show,cue,seconds){
  const look=over=>{for(const entry of cue?.look??[]){if(!!entry.over!==over||!states[entry.id])continue;Object.assign(states[entry.id],entry.values);if(entry.values.color)states[entry.id].color=rgb(entry.values.color)}};
  const tracks=layered=>{if(cue)for(const tr of cue.tracks){if(!!tr.layer!==layered||seconds<tr.start||seconds>=tr.start+tr.duration)continue;
   const ids=trackFixtures(show,tr),t=seconds-tr.start,byId=fixtureIndex(show);
-  const envelope=tr.effect==='fade'?1:smooth(t/Math.max(.001,tr.fadeIn??.5))*smooth((tr.duration-t)/Math.max(.001,tr.fadeOut??.5));
+  // A fade of 0 is a cut: no ramp at all, so a tick landing right on a cue start or loop point is never caught mid-ramp.
+  const ramp=(x,f)=>f>0?smooth(x/f):1,envelope=tr.effect==='fade'?1:ramp(t,tr.fadeIn??.5)*ramp(tr.duration-t,tr.fadeOut??.5);
   ids.forEach((id,i)=>{const f=byId.get(id);if(!f||!states[id])return;
    if(layered)states[id]=layerEffect(states[id],f,i,ids.length,tr.effect,tr.params,t,show,tr.layer,envelope,tr.duration);
    else{Object.assign(states[id],effectPose(f,i,ids.length,tr.effect,tr.params,t,show,tr.duration));states[id].intensity*=envelope}});

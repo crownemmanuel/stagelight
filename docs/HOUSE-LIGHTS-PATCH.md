@@ -53,3 +53,16 @@ The operator photographed the Hog Fixture Builder page for **RGBW Pendant Light 
 | 4 | Blue | 0–255 |
 
 There is no white channel, so the earlier assumed R, G, B, W layout was wrong. `pendant4` now encodes dimmer, red, green, blue, and its attributes are intensity and colour only. All 123 pendants are `verified:true` and receive DMX while output is armed. The operator's Hog Art-Net screen maps Hog universes 1–8 to Art-Net 0/0–0/7, which matches the app (Hog 8 → Art-Net 7, Hog 5 → Art-Net 4). On the same day the house-light channels read 0 on the Hog because the app sent nothing for unverified fixtures.
+
+## Rows from the operator — 2026-10-28
+
+| Row | Pendants | Radius | Status |
+| --- | --- | --- | --- |
+| 1 | 1001–1009 | 17 m | Operator order. 1009 is assumed: the operator listed 1001–1008, then 1010 |
+| 2 | 1010–1023 | 19 m | Operator order |
+| 3 | 1024–1037 | 21 m | Provisional, same count as row 2 |
+| 4 | 1038–1051 | 23 m | Provisional |
+| 5 | 1052–1062 | 25 m | Provisional |
+| — | 3301–3362 | 27 / 29 m | Location unknown, group `house-3300s` |
+
+Each row is an arc of ±50° at a height of 5 m, lowest number at stage right (+X). Groups `house-row-1` to `house-row-5` follow the table. Patch, addresses and verification were not changed.

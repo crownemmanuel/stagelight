@@ -22,6 +22,18 @@ test('Auto-follow fires the next entry after its wait; manual entries wait for G
  at(3);assert.equal(e.runtime().stack.entry,'b');assert.equal(frame(e).intensity,1);at(60);assert.equal(e.runtime().stack.entry,'b');
 });
 
+test('Chained auto-follow stays on the show clock: a late tick does not delay the next entries',async()=>{
+ const {e,at}=await stackRig([{id:'a',cue:'dim',fade:0,follow:'auto',wait:3},{id:'b',cue:'bright',fade:0,follow:'auto',wait:3},{id:'c',cue:'last',fade:0,follow:'manual'}]);
+ await e.command('page.go',{id:'act'});at(3.03);assert.equal(e.runtime().stack.entry,'b');assert.ok(Math.abs(e.elapsed()-.03)<1e-9,'b started when the wait ran out, 30 ms before the tick');
+ at(5.99);assert.equal(e.runtime().stack.entry,'b');at(6);assert.equal(e.runtime().stack.entry,'c','c fires at 6 s, not 6.03 s');
+});
+
+test('A track with fade 0 is at full level from its very first instant',async()=>{
+ const {e,at}=await stackRig([]);
+ await e.command('cue.save',{cue:{id:'cut',name:'Cut',duration:2,loop:true,tracks:[{group:'backlights',effect:'static',start:0,duration:2,params:{color:'#ffffff',brightness:1},fadeIn:0,fadeOut:0}]}});
+ await e.command('cue.play',{id:'cut'});at(.0002);assert.equal(frame(e).intensity,1,'no 1 ms ramp after the cut');at(2.0003);assert.equal(frame(e).intensity,1,'nor at the loop point');
+});
+
 test('Overrides survive GO and release fades back to the running cue',async()=>{
  const {e,at}=await stackRig([{id:'a',cue:'dim',fade:0,follow:'manual'},{id:'b',cue:'bright',fade:0,follow:'manual'}]);
  await e.command('page.go',{id:'act'});await e.command('fixture.set',{ids:['401'],values:{intensity:.8}});await e.command('page.go',{id:'act'});assert.equal(frame(e).intensity,.8);

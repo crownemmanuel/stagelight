@@ -84,7 +84,14 @@ const P={
  sweep:'<path d="M4 18a11 11 0 0 1 16 0"/><path d="M12 18L7 8M12 18l5-10"/>',
  ballyhoo:'<path d="M3 15c2-6 4 2 6-4s4 6 6 0 4 2 6-4"/>',
  popout:'<path d="M14 4h6v6M20 4l-8 8"/><path d="M18 14v4.5a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 4 18.5v-11A1.5 1.5 0 0 1 5.5 6H10"/>',
- dock:'<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M12 8v7M8.5 11.5 12 15l3.5-3.5"/>'
+ dock:'<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M12 8v7M8.5 11.5 12 15l3.5-3.5"/>',
+ masters:'<rect x="3" y="6" width="5" height="12" rx="1.5"/><rect x="9.5" y="6" width="5" height="12" rx="1.5"/><rect x="16" y="6" width="5" height="12" rx="1.5"/>',
+ bolt:'<path d="M13 3 5 14h6l-1 7 8-11h-6l1-7z"/>',
+ toggle:'<rect x="3" y="7" width="18" height="10" rx="5"/><circle cx="16" cy="12" r="2.5"/>',
+ key:'<rect x="3" y="6" width="18" height="12" rx="2.5"/><path d="M7 10h.01M11 10h.01M15 10h.01M8 14h8"/>',
+ scene:'<path d="M4 18h16"/><path d="M6 18V9l6-4 6 4v9"/><path d="M10 18v-5h4v5"/>',
+ collapseLeft:'<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16M15 10l-2 2 2 2"/>',
+ collapseRight:'<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M15 4v16M9 10l2 2-2 2"/>'
 };
 export function icon(name,cls=''){return `<svg class="i ${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${P[name]??P.spark}</svg>`}
 export const ICONS=Object.keys(P);

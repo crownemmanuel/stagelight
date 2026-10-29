@@ -64,11 +64,15 @@ const indexes=new WeakMap();
 export function fixtureIndex(show){const list=show.fixtures;let m=indexes.get(list);if(!m||m.size!==list.length){m=new Map(list.map(f=>[f.id,f]));indexes.set(list,m)}return m}
 // Look Link zone members: its groups' fixtures then its own, each once, in order (enabled or not).
 export const zoneFixtures=(show,zone)=>[...new Set([...(zone.groups??[]).flatMap(g=>show.groups.find(x=>x.id===g)?.fixtures??[]),...(zone.fixtures??[])])];
+// Masters start blank and flash: slots 1–9 on the home row A S D F G H J K L, Highlight on Shift+H (docs/MASTERS-AND-SCENES.md).
+export const MASTER_KEYS=['a','s','d','f','g','h','j','k','l'];
+export const defaultMasters=()=>({slots:Array.from({length:18},(_,i)=>({id:'m'+(i+1),...(MASTER_KEYS[i]?{key:MASTER_KEYS[i]}:{}),action:'flash',fade:0})),desk:{highlight:'shift+h',clear:'c',blackout:'b'}});
 // Shows saved before pages existed get one page holding every cue, in order.
 export function migrate(show){
  if(!show.pages)show.pages=[{id:'scene-1',name:'Scene 1',color:'#8bc9d0',cues:show.cues.map((c,i)=>({id:'entry-'+(i+1),cue:c.id,fade:2,follow:'manual'}))}];
  if(!show.groups.some(g=>g.id==='movers'))show.groups.push({id:'movers',name:'All moving heads',fixtures:show.fixtures.filter(f=>f.enabled&&['rogue','mh7','beam200','beam7r'].includes(f.profile)).map(f=>f.id)});
  show.media??=[];show.playback??={clearFade:3,blindFade:2};show.presets??=[];show.targets??=[];show.triggers??=[];show.zones??=[];show.visualizer??={hiddenGroups:[],hiddenFixtures:[]};show.ledWall??={media:'salvation-title',brightness:.85,fit:'cover'};
+ show.scenes??=[];show.masters??=defaultMasters();show.playback.sceneFade??=2;
  return show;
 }
 const track=(group,effect,start,duration,params={})=>({group,effect,start,duration,params,fadeIn:1,fadeOut:1});

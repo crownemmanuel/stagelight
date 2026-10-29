@@ -9,9 +9,24 @@ import {outputRGB} from '../public/fixture-colors.js';
 import {hiddenFixtureIds} from '../public/visibility.js';
 import {OSC_ADDRESSES} from './osc-routes.mjs';
 import {COMMANDS,validate,validateShow,validateWheelAttributes} from './spec.mjs';
-import {render,compose,applyOverrides,finish,blend,blendState,encode,layerEffect} from './render.mjs';
+import {render,compose,applyOverrides,finish,blend,blendState,encode,layerEffect,trackFixtures} from './render.mjs';
 import {Output,validateNetwork,checkConnection} from './output.mjs';
 const copy=x=>structuredClone(x);
+// Master slots and their keys (show.masters). A key is on one slot or one desk shortcut at most.
+const DESK_KEYS={highlight:'Highlight',clear:'Clear',blackout:'Blackout'};
+const keyName=k=>k.split('+').map(p=>p.length===1?p.toUpperCase():p[0].toUpperCase()+p.slice(1)).join('+');
+const masterSlot=(s,id)=>{const m=s.masters.slots.find(x=>x.id===id);if(!m)throw Error('Unknown master '+id);return m};
+const slotName=(s,m)=>`Master ${s.masters.slots.indexOf(m)+1}`+(m.cue?' · '+(m.label??s.cues.find(c=>c.id===m.cue)?.name??m.cue):'');
+// conflict: swap trades keys with the current owner (it gets this slot's old key); take leaves the owner without one.
+function setMasterKey(s,id,key,conflict){
+ const m=masterSlot(s,id),old=m.key??null;if(key===old)return;if(!key){delete m.key;return}
+ const other=s.masters.slots.find(x=>x!==m&&x.key===key),desk=Object.keys(s.masters.desk).find(k=>s.masters.desk[k]===key);
+ if(other||desk){
+  if(!conflict)throw Error(`${keyName(key)} is already ${other?'on '+slotName(s,other):'the '+DESK_KEYS[desk]+' key'}. Pass conflict:"swap" to trade keys or "take" to move it here.`);
+  if(other){if(conflict==='swap'&&old)other.key=old;else delete other.key}else{if(conflict==='swap'&&old)s.masters.desk[desk]=old;else delete s.masters.desk[desk]}
+ }
+ m.key=key;
+}
 const shortId=prefix=>prefix+'-'+crypto.randomUUID().slice(0,8);
 const VERSION=(()=>{try{return JSON.parse(fs.readFileSync(new URL('../package.json',import.meta.url),'utf8')).version}catch{return '0.0.0'}})();
 // Look Link sequence numbers count tenths of a second since 2026 (and at least +1 per message), so they keep rising across restarts; int32 until 2032.
@@ -25,7 +40,7 @@ export class Engine{
  constructor({dataDir,output,clock=()=>performance.now()/1000}={}){
   this.dir=dataDir;this.clock=clock;this.logs=[];this.output=output??new Output(m=>this.log(m));this.show=defaults();const seed=new URL('../show-template.json',import.meta.url);if(fs.existsSync(seed)){this.show=migrate(JSON.parse(fs.readFileSync(seed,'utf8')));validateShow(this.show)}
   if(dataDir){fs.mkdirSync(dataDir,{recursive:true});const file=path.join(dataDir,'show.json');if(fs.existsSync(file)){const raw=JSON.parse(fs.readFileSync(file,'utf8')),added=!raw.pages;this.show=migrate(raw);validateShow(this.show);if(added)this.save()}else this.save();}
-  this.agents=new Map();this.net={in:[],out:[],count:{in:0,out:0,rejected:0},listener:{listening:false},presets:{}};this.looks=new Map();this.presetBursts=new Map();this.presetAsks=new Map();this.sendHook=null;this.onNetworkChange=null;this.selection={ids:[],group:'backlights',revision:0};this.lampCommands=new Map();this.revision=1;this.playback=null;this.overrides={};this.fx=[];this.master=.8;this.blackout=false;this.held=null;this.fading=null;this.transition=null;this.stack=null;this.release=null;this.programmed=null;this.raw=null;this.preview=null;this.previewFrames=null;this.blind=false;this.blindOverrides={};this.blindRelease=null;this.blindStates=null;this.fxPreview=null;this.requests=new Map();this.listeners=new Set();this.tickCount=0;this.dropped=0;this.lastTick=null;this.frames=render(this.show,null,0);this.log('Engine ready in preview. Physical output is disarmed.');
+  this.layers=[];this.highlight=false;this.scene=null;this.flashes=new Map();this.agents=new Map();this.net={in:[],out:[],count:{in:0,out:0,rejected:0},listener:{listening:false},presets:{}};this.looks=new Map();this.presetBursts=new Map();this.presetAsks=new Map();this.sendHook=null;this.onNetworkChange=null;this.selection={ids:[],group:'backlights',revision:0};this.lampCommands=new Map();this.revision=1;this.playback=null;this.overrides={};this.fx=[];this.master=.8;this.blackout=false;this.held=null;this.fading=null;this.transition=null;this.stack=null;this.release=null;this.programmed=null;this.raw=null;this.preview=null;this.previewFrames=null;this.blind=false;this.blindOverrides={};this.blindRelease=null;this.blindStates=null;this.fxPreview=null;this.requests=new Map();this.listeners=new Set();this.tickCount=0;this.dropped=0;this.lastTick=null;this.frames=render(this.show,null,0);this.log('Engine ready in preview. Physical output is disarmed.');
  }
  save(){if(!this.dir)return;const f=path.join(this.dir,'show.json');fs.writeFileSync(f+'.tmp',JSON.stringify(this.show,null,2));fs.renameSync(f+'.tmp',f)}
  // Audit log is append-only and asynchronous so a GO never waits on the disk; rotates at ~2 MB.
@@ -38,13 +53,14 @@ export class Engine{
  tick(){
   const now=this.clock();if(this.lastTick!==null&&now-this.lastTick>.1)this.dropped++;this.lastTick=now;this.tickCount++;
   this.follow();
+  this.layers=this.layers.filter(l=>{const c=l.cue,done=!c.loop&&!c.hold&&this.sourceTime(l,true)>=c.duration;if(done)this.log(`Cue complete underneath · ${c.name}`);return !done});
   let t=this.elapsed();let cue=this.playback?.cue;
-  if(cue&&t>=cue.duration){if(cue.loop)t%=cue.duration;else if(cue.hold)t=cue.duration-1e-6;else{this.held=copy(this.frames).map(f=>({...f,intensity:0}));this.playback=null;this.stack=null;cue=null;t=0;this.log('Cue complete; intensity zero, final positions held.')}}
-  let base=cue?compose(this.show,cue,t):this.held?copy(this.held):compose(this.show,null,0);
-  if(this.transition){const tr=this.transition,k=Math.min(1,(now-tr.start)/Math.max(.001,tr.duration));base=blend(tr.from.cue?compose(this.show,tr.from.cue,this.sourceTime(tr.from)):tr.from.frames,base,k);if(k>=1)this.transition=null}
+  if(cue&&t>=cue.duration){if(cue.loop)t%=cue.duration;else if(cue.hold)t=cue.duration-1e-6;else{if(!this.scene)this.held=copy(this.frames).map(f=>({...f,intensity:0}));else if(!this.layers.length)this.toFloor(this.sceneFade(),copy(this.raw??this.frames));this.log(`Cue complete · ${cue.name}`+(this.layers.length?'; the cue underneath takes over':this.scene?`; back to scene ${this.scene.name}`:'; intensity zero, final positions held.'));this.playback=this.layers.pop()??null;if(!this.playback)this.stack=null;cue=this.playback?.cue??null;t=cue?this.sourceTime(this.playback):0}}
+  let base=cue?this.composite(this.playback,this.layers):this.held?copy(this.held):this.floor();
+  if(this.transition){const tr=this.transition,k=Math.min(1,(now-tr.start)/Math.max(.001,tr.duration));base=blend(tr.from.cue?this.composite(tr.from,tr.from.layers??[]):tr.from.frames,base,k);if(k>=1)this.transition=null}
   this.raw=base;let states=this.applyFx(applyOverrides(this.show,base,this.overrides),this.fx,now);
   if(this.release){const r=this.release,k=Math.min(1,(now-r.start)/Math.max(.001,r.duration));states=states.map(s=>r.frames[s.id]?blendState(r.frames[s.id],s,k):s);if(k>=1)this.release=null}
-  this.programmed=states;this.frames=finish(this.show,states,this.master,this.blackout);
+  this.programmed=states;this.frames=finish(this.show,this.highlighted(states),this.master,this.blackout);
   this.previewFrames=this.preview||this.blind||this.fxPreview?this.renderPreview(now):null;
   if(this.fading){const factor=Math.max(0,1-(now-this.fading.start)/Math.max(.001,this.fading.duration));this.frames=this.fading.frames.map(f=>({...f,intensity:this.blackout?0:f.intensity*factor}));if(factor===0){this.held=copy(this.frames);this.fading=null}}
   // Packets are only built while they can be sent; the patch sheet encodes its own readback.
@@ -60,11 +76,77 @@ export class Engine{
   this.watchLooks();
   for(const f of this.listeners)f();
  }
- sourceTime(p){const cue=p.cue,t=p.paused?p.offset:p.offset+this.clock()-p.started;return cue.loop?t%cue.duration:Math.min(t,cue.duration-1e-6)}
- // Start a cue, crossfading from whatever is showing. Outgoing cues keep running during the fade.
- startCue(cue,{fade=0}={}){
-  if(fade>0)this.transition={start:this.clock(),duration:fade,from:this.playback?{...this.playback,cue:this.playback.cue}:{frames:copy(this.raw??this.frames)}};else this.transition=null;
-  this.playback={cue:copy(cue),started:this.clock(),offset:0,paused:false};this.held=null;this.fading=null;
+ sourceTime(p,raw=false){const cue=p.cue,t=p.paused?p.offset:p.offset+this.clock()-p.started;return raw?t:cue.loop?t%cue.duration:Math.min(t,cue.duration-1e-6)}
+ // Running cues (docs/CUE-PLAYBACK.md): the newest cue is this.playback; earlier cues keep running underneath in this.layers.
+ // A fixture follows the newest running cue that uses it (its look entries or track groups). A cue whose fixtures are all
+ // taken by newer cues has nothing left to show and retires, so stepping through full-look cues behaves as before.
+ controls(cue){return new Set([...(cue.look??[]).map(e=>e.id),...cue.tracks.flatMap(tr=>trackFixtures(this.show,tr))])}
+ composite(top,layers){
+  const states=compose(this.show,top.cue,this.sourceTime(top)),floor=this.scene&&this.floor();if(!layers.length&&!floor)return states;
+  const taken=new Set(top.controls??this.controls(top.cue)),index=new Map(states.map((st,i)=>[st.id,i]));
+  for(let i=layers.length-1;i>=0;i--){const l=layers[i],ids=[...(l.controls??this.controls(l.cue))].filter(id=>!taken.has(id)&&index.has(id));if(!ids.length)continue;
+   const own=new Map(compose(this.show,l.cue,this.sourceTime(l)).map(st=>[st.id,st]));for(const id of ids){states[index.get(id)]=own.get(id);taken.add(id)}}
+  // Fixtures no running cue uses show the active scene instead of resting dark.
+  if(floor)for(const st of floor)if(!taken.has(st.id)&&index.has(st.id))states[index.get(st.id)]=st;
+  return states;
+ }
+ pruneLayers(){
+  const taken=new Set(this.playback?.controls??[]),keep=[];
+  for(let i=this.layers.length-1;i>=0;i--){const l=this.layers[i],own=[...l.controls].some(id=>!taken.has(id));if(own&&keep.length<7)keep.unshift(l);else this.log(`Cue retired · ${l.cue.name} (every fixture taken by newer cues)`);for(const id of l.controls)taken.add(id)}
+  this.layers=keep;
+ }
+ running(){return [...this.layers,this.playback].filter(Boolean)}
+ runningCue(id){const list=this.running(),r=id===undefined?this.playback:list.find(l=>l.cue.id===id);if(!r)throw Error(id===undefined?'No cue is running':'Cue '+id+' is not running');return r}
+ runningStatus(){const top=this.playback;return this.running().map(l=>({id:l.cue.id,name:l.cue.name,top:l===top,paused:l.paused,elapsed:+this.sourceTime(l).toFixed(2),duration:l.cue.duration,loop:!!l.cue.loop,hold:!!l.cue.hold,fixtures:l.controls.size,page:l.page??null,entry:l.entry??null})).reverse()}
+ // Highlight (Hog-style): the selected fixtures show full, open white, beams open; position, zoom and focus unchanged.
+ // Applied after the programmer so it is never recorded, saved or sent to look reports; master and blackout still apply.
+ highlighted(states){
+  if(!this.highlight||!this.selection.ids.length)return states;const ids=new Set(this.selection.ids);
+  return states.map(st=>{if(!ids.has(st.id))return st;const {colorWheel,colorWheel2,...rest}=st;return {...rest,intensity:1,color:[1,1,1],white:0,gobo:0,goboShake:0,prism:0,prismRotation:0,frost:0,opticalMode:'beam'}});
+ }
+ // Scenes (docs/MASTERS-AND-SCENES.md): one saved look stays on underneath every cue. Fixtures no running cue uses show it,
+ // and releasing or stopping the last cue fades back to it instead of to dark. Its states are composed once per show revision.
+ floor(){
+  const sc=this.scene;if(!sc)return compose(this.show,null,0);
+  if(sc.rev!==this.revision){const saved=this.show.scenes.find(x=>x.id===sc.id);if(!saved){this.scene=null;return compose(this.show,null,0)}
+   this.scene={id:saved.id,name:saved.name,rev:this.revision,states:compose(this.show,{id:'scene',name:saved.name,duration:1,loop:true,tracks:[],look:saved.look},0)}}
+  return copy(this.scene.states);
+ }
+ sceneFade(){return this.show.playback.sceneFade??2}
+ // Nothing left running: crossfade from what was showing to the floor (the scene, or dark).
+ toFloor(fade,frames){this.held=null;this.fading=null;this.transition=fade>0?{start:this.clock(),duration:fade,from:{frames}}:null}
+ dropScene(fade){
+  if(!this.scene)return;const from=copy(this.raw??this.frames);this.log(`Scene released · ${this.scene.name}`);this.scene=null;
+  if(!this.playback)this.held=from.map(f=>({...f,intensity:0}));this.fading=null;this.transition=fade>0?{start:this.clock(),duration:fade,from:{frames:from}}:null;
+ }
+ releaseCue(r,fade=1.5){
+  if(fade>0)this.transition={start:this.clock(),duration:fade,from:this.playback?{...this.playback,layers:[...this.layers]}:{frames:copy(this.raw??this.frames)}};
+  if(r===this.playback){this.playback=this.layers.pop()??null;if(!this.playback){if(!this.scene)this.held=copy(this.raw??this.frames).map(f=>({...f,intensity:0}));if(fade>0)this.transition.from={frames:copy(this.raw??this.frames)}}}
+  else this.layers=this.layers.filter(l=>l!==r);
+  for(const [slot,cue] of this.flashes)if(cue===r.cue.id)this.flashes.delete(slot);
+  this.log(`Released · ${r.cue.name}`+(this.playback?` · ${this.playback.cue.name} carries on`:this.scene?` · back to scene ${this.scene.name}`:' · nothing else running, intensity to zero with positions held'));
+ }
+ // Masters (docs/MASTERS-AND-SCENES.md): a slot holds a cue and an action. Keyboard, mouse, MCP and OSC all press it here.
+ // Cues start on top of whatever runs, keeping the programmer and the page stack. A flash only lets go of a cue it started.
+ masterTrigger(id,down){
+  const slots=this.show.masters.slots,slot=slots.find(x=>x.id===id);if(!slot)throw Error('Unknown master '+id);
+  if(!slot.cue){if(down)throw Error(`Master ${slots.indexOf(slot)+1} has no cue`);return}
+  const cue=this.show.cues.find(c=>c.id===slot.cue),run=this.running().find(l=>l.cue.id===slot.cue),fade=slot.fade??0;
+  const start=(keep=false)=>{this.startCue(cue,{fade,keep});this.playback.master=slot.id};
+  if(!down){if(slot.action==='flash'&&this.flashes.get(slot.id)===slot.cue){this.flashes.delete(slot.id);if(run)this.releaseCue(run,fade)}return}
+  if(slot.action==='flash'){if(!run){start(true);this.flashes.set(slot.id,cue.id)}}
+  else if(slot.action==='toggle'){if(run)this.releaseCue(run,fade);else start()}
+  else if(slot.action==='go')start();
+  else if(slot.action==='pause'){if(run){run.offset=this.sourceTime(run,true);run.started=this.clock();run.paused=!run.paused;this.log(`${run.paused?'Paused':'Resumed'} · ${run.cue.name}`)}}
+  else if(slot.action==='release'&&run)this.releaseCue(run,fade);
+ }
+ mastersStatus(){const running=new Set(this.running().map(l=>l.cue.id));return {held:[...this.flashes].filter(([,cue])=>running.has(cue)).map(([slot])=>slot)}}
+ // Start a cue, crossfading from whatever is showing. Outgoing cues keep running during the fade. A flash (keep) is
+ // temporary, so it never retires the cues it covers: letting go shows them again.
+ startCue(cue,{fade=0,keep=false}={}){
+  if(fade>0)this.transition={start:this.clock(),duration:fade,from:this.playback?{...this.playback,layers:[...this.layers]}:{frames:copy(this.raw??this.frames)}};else this.transition=null;
+  const c=copy(cue);if(this.playback&&this.playback.cue.id!==cue.id)this.layers.push(this.playback);this.layers=this.layers.filter(l=>l.cue.id!==cue.id);
+  this.playback={cue:c,started:this.clock(),offset:0,paused:false,controls:this.controls(c)};if(keep)this.layers=this.layers.slice(-7);else this.pruneLayers();this.held=null;this.fading=null;
  }
  // Preview playback: same renderer as live, master applied, no overrides or blackout, never encoded.
  // Blind adds its own programmer buffer on top: over the preview cue, or over the live look when nothing is previewed.
@@ -99,7 +181,7 @@ export class Engine{
  stackIndex(page){const i=page.cues.findIndex(e=>e.id===this.stack.entry);return i>=0?i:this.stack.index}
  goEntry(page,index,fade){
   const entry=page.cues[index],cue=this.show.cues.find(c=>c.id===entry.cue);if(!cue)throw Error('Unknown cue '+entry.cue);
-  this.startCue(cue,{fade:fade??entry.fade});this.stack={page:page.id,entry:entry.id,index};
+  this.startCue(cue,{fade:fade??entry.fade});this.playback.page=page.id;this.playback.entry=entry.id;this.stack={page:page.id,entry:entry.id,index};
   this.fireSends(page,entry,index,cue,fade??entry.fade);
  }
  // Every GO (UI, MCP, OSC, auto-follow) tells announce targets and runs the entry's sends. Never blocks: the server's sendHook is async.
@@ -235,9 +317,15 @@ export class Engine{
  networkStatus(){const o=this.show.settings.osc??{bind:'loopback',allow:[]};return {listener:{...o,...this.net.listener},addresses:OSC_ADDRESSES.map(([address,args,does])=>({address,args,does})),triggers:this.show.triggers,targets:this.show.targets,zones:this.show.zones.map(z=>({...z,members:zoneFixtures(this.show,z).filter(id=>this.show.fixtures.find(f=>f.id===id)?.enabled)})),presets:this.net.presets,looks:Object.fromEntries(this.show.targets.map(t=>{const st=this.looks.get(t.id);return [t.id,{mode:t.look?.mode??'off',seq:st?.seq??0,settling:!!st?.settle,lastSentAgo:st?+(this.clock()-st.at).toFixed(2):null}]})),count:this.net.count,inbound:this.net.in,outbound:this.net.out}}
  // Auto-follow: an entry marked follow:auto fires the next entry after its wait.
  follow(){
-  const page=this.activePage();if(!page||!this.playback||this.playback.paused)return;
+  const page=this.activePage();if(!page)return;
   const i=this.stackIndex(page),entry=page.cues[i];if(!entry||entry.follow!=='auto'||i+1>=page.cues.length)return;
-  if(this.elapsed()>=(entry.wait??this.playback.cue.duration)){this.goEntry(page,i+1);this.log(`Auto-follow · ${page.name} → ${page.cues[i+1].label??page.cues[i+1].cue}`)}
+  // Time the entry's own running cue: a master cue may be on top of it.
+  const run=this.running().find(l=>l.page===page.id&&l.entry===entry.id);if(!run||run.paused)return;
+  const late=this.sourceTime(run,true)-(entry.wait??run.cue.duration);if(late<0)return;
+  this.goEntry(page,i+1);this.log(`Auto-follow · ${page.name} → ${page.cues[i+1].label??page.cues[i+1].cue}`);
+  // The next entry starts when the wait ran out, not on the tick that noticed, so a chain of auto entries stays on the
+  // show clock (beat-locked to a song) instead of each adding up to a frame of lag. Longer stalls are not caught up.
+  if(late<.5){this.playback.started-=late;if(this.transition)this.transition.start-=late}
  }
  stackStatus(){
   const page=this.activePage();if(!page)return null;const i=this.stackIndex(page),entry=page.cues[i],next=page.cues[i+1];
@@ -256,12 +344,12 @@ export class Engine{
  }
  // Agents count as connected while their MCP server keeps saying hello (every 10 s).
  connectedAgents(){const now=this.clock();for(const [k,a] of this.agents)if(now-a.lastSeen>30)this.agents.delete(k);return [...this.agents.values()].map(a=>({client:a.client,version:a.version,connectedFor:Math.round(now-a.connectedAt)}))}
- runtime(){return {agents:this.connectedAgents(),selection:copy(this.selection),lampCommands:Object.fromEntries([...this.lampCommands].map(([id,p])=>[id,{action:p.action,remaining:Math.max(0,p.until-this.clock())}])),revision:this.revision,playback:this.playback?{id:this.playback.cue.id,name:this.playback.cue.name,duration:this.playback.cue.duration,loop:this.playback.cue.loop,hold:!!this.playback.cue.hold,paused:this.playback.paused,elapsed:Math.min(this.elapsed()% (this.playback.cue.loop?this.playback.cue.duration:Infinity),this.playback.cue.duration)}:null,stack:this.stackStatus(),net:{in:this.net.count.in,out:this.net.count.out,rejected:this.net.count.rejected,listening:!!this.net.listener.listening,last:this.net.in[0]?.address??null},preview:this.previewStatus(),fx:this.fx.map(x=>this.fxSummary(x)),fxPreview:this.fxSummary(this.fxPreview),blind:{enabled:this.blind,fixtures:Object.keys(this.blindOverrides),overrides:this.blindOverrides,release:this.blindRelease?{fixtures:Object.keys(this.blindRelease.frames),progress:Math.min(1,(this.clock()-this.blindRelease.start)/Math.max(.001,this.blindRelease.duration))}:null},previewFrames:this.previewFrames,transition:this.transition?{from:this.transition.from.cue?.id??null,duration:this.transition.duration,progress:Math.min(1,(this.clock()-this.transition.start)/Math.max(.001,this.transition.duration))}:null,release:this.release?{fixtures:Object.keys(this.release.frames),progress:Math.min(1,(this.clock()-this.release.start)/Math.max(.001,this.release.duration))}:null,master:this.master,blackout:this.blackout,overrides:this.overrides,frames:this.frames,output:this.output.status(),tickCount:this.tickCount,slowFrames:this.dropped,logs:this.logs.slice(-15)}}
+ runtime(){return {agents:this.connectedAgents(),selection:copy(this.selection),lampCommands:Object.fromEntries([...this.lampCommands].map(([id,p])=>[id,{action:p.action,remaining:Math.max(0,p.until-this.clock())}])),revision:this.revision,running:this.runningStatus(),highlight:this.highlight,scene:this.scene?{id:this.scene.id,name:this.scene.name}:null,masters:this.mastersStatus(),playback:this.playback?{id:this.playback.cue.id,name:this.playback.cue.name,duration:this.playback.cue.duration,loop:this.playback.cue.loop,hold:!!this.playback.cue.hold,paused:this.playback.paused,elapsed:Math.min(this.elapsed()% (this.playback.cue.loop?this.playback.cue.duration:Infinity),this.playback.cue.duration)}:null,stack:this.stackStatus(),net:{in:this.net.count.in,out:this.net.count.out,rejected:this.net.count.rejected,listening:!!this.net.listener.listening,last:this.net.in[0]?.address??null},preview:this.previewStatus(),fx:this.fx.map(x=>this.fxSummary(x)),fxPreview:this.fxSummary(this.fxPreview),blind:{enabled:this.blind,fixtures:Object.keys(this.blindOverrides),overrides:this.blindOverrides,release:this.blindRelease?{fixtures:Object.keys(this.blindRelease.frames),progress:Math.min(1,(this.clock()-this.blindRelease.start)/Math.max(.001,this.blindRelease.duration))}:null},previewFrames:this.previewFrames,transition:this.transition?{from:this.transition.from.cue?.id??null,duration:this.transition.duration,progress:Math.min(1,(this.clock()-this.transition.start)/Math.max(.001,this.transition.duration))}:null,release:this.release?{fixtures:Object.keys(this.release.frames),progress:Math.min(1,(this.clock()-this.release.start)/Math.max(.001,this.release.duration))}:null,master:this.master,blackout:this.blackout,overrides:this.overrides,frames:this.frames,output:this.output.status(),tickCount:this.tickCount,slowFrames:this.dropped,logs:this.logs.slice(-15)}}
  snapshot(){return {show:copy(this.show),runtime:this.runtime()}}
  update(fn){const next=copy(this.show);fn(next);validateShow(next);this.show=next;this.revision++;this.save()}
  appendEntry(s,pageId,cue,fade=2,after){const page=s.pages.find(p=>p.id===pageId);if(!page)throw Error('Unknown page');const id=shortId('entry'),at=after?page.cues.findIndex(e=>e.id===after):-1;page.cues.splice(at<0?page.cues.length:at+1,0,{id,cue,fade,follow:'manual'});return id}
- // What is seen right now (blind view while blind), with master removed, as look entries.
- snapshotLook(){return (this.blind?this.previewFrames:this.frames).filter(f=>this.show.fixtures.some(x=>x.id===f.id&&x.enabled)).map(({id,...values})=>({id,values:{...values,intensity:this.master>0?Math.min(1,values.intensity/this.master):0,color:'#'+values.color.map(v=>Math.round(v*255).toString(16).padStart(2,'0')).join('')}}))}
+ // What is seen right now (blind view while blind), with master removed, as look entries. Highlight is never recorded.
+ snapshotLook(){const seen=this.blind?this.previewFrames:this.highlight&&this.programmed?finish(this.show,this.programmed,this.master,this.blackout):this.frames;return seen.filter(f=>this.show.fixtures.some(x=>x.id===f.id&&x.enabled)).map(({id,...values})=>({id,values:{...values,intensity:this.master>0?Math.min(1,values.intensity/this.master):0,color:'#'+values.color.map(v=>Math.round(v*255).toString(16).padStart(2,'0')).join('')}}))}
  // Programmer effects: one per fixture per layer, layered on top of cue + overrides.
  applyFx(states,list,now){
   if(!list.length)return states;const byId=new Map(states.map(s=>[s.id,s])),fixtures=fixtureIndex(this.show);
@@ -287,7 +375,7 @@ export class Engine{
  fxSummary(fx){return fx&&{id:fx.id,name:fx.name,preset:fx.preset,effect:fx.effect,layer:fx.layer,fixtures:fx.fixtures,params:fx.params}}
  upsert(list,item){const i=list.findIndex(x=>x.id===item.id);if(i<0)list.push(copy(item));else list[i]=copy(item)}
  ensureIds(ids){for(const id of ids)if(!this.show.fixtures.some(f=>f.id===id))throw Error('Unknown fixture '+id)}
- async disarm(){this.lampCommands.clear();const dark=copy(this.frames).map(f=>({...f,intensity:0}));this.playback=null;this.overrides={};this.fx=[];this.fading=null;this.transition=null;this.release=null;this.stack=null;this.held=copy(dark);this.frames=copy(dark);if(this.output.armed){for(let i=0;i<5;i++){this.output.send(encode(this.show,dark,{physical:true}));await new Promise(r=>setTimeout(r,34))}this.output.close();}this.playback=null;this.overrides={};this.fx=[];this.fading=null;this.held=copy(this.frames).map(f=>({...f,intensity:0}));this.frames=copy(this.held);this.log('Physical output stopped. Hog channel handback remains manual.')}
+ async disarm(){this.lampCommands.clear();this.scene=null;this.flashes.clear();const dark=copy(this.frames).map(f=>({...f,intensity:0}));this.playback=null;this.layers=[];this.overrides={};this.fx=[];this.fading=null;this.transition=null;this.release=null;this.stack=null;this.held=copy(dark);this.frames=copy(dark);if(this.output.armed){for(let i=0;i<5;i++){this.output.send(encode(this.show,dark,{physical:true}));await new Promise(r=>setTimeout(r,34))}this.output.close();}this.playback=null;this.overrides={};this.fx=[];this.fading=null;this.held=copy(this.frames).map(f=>({...f,intensity:0}));this.frames=copy(this.held);this.log('Physical output stopped. Hog channel handback remains manual.')}
  // lean: skip building the full runtime in the reply (show-control triggers do not need it).
  async command(name,args={},{lean=false}={}){
   if(!Object.hasOwn(COMMANDS,name))throw Error('Unknown command '+name);const def=COMMANDS[name];validate(def.schema,args);
@@ -300,7 +388,11 @@ export class Engine{
   switch(name){
    case 'selection.set':{
     this.ensureIds(args.ids);if(args.group&&args.group!=='all'&&!this.show.groups.some(g=>g.id===args.group))throw Error('Unknown selection group');
-    this.selection={ids:[...new Set(args.ids)],group:args.group??this.selection.group,revision:this.selection.revision+1};break;
+    // Without an explicit group the old one stays only while every ID is still in it, so clearing the selection (or
+    // picking outside the group) drops it and the UI's fixture buttons go back to the whole rig.
+    const ids=[...new Set(args.ids)],prev=this.selection.group,members=prev==='all'?null:this.show.groups.find(g=>g.id===prev)?.fixtures;
+    const keep=prev&&ids.length&&(prev==='all'||members&&ids.every(id=>members.includes(id)));
+    this.selection={ids,group:args.group??(keep?prev:null),revision:this.selection.revision+1};break;
    }
    case 'selection.group':{
     const ids=args.group==='all'?this.show.fixtures.filter(f=>f.enabled).map(f=>f.id):this.show.groups.find(g=>g.id===args.group)?.fixtures;
@@ -308,15 +400,30 @@ export class Engine{
    }
    case 'look.capture':{const look=this.snapshotLook();this.update(s=>{this.upsert(s.cues,{id:args.id,name:args.name,duration:30,loop:true,tracks:[],look});if(args.page)created={cue:args.id,entry:this.appendEntry(s,args.page,args.id,args.fade)}});created??={cue:args.id};break;}
    case 'cue.save':this.update(s=>this.upsert(s.cues,args.cue));break;
-   case 'cue.delete':this.update(s=>{s.cues=s.cues.filter(c=>c.id!==args.id);for(const p of s.pages)p.cues=p.cues.filter(e=>e.cue!==args.id)});break;
+   case 'cue.delete':this.update(s=>{s.cues=s.cues.filter(c=>c.id!==args.id);for(const p of s.pages)p.cues=p.cues.filter(e=>e.cue!==args.id);for(const m of s.masters.slots)if(m.cue===args.id)delete m.cue});break;
    case 'cue.play':{
     if(args.requestId&&this.requests.has(args.requestId))return {ok:true,duplicate:true,runtime:this.runtime()};
     const cue=this.show.cues.find(c=>c.id===args.id);if(!cue)throw Error('Unknown cue');
     this.overrides={};this.fx=[];this.release=null;this.stack=null;this.startCue(cue,{fade:args.fade??0});
     if(args.requestId){this.requests.set(args.requestId,this.clock());if(this.requests.size>1000)this.requests.delete(this.requests.keys().next().value)}break;}
-   case 'cue.pause':if(this.playback&&this.playback.paused!==args.paused){this.playback.offset=this.elapsed();this.playback.started=this.clock();this.playback.paused=args.paused}break;
+   case 'cue.pause':{const r=args.id===undefined?this.playback:this.runningCue(args.id);if(r&&r.paused!==args.paused){r.offset=this.sourceTime(r,true);r.started=this.clock();r.paused=args.paused;this.log(`${args.paused?'Paused':'Resumed'} · ${r.cue.name}`)}break}
+   case 'cue.release':this.releaseCue(this.runningCue(args.id),args.fade??1.5);break;
+   case 'highlight.set':this.highlight=args.enabled;this.log(`Highlight ${args.enabled?'on':'off'}`);break;
    case 'cue.seek':if(this.playback){this.playback.offset=Math.min(args.seconds,this.playback.cue.duration);this.playback.started=this.clock()}break;
-   case 'cue.stop':this.playback=null;this.overrides={};this.fx=[];this.transition=null;this.release=null;this.stack=null;this.fading={start:this.clock(),duration:args.fade??1.5,frames:copy(this.frames)};break;
+   case 'cue.stop':{const lit=copy(this.programmed??this.raw??this.frames);this.playback=null;this.layers=[];this.overrides={};this.fx=[];this.transition=null;this.release=null;this.stack=null;this.flashes.clear();
+    if(this.scene)this.toFloor(args.fade??1.5,lit);else this.fading={start:this.clock(),duration:args.fade??1.5,frames:copy(this.frames)};break}
+   case 'scene.capture':{const old=this.show.scenes.find(x=>x.id===args.id),color=args.color??old?.color,look=this.snapshotLook();this.update(s=>this.upsert(s.scenes,{id:args.id,name:args.name,...(color?{color}:{}),look}));created={scene:args.id};break}
+   case 'scene.save':this.update(s=>this.upsert(s.scenes,args.scene));break;
+   case 'scene.delete':if(!this.show.scenes.some(x=>x.id===args.id))throw Error('Unknown scene');if(this.scene?.id===args.id)this.dropScene(this.sceneFade());this.update(s=>{s.scenes=s.scenes.filter(x=>x.id!==args.id)});break;
+   case 'scene.go':{const sc=this.show.scenes.find(x=>x.id===args.id);if(!sc)throw Error('Unknown scene');const fade=args.fade??this.sceneFade(),from=copy(this.raw??this.frames);
+    this.scene={id:sc.id,name:sc.name,rev:-1};this.held=null;this.fading=null;this.transition=fade>0?{start:this.clock(),duration:fade,from:{frames:from}}:null;break}
+   case 'scene.release':this.dropScene(args.fade??this.sceneFade());break;
+   case 'masters.trigger':this.masterTrigger(args.slot,args.down);break;
+   case 'masters.assign':{if(args.cue&&!this.show.cues.some(c=>c.id===args.cue))throw Error('Unknown cue '+args.cue);
+    this.update(s=>{const m=masterSlot(s,args.slot);if(args.clear){delete m.cue;delete m.label}if(args.cue)m.cue=args.cue;if(args.action)m.action=args.action;if(args.fade!==undefined)m.fade=args.fade;if(args.label!==undefined){if(args.label)m.label=args.label;else delete m.label}});
+    if(args.clear||args.cue)this.flashes.delete(args.slot);break}
+   case 'masters.key':{if(!args.clear&&!args.key)throw Error('Give a key, or clear:true');this.update(s=>setMasterKey(s,args.slot,args.clear?null:args.key,args.conflict));break}
+   case 'masters.save':this.update(s=>{if(args.slots)s.masters.slots=args.slots;if(args.desk)s.masters.desk=args.desk});for(const id of [...this.flashes.keys()])if(!this.show.masters.slots.some(m=>m.id===id&&m.cue===this.flashes.get(id)))this.flashes.delete(id);break;
    case 'effect.preview':{
     const cue={id:'ad-hoc',name:'Unsaved effect',duration:args.duration??20,loop:true,tracks:[{group:args.group,effect:args.effect,start:0,duration:args.duration??20,params:args.params,fadeIn:.5,fadeOut:.5}]};
     const probe=copy(this.show);probe.cues.push(cue);validateShow(probe);this.overrides={};this.fx=[];this.release=null;this.stack=null;this.startCue(cue);break;}
@@ -361,7 +468,7 @@ export class Engine{
     if(!args.show||typeof args.show!=='object')throw Error('Invalid show');
     const next=migrate(copy(args.show));next.settings=copy(this.show.settings);validateShow(next);
     if(this.dir)fs.writeFileSync(path.join(this.dir,'show-before-import-'+Date.now()+'.json'),JSON.stringify(this.show,null,2));
-    this.selection={ids:[],group:'all',revision:this.selection.revision+1};this.preview=null;this.blind=false;this.blindOverrides={};this.playback=null;this.overrides={};this.fx=[];this.held=null;this.fading=null;this.transition=null;this.release=null;this.stack=null;this.blackout=false;this.update(s=>{for(const k of Object.keys(s))delete s[k];Object.assign(s,next)});break;
+    this.selection={ids:[],group:'all',revision:this.selection.revision+1};this.preview=null;this.blind=false;this.blindOverrides={};this.playback=null;this.layers=[];this.overrides={};this.fx=[];this.held=null;this.fading=null;this.transition=null;this.release=null;this.stack=null;this.blackout=false;this.update(s=>{for(const k of Object.keys(s))delete s[k];Object.assign(s,next)});break;
    }
    case 'fixture.patch':this.update(s=>this.upsert(s.fixtures,args.fixture));break;
    case 'group.save':this.ensureIds(args.fixtures);this.update(s=>this.upsert(s.groups,args));break;
@@ -480,10 +587,10 @@ export class Engine{
    case 'master.set':this.master=args.value;break;
    case 'blackout.set':this.blackout=args.enabled;break;
    case 'output.configure':validateNetwork(args);this.update(s=>Object.assign(s.settings,args));break;
-   case 'output.arm':if(this.playback||Object.keys(this.overrides).length||this.fx.length||this.fading||this.transition||this.release)throw Error('Stop preview and clear overrides before arming.');await this.output.arm(this.show.settings);break;
+   case 'output.arm':if(this.scene)throw Error('Release the scene before arming.');if(this.playback||this.layers.length||Object.keys(this.overrides).length||this.fx.length||this.fading||this.transition||this.release)throw Error('Stop preview and clear overrides before arming.');await this.output.arm(this.show.settings);break;
    case 'output.disarm':await this.disarm();break;
   }
-  this.log(`${name}${args.id?' · '+args.id:''}${args.cue?' · '+args.cue.name:''}${args.page?.name?' · '+args.page.name:''}`);this.tick();return {ok:true,...(created?{created}:{}),...(lean?{}:{runtime:this.runtime()})};
+  this.log(`${name}${args.id?' · '+args.id:''}${args.slot?' · '+args.slot:''}${args.cue?.name?' · '+args.cue.name:''}${args.page?.name?' · '+args.page.name:''}`);this.tick();return {ok:true,...(created?{created}:{}),...(lean?{}:{runtime:this.runtime()})};
  }
  start(){this.timer=setInterval(()=>{try{this.tick()}catch(e){this.log('Engine error: '+e.message);this.output.close()}},1000/30)}
  async close(){clearInterval(this.timer);await this.disarm();const audit=this.audit;this.audit=null;await new Promise(r=>audit?audit.end(r):r())}
