@@ -13,7 +13,7 @@ export class Stage{
   this.scene.add(new THREE.HemisphereLight(0xb8d0ee,0x1b2434,.9));const key=new THREE.DirectionalLight(0xc9dcf9,.8);key.position.set(-5,15,10);this.scene.add(key);
   this.buildRoom();for(const f of fixtures)this.makeFixture(f);
   this.ray=new THREE.Raycaster();this.pointer=new THREE.Vector2();let down;
-  this.renderer.domElement.addEventListener('pointerdown',e=>down=[e.clientX,e.clientY]);this.renderer.domElement.addEventListener('pointerup',e=>{if(!down||Math.hypot(e.clientX-down[0],e.clientY-down[1])>5)return;const r=this.renderer.domElement.getBoundingClientRect();this.pointer.set((e.clientX-r.left)/r.width*2-1,-(e.clientY-r.top)/r.height*2+1);this.ray.setFromCamera(this.pointer,this.camera);const hits=this.ray.intersectObjects(this.targets);if(hits.length)this.onSelect(hits[0].object.userData.id,{shiftKey:e.shiftKey})});
+  this.renderer.domElement.addEventListener('pointerdown',e=>down=[e.clientX,e.clientY]);this.renderer.domElement.addEventListener('pointerup',e=>{if(!down||Math.hypot(e.clientX-down[0],e.clientY-down[1])>5)return;const r=this.renderer.domElement.getBoundingClientRect();this.pointer.set((e.clientX-r.left)/r.width*2-1,-(e.clientY-r.top)/r.height*2+1);this.ray.setFromCamera(this.pointer,this.camera);const hits=this.ray.intersectObjects(this.targets);this.onSelect(hits.length?hits[0].object.userData.id:null,{shiftKey:e.shiftKey})});
   this.resizeObserver=new ResizeObserver(()=>this.resize());this.resizeObserver.observe(container);this.resize();this.last=performance.now();this.animate();
  }
  material(color,roughness=.7){return new THREE.MeshStandardMaterial({color,roughness,metalness:.25})}
