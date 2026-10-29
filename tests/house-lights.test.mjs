@@ -4,10 +4,10 @@ const show=JSON.parse(fs.readFileSync(new URL('../data/show.json',import.meta.ur
 const house=show.fixtures.filter(f=>f.profile==='pendant4');
 // Hog fixture window photos IMG_3836–3843: RGBW Pendant Light 4ch. 3319 has no patch on the Hog.
 const hog=[];for(let n=1001;n<=1062;n++)hog.push([String(n),8,1+4*(n-1001)]);for(let n=3301;n<=3318;n++)hog.push([String(n),5,165+4*(n-3301)]);for(let n=3320;n<=3362;n++)hog.push([String(n),5,241+4*(n-3320)]);
-test('123 house pendants carry the Hog patch and are preview-only until the 4ch layout is confirmed',()=>{
+test('123 house pendants carry the Hog patch and are verified for output (Hog Fixture Builder, 2026-10-28)',()=>{
  assert.equal(PROFILE_DEFS.pendant4.channels,4);
  assert.deepEqual(house.map(f=>[f.id,f.universe,f.address]),hog);
- assert.ok(house.every(f=>f.enabled&&!f.verified),'enabled for preview, unverified so never encoded');
+ assert.ok(house.every(f=>f.enabled&&f.verified),'enabled and verified, so encoded while armed');assert.deepEqual(PROFILE_DEFS.pendant4.attributes,['intensity','color'],'no white channel');
  assert.ok(!show.fixtures.some(f=>f.id==='3319'));assert.equal(show.settings.mappings['8'],7);
  assert.deepEqual(show.groups.find(g=>g.id==='house-lights').fixtures,hog.map(h=>h[0]));
  // No pendant footprint overlaps any other fixture's patch.
@@ -18,9 +18,9 @@ test('123 house pendants carry the Hog patch and are preview-only until the 4ch 
  const dist=f=>Math.hypot(f.position[0],f.position[2]),face=show.fixtures.filter(f=>f.profile==='reveE3');assert.ok(Math.min(...house.map(dist))>Math.max(...face.map(dist))+1);
  assert.ok(show.fixtures.length>128);validateShow(show);
 });
-test('unverified pendants send nothing even at full; once verified, pendant 4ch encodes R, G, B, W scaled by intensity (no dimmer channel)',()=>{
- const full=encode(show,show.fixtures.map(x=>({...baseState(x),intensity:1,white:1}))).get(7);assert.ok(!full||full.every(b=>b===0));
- const s=structuredClone(show),f=s.fixtures.find(f=>f.id==='1001');f.enabled=f.verified=true;
- const p=encode(s,s.fixtures.map(x=>({...baseState(x),...(x.id==='1001'?{intensity:.5,color:[1,0,.5],white:1}:{})}))).get(7);
- assert.deepEqual([...p.subarray(0,4)],[128,0,64,128]);
+test('pendant 4ch encodes dimmer, red, green, blue per the Hog Fixture Builder; an unverified pendant sends nothing',()=>{
+ const s=structuredClone(show);const state=x=>({...baseState(x),...(x.id==='1001'?{intensity:.5,color:[1,0,.5],white:1}:{})});
+ const p=encode(s,s.fixtures.map(state)).get(7);assert.deepEqual([...p.subarray(0,4)],[128,255,0,128],'ch1 dimmer, ch2 red, ch3 green, ch4 blue; white ignored');
+ assert.deepEqual([...p.subarray(4,8)],[0,255,255,255],'1002 is dark through its dimmer (ch1 = 0), colour held at white');
+ s.fixtures.find(f=>f.id==='1001').verified=false;const off=encode(s,s.fixtures.map(state)).get(7);assert.ok(!off||off.subarray(0,4).every(b=>b===0));
 });

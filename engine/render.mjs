@@ -100,8 +100,8 @@ export function encode(show,states,{physical=false}={}){
   if(f.profile==='q120')d.set([byte(st.intensity),...st.color.map(byte),byte(st.white)],base);
   if(f.profile==='colorado')d.set([byte(st.intensity),...st.color.map(byte),byte(st.white),byte(st.zoom),0],base);
   // Rêve E-3 12ch: 16-bit dimmer, RGB from color, white drives amber + mint together; strobe, VCW, CCT, hue and gobo rotator held at 0.
-  // Pendant 4ch has no dimmer channel: intensity scales R, G, B, W (assumed order, unverified).
-  if(f.profile==='pendant4')d.set([...st.color.map(c=>byte(c*st.intensity)),byte(st.white*st.intensity)],base);
+  // Pendant 4ch per the Hog Fixture Builder: dimmer, red, green, blue.
+  if(f.profile==='pendant4')d.set([byte(st.intensity),...st.color.map(byte)],base);
   if(f.profile==='reveE3'){const dim=Math.round(clamp(st.intensity)*65535),w=byte(st.white);d.set([dim>>8,dim&255,...st.color.map(byte),w,w,0,0,0,0,0],base)}
   if(f.profile==='mh7'){
    const fine=v=>Math.round(clamp(v)*65535),dim=fine(st.intensity),pan=fine(f.calibration.invertPan?1-st.pan:st.pan),tilt=fine(f.calibration.invertTilt?1-st.tilt:st.tilt),zoom=fine(st.zoom),focus=fine(st.focus);

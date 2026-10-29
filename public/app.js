@@ -561,11 +561,50 @@ function paintAgentStatus(r){
 }
 function importDialog(){dialog('Import a show',`<p class="hint">Includes fixtures, placement, alignment, positions, groups, cues, pages and LED wall choice. Network settings stay. Output must be disarmed; the current show is backed up. Imported media files are not inside the show file.</p><input id="showFile" type="file" accept=".json,application/json" aria-label="Show file"><div class="dialog-actions"><button id="loadShow" class="primary"><span data-icon="upload"></span>Import</button></div>`);$('#loadShow').onclick=async()=>{try{const file=$('#showFile').files[0];if(!file)return toast('Choose an exported show file.');if(file.size>300000)throw Error('Show file is too large');await command('show.import',{show:JSON.parse(await file.text())});cancelAlignment();selected=[];group=null;$('#dialog').close();toast('Show imported. Output remains disarmed.')}catch(e){toast(e.message)}}}
 function helpDialog(){dialog('Guides',`<div class="pool-list"><a class="pool-row link" href="/help/operator.html" target="_blank"><span class="pill-icon" data-icon="show"></span><strong>Running the show</strong><small>Pages, GO, overrides</small></a><a class="pool-row link" href="/help/hog-setup.html" target="_blank"><span class="pill-icon" data-icon="plug"></span><strong>Hog 4 setup</strong><small>Field guide</small></a><a class="pool-row link" href="/help/mh7.html" target="_blank"><span class="pill-icon" data-icon="beam"></span><strong>MH7 notes</strong><small>Verified behavior</small></a><a class="pool-row link" href="/help/triggers.html" target="_blank"><span class="pill-icon" data-icon="network"></span><strong>Triggers from other apps</strong><small>OSC setup</small></a><a class="pool-row link" href="/help/agent-api.html" target="_blank"><span class="pill-icon" data-icon="agent"></span><strong>Agent API</strong><small>HTTP, OSC, MCP</small></a></div><h3>Keys</h3><dl class="diagnostic"><dt>Space</dt><dd>GO</dd><dt>⌫</dt><dd>Back</dd><dt>C</dt><dd>Clear overrides (fade 3 s)</dd><dt>B</dt><dd>Blackout on/off</dd><dt>Esc</dt><dd>Close panels</dd></dl><p class="hint">Version 0.2 prototype. The stage is an approximate spatial model, not a photometric simulator.</p>`)}
+// Art-Net output: where the desk sends DMX and a check of the path (output.status / output.check / output.configure,
+// the same commands agents use as lights_output_*). The check sends no DMX.
+let lastCheck=null;
+function outputSection(){
+ const o=runtime.output,ips=[...new Set([show.settings.source,...o.interfaces.filter(i=>!i.internal).map(i=>i.address)])];
+ const adapter=ip=>o.interfaces.find(i=>i.address===ip)?.name;
+ return `<section class="prop net-settings"><h3><span data-icon="plug"></span>Art-Net output</h3>
+ <div id="outState" class="out-state"></div>
+ <div class="form-grid"><label class="mini"><span>This Mac's lighting network address</span><select id="outSource">${ips.map(ip=>`<option value="${esc(ip)}">${esc(ip)}${adapter(ip)?' · '+esc(adapter(ip)):' · not connected'}</option>`).join('')}</select></label>
+ <label class="mini"><span>Console or Art-Net node IP</span><input id="outTarget" type="text" inputmode="decimal" spellcheck="false" value="${esc(show.settings.target)}" placeholder="10.0.0.1"></label></div>
+ <div class="dialog-actions left"><button id="outCheck" class="ghost-button"><span data-icon="network"></span>Check connection</button><button id="outSave" class="ghost-button"><span data-icon="save"></span>Save addresses</button><button id="outMore" class="link-button">Universe mapping…</button></div>
+ <ul id="outSteps" class="check-steps"></ul>
+ <p class="hint">The check pings the address and asks it to identify itself over Art-Net. It sends no DMX. Agents: lights_output_status, lights_output_check.</p></section>`;
+}
+function paintOutputState(){
+ const el=$('#outState');if(!el)return;const o=runtime.output,key=[o.armed,o.packets,o.lastError].join('|');if(el.dataset.key===key)return;el.dataset.key=key;
+ el.className='out-state '+(o.armed?'live':'off');
+ el.innerHTML=o.armed?`<i></i><div><strong>Output on</strong><small>Sending to ${esc(show.settings.target)} · ${o.packets.toLocaleString()} packets${o.lastError?' · '+esc(o.lastError):''}</small></div>`:`<i></i><div><strong>Output off</strong><small>Nothing is sent to the rig. The visualizer is preview only until you arm output.</small></div><button class="primary danger small" id="outArm">Arm output…</button>`;
+ if($('#outArm'))$('#outArm').onclick=armDialog;
+}
+function paintChecks(c){
+ const el=$('#outSteps');if(!el)return;if(!c){el.innerHTML='';return}
+ el.innerHTML=c.steps.map(x=>`<li class="${x.ok?'ok':'bad'}">${icon(x.ok?'check':'warning')}<span>${esc(x.label)}</span></li>`).join('')+`<li class="muted"><span>Checked ${esc(new Date(c.at).toLocaleTimeString())} · ${esc(c.target)}</span></li>`;
+}
+function wireOutputSection(){
+ $('#outSource').value=show.settings.source;paintOutputState();paintChecks(lastCheck&&lastCheck.target===show.settings.target?lastCheck:null);
+ const addr=()=>({source:$('#outSource').value,target:$('#outTarget').value.trim()});
+ $('#outCheck').onclick=async e=>{const b=e.currentTarget;b.disabled=true;$('#outSteps').innerHTML=`<li class="muted"><span>Checking ${esc(addr().target)}…</span></li>`;try{lastCheck=await command('output.check',addr());paintChecks(lastCheck)}catch{$('#outSteps').innerHTML=''}finally{if(b.isConnected)b.disabled=false}};
+ $('#outSave').onclick=async()=>{if(runtime.output.armed)return toast('Disarm output before changing addresses.');try{await command('output.configure',{...addr(),mappings:show.settings.mappings});toast('Addresses saved.')}catch{}};
+ $('#outMore').onclick=connection;
+}
+// Shown over the stage while lights are being driven but output is off, so "the rig does nothing" is never a mystery.
+let outputHintDismissed=false;
+function paintOutputHint(r){
+ const el=$('#outputHint');if(!el)return;if(r.output.armed)outputHintDismissed=false;
+ const driving=!!r.playback||(r.frames??[]).some(f=>f.intensity>.01);const show_=!r.output.armed&&driving&&!outputHintDismissed;
+ if(el.hidden!==!show_)el.hidden=!show_;
+}
 // Playback preferences live in the show (settings.set), so agents and every desk share them.
 function settingsDialog(){
  const row=(key,title,hint)=>`<section class="prop"><h3><span data-icon="${key==='clearFade'?'release':'blind'}"></span>${title}</h3><p class="hint">${hint}</p><div class="seg-row"><div class="segmented">${[[0,'Instant'],[1,'1 s'],[2,'2 s'],[3,'3 s'],[5,'5 s']].map(([v,l])=>`<button data-setting="${key}" data-value="${v}" class="${show.playback[key]===v?'active':''}">${l}</button>`).join('')}</div><label class="num"><input data-setting-number="${key}" type="number" min="0" max="30" step=".5" value="${show.playback[key]}">s</label></div></section>`;
- dialog('Settings',row('clearFade','Clear','How long Clear (C) takes to fade manual changes back to the running cue. Instant is a hard cut.')+row('blindFade','Blind','How long clearing blind changes, and Apply live, take to fade. Instant is a hard cut.')+'<p class="hint">Saved in the show, so it travels with exports and agents see it (lights_settings_set).</p>');
+ dialog('Settings',outputSection()+row('clearFade','Clear','How long Clear (C) takes to fade manual changes back to the running cue. Instant is a hard cut.')+row('blindFade','Blind','How long clearing blind changes, and Apply live, take to fade. Instant is a hard cut.')+'<p class="hint">Saved in the show, so it travels with exports and agents see it (lights_settings_set).</p>');
  const save=async(key,value)=>{if(!Number.isFinite(value)||value<0||value>30)return toast('Use 0 to 30 seconds.');try{await command('settings.set',{[key]:value});settingsDialog()}catch{}};
+ wireOutputSection();
  $$('[data-setting]').forEach(b=>b.onclick=()=>save(b.dataset.setting,+b.dataset.value));
  $$('[data-setting-number]').forEach(el=>el.onchange=()=>save(el.dataset.settingNumber,Math.round(+el.value*10)/10));
 }
@@ -710,6 +749,7 @@ function armDialog(){if(runtime.output.armed){quiet(command('output.disarm'));re
 
 // ── 10 Hz paint: readback only, no structural redraws ──
 function paint(r){
+ paintOutputHint(r);paintOutputState();
  if(!r)return;runtime=r;paintAgentStatus(r);
  if(show&&r.selection&&r.selection.revision>selectionRevision){const first=!selectionRevision;selectionRevision=r.selection.revision;if(!first||r.selection.ids.length)applySelection(r.selection.ids,r.selection.group)}$('#engineStatus').innerHTML='<i></i>Engine ready';document.body.classList.toggle('live',r.output.armed);
  setText($('#outputButton span'),r.output.armed?'LIVE':'Output off');setText($('.preview-label'),stage?.mode==='reference'?'Reference render · not live lighting':r.output.armed?'Live view · output on':'Live view · output off');drawPreviewBanner(r);
@@ -767,7 +807,7 @@ function layersDialog(){const v=show.visualizer??{hiddenGroups:[],hiddenFixtures
 $('#visLayers').onclick=layersDialog;
 $$('[data-view]').forEach(b=>b.onclick=()=>{stage.setView(b.dataset.view);$$('[data-view]').forEach(x=>x.classList.toggle('active',x===b));paint(runtime)});
 $('#ledButton').onclick=()=>{ledOpen=!ledOpen;drawLedTray()};
-$('#outputButton').onclick=armDialog;
+$('#outputButton').onclick=armDialog;$('#outputHintArm').onclick=armDialog;$('#outputHintClose').onclick=()=>{outputHintDismissed=true;$('#outputHint').hidden=true};
 $('#menuButton').onclick=e=>{e.stopPropagation();const open=$('#menu').hidden;$('#menu').hidden=!open;$('#menuButton').setAttribute('aria-expanded',String(open))};
 document.addEventListener('click',e=>{if(!e.target.closest('#ctxMenu'))closeMenu();if(!$('#menu').hidden&&!e.target.closest('.menu-wrap')){$('#menu').hidden=true;$('#menuButton').setAttribute('aria-expanded','false')}});
 $$('[data-menu]').forEach(b=>b.onclick=()=>{$('#menu').hidden=true;({agent:agentHelp,connection,settings:settingsDialog,patch:patchSheet,network:networkSheet,export:()=>window.open('/api/show'),import:importDialog,help:helpDialog,update:updatesDialog})[b.dataset.menu]()});

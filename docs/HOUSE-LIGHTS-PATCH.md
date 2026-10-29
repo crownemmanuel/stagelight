@@ -40,3 +40,16 @@ Click the eye button in the 3D view's toolbar and untick a group, for example Ho
 The show schema allowed only 128 fixtures. The show now has 232, so the limit on fixtures per show, per group and per zone is now 512. Commands that take a list of fixtures (including `fixture.set` and `fixture.clear`, which were capped at 64) now take up to 512. Lamp strike/douse stays capped at 32 on purpose.
 
 Backup of the show before this patch: `data/before-house-lights-2026-10-27.json`, local only and ignored by git.
+
+## Layout confirmed — 2026-10-28
+
+The operator photographed the Hog Fixture Builder page for **RGBW Pendant Light 4ch**:
+
+| Channel | Function | DMX |
+| --- | --- | --- |
+| 1 | Intensity | 0–255 → 0–100 % |
+| 2 | Red | 0–255 |
+| 3 | Green | 0–255 |
+| 4 | Blue | 0–255 |
+
+There is no white channel, so the earlier assumed R, G, B, W layout was wrong. `pendant4` now encodes dimmer, red, green, blue, and its attributes are intensity and colour only. All 123 pendants are `verified:true` and receive DMX while output is armed. The operator's Hog Art-Net screen maps Hog universes 1–8 to Art-Net 0/0–0/7, which matches the app (Hog 8 → Art-Net 7, Hog 5 → Art-Net 4). On the same day the house-light channels read 0 on the Hog because the app sent nothing for unverified fixtures.

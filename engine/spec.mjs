@@ -127,6 +127,8 @@ export const COMMANDS={
  'master.set':cmd('Set normalized master intensity, 0..1.',object({value:number(0,1)}),true,true),
  'blackout.set':cmd('Set blackout explicitly, never toggle. Holds positions; closes shutters.',object({enabled:bool}),true,true),
  'output.configure':cmd('Configure unicast IPv4 output and raw Art-Net universe mapping; disarmed only.',object({source:string,target:string,mappings:object({'1':integer(0,32767),'2':integer(0,32767),'3':integer(0,32767),'4':integer(0,32767),'5':integer(0,32767),'6':integer(0,32767),'7':integer(0,32767),'8':integer(0,32767)},['3','4','5'])}),true),
+ 'output.status':cmd('Read the Art-Net output settings and health: Mac source address, console/node destination, UDP port, Hog→Art-Net universe mapping, armed state, packets sent, last send and error, this Mac\'s IPv4 adapters and the last output.check result. Disarmed means NOTHING reaches the rig. No output.',object({})),
+ 'output.check':cmd('Test the path to the console or Art-Net node without sending DMX: is the source address on this Mac, is the destination on its subnet, does it answer ping, and does it reply to an ArtPoll (Art-Net enabled, its name and output universes). Optional source/target test other addresses before saving them. Takes about 3 s. A reply is not proof that a fixture responds.',object({source:string,target:string},[])),
  'output.arm':cmd('Enable PHYSICAL Art-Net output. Requires explicit operator authorization. Uses verified fixture profiles and bounded positions. Clear preview playback before arming.',object({confirmation:{const:'ENABLE_PHYSICAL_OUTPUT'}}),true,true),
  'output.disarm':cmd('Close shutters and zero intensities, then stop Art-Net transmission. Does not return Hog channels to HogNet.',object({}),true,true)
 };
