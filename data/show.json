@@ -21802,7 +21802,7 @@
   "targets": [],
   "triggers": [],
   "ledWall": {
-    "media": "off",
+    "media": "starfield",
     "brightness": 0.85,
     "fit": "cover"
   },

@@ -51,7 +51,6 @@ export const EFFECT_PRESETS={
 };
 // Built-in LED wall art lives in public/led and is always available.
 export const BUILTIN_MEDIA=[
-  {id:'salvation-title',name:'Salvation title',kind:'image',src:'/led/salvation-title.svg'},
   {id:'sunrise',name:'Sunrise',kind:'image',src:'/led/sunrise.svg'},
   {id:'starfield',name:'Starfield',kind:'image',src:'/led/starfield.svg'},
   {id:'stained-glass',name:'Stained glass',kind:'image',src:'/led/stained-glass.svg'},
@@ -71,7 +70,9 @@ export const defaultMasters=()=>({slots:Array.from({length:18},(_,i)=>({id:'m'+(
 export function migrate(show){
  if(!show.pages)show.pages=[{id:'scene-1',name:'Scene 1',color:'#8bc9d0',cues:show.cues.map((c,i)=>({id:'entry-'+(i+1),cue:c.id,fade:2,follow:'manual'}))}];
  if(!show.groups.some(g=>g.id==='movers'))show.groups.push({id:'movers',name:'All moving heads',fixtures:show.fixtures.filter(f=>f.enabled&&['rogue','mh7','beam200','beam7r'].includes(f.profile)).map(f=>f.id)});
- show.media??=[];show.playback??={clearFade:3,blindFade:2};show.presets??=[];show.targets??=[];show.triggers??=[];show.zones??=[];show.visualizer??={hiddenGroups:[],hiddenFixtures:[]};show.ledWall??={media:'off',brightness:.85,fit:'cover'};
+ show.media??=[];show.playback??={clearFade:3,blindFade:2};show.presets??=[];show.targets??=[];show.triggers??=[];show.zones??=[];show.visualizer??={hiddenGroups:[],hiddenFixtures:[]};show.ledWall??={media:'starfield',brightness:.85,fit:'cover'};
+ // The Salvation title art was removed in 0.4.1; a show still showing it gets the default instead.
+ if(show.ledWall.media==='salvation-title')show.ledWall.media='starfield';
  show.scenes??=[];show.masters??=defaultMasters();show.playback.sceneFade??=2;
  if(!show.masters.desk.tap&&!Object.values(show.masters.desk).includes('t')&&!show.masters.slots.some(m=>m.key==='t'))show.masters.desk.tap='t';
  // Cues written with "… at 102.975 BPM" in their notes follow tap tempo at that tempo (docs/MIDI-AND-SOUND.md).
@@ -102,7 +103,7 @@ export function defaults(){
     {...track('backlights','static',57,3,{color:'#ffe2ba',brightness:.8}),fadeIn:.3,fadeOut:2.5},{...track('rogues','static',57,3,{color:'#fff0d7',brightness:.65}),fadeIn:.3,fadeOut:2.5}]},
    {id:'afterglow',name:'Afterglow',description:'A slow gold and lavender breathing look.',duration:30,loop:true,tracks:[track('backlights','wave',0,30,{color:'#f1b65b',secondary:'#9f72e8',brightness:.45,speed:.25}),track('rogues','static',0,30,{color:'#ffb54a',brightness:.22,prism:1,frost:.3})]}],
   pages:[{id:'scene-1',name:'Opening',color:'#8bc9d0',cues:[{id:'entry-1',cue:'first-light',fade:3,follow:'manual'},{id:'entry-2',cue:'prism-dance',fade:2,follow:'auto'},{id:'entry-3',cue:'afterglow',fade:4,follow:'manual'}]}],
-  media:[],ledWall:{media:'off',brightness:.85,fit:'cover'},
+  media:[],ledWall:{media:'starfield',brightness:.85,fit:'cover'},
   settings:{source:'10.0.0.50',target:'10.0.0.1',port:6454,fps:30,mappings:{3:2,4:3,5:4}},stage:{width:19,depth:10,height:7,estimated:true,notes:'Approximate geometry traced from the stage photo. Fixture order for Rogue IDs is provisional; calibrate in the room.'}});
 }
 

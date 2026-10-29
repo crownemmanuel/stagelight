@@ -7,7 +7,7 @@
 - `cues[].hold` (optional): a non-looping cue holds its last frame instead of going dark.
 - `media[]`: imported LED wall media `{id, name, kind: image|video, src: /media/<file>}`; files live in `data/media/` and are **not** inside an exported show file.
 - `ledWall`: `{media: <id>|'off', brightness, fit: cover|contain|stretch}`. Built-in media (`public/led/*.svg`) are listed by `schema.media`.
-- Shows saved before v0.2 are migrated on load: one page "Scene 1" with every cue in order (fade 2 s, manual), an `movers` group of patched moving heads, and the Salvation title on the wall.
+- Shows saved before v0.2 are migrated on load: one page "Scene 1" with every cue in order (fade 2 s, manual), an `movers` group of patched moving heads, and the Starfield image on the LED wall (the Salvation title art was removed in 0.4.1).
 
 ## Engine behaviour
 
