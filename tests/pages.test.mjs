@@ -64,7 +64,7 @@ test('Positions recall for one group; groups and positions in use are protected'
 });
 
 test('Old shows migrate to one page; deleting a cue removes its entries',async()=>{
- const old=defaults();delete old.pages;delete old.media;delete old.ledWall;const s=migrate(old);validateShow(s);assert.equal(s.pages[0].cues.length,s.cues.length);assert.equal(s.ledWall.media,'salvation-title');
+ const old=defaults();delete old.pages;delete old.media;delete old.ledWall;const s=migrate(old);validateShow(s);assert.equal(s.pages[0].cues.length,s.cues.length);assert.equal(s.ledWall.media,'off','a new show starts with the LED wall blank');
  const {e}=rig();await e.command('cue.delete',{id:'prism-dance'});assert.ok(e.show.pages[0].cues.every(x=>x.cue!=='prism-dance'));
  await assert.rejects(e.command('page.save',{page:{id:'bad',name:'Bad',cues:[{id:'x',cue:'missing',fade:0,follow:'manual'}]}}),/unknown cue/);
 });

@@ -182,6 +182,31 @@ pub fn stop_owned(cfg: &Config) -> Result<(), String> {
     }
 }
 
+/// Watchdog: if an engine this app started stops answering for three seconds (it crashed), start it again. The new
+/// engine comes up disarmed and offers to resume the show (docs/SHOW-SAFETY.md); nothing comes back on by itself. An
+/// engine this app stopped on purpose (no `engine.pid`), or one started some other way, is left alone.
+pub fn watch(cfg: Config) {
+    std::thread::spawn(move || {
+        let mut down = 0;
+        loop {
+            std::thread::sleep(Duration::from_secs(1));
+            if running_version(cfg.port).is_some() {
+                down = 0;
+                continue;
+            }
+            down += 1;
+            let ours = fs::read_to_string(cfg.pid_file())
+                .ok()
+                .and_then(|t| t.split_whitespace().nth(1).and_then(|p| p.parse::<u16>().ok()))
+                == Some(cfg.port);
+            if down >= 3 && ours && owned_pid(&cfg).is_none() {
+                down = 0;
+                let _ = spawn(&cfg);
+            }
+        }
+    });
+}
+
 /// Make sure this version's engine is answering on the port: attach to a running one, or start it.
 /// An engine this app started from an older version is replaced while output is disarmed; one
 /// started some other way (a terminal, another copy) is used as it is.

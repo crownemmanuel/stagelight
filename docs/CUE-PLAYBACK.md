@@ -8,6 +8,7 @@ Several cues can run at once. The newest is on top.
 
 - **Who owns a fixture.** A fixture follows the newest running cue that uses it, through the cue's look entries or the groups its tracks name. Fixtures a new cue does not use keep following the older cue, so starting a movers cue over a colour look leaves the colour look on everything else.
 - **Retiring.** When newer cues use every fixture of an older cue, the older cue has nothing left to show and is retired automatically. Stepping through full-look cues therefore behaves exactly as before, and the stack stays small (at most 8 running cues).
+- **Masters keep their cues.** A cue started by a master (its key or fader, docs/MASTERS-AND-SCENES.md) is never retired for being covered: it stays underneath while its master holds it, ready to show again when the covering cue goes or a flash bumps it.
 - **Same cue twice.** Starting a cue that is already running restarts it on top; it is never stacked twice.
 - **End of a cue.** A non-looping cue that reaches its end leaves the stack; its fixtures fall back to the cue underneath, or go to zero with positions held when nothing else is running.
 

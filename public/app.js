@@ -122,7 +122,15 @@ function paintGroupGrid(frames){
 function drawGroups(){
  const groups=sortedGroups(),pills=groups.map(g=>`<button class="pill ${g.id===group?'active':''}" data-group="${esc(g.id)}" title="${esc(g.name)}">${esc(shortGroup(g))}<span>${g.fixtures.length}</span></button>`).join('');
  $('#groupPills').innerHTML=`<button class="pill ${group==='all'?'active':''}" data-group="all"><span class="pill-icon" data-icon="group"></span>All</button>${pills}<button class="pill ghost build-only" id="groupsManage" title="New group" data-icon="plus"></button>`;
- fillIcons($('#groupPills'));drawGroupGrid();$$('[data-group]').forEach(b=>{b.onclick=()=>{if(b.dataset.longPress){delete b.dataset.longPress;return}selectGroup(b.dataset.group)};bindGroupMenu(b,b.dataset.group)});$('#groupsManage').onclick=()=>groupEditor(null);
+ fillIcons($('#groupPills'));applyDrawer();drawGroupGrid();$$('[data-group]').forEach(b=>{b.onclick=()=>{if(b.dataset.longPress){delete b.dataset.longPress;return}selectGroup(b.dataset.group)};bindGroupMenu(b,b.dataset.group)});$('#groupsManage').onclick=()=>groupEditor(null);
+}
+// The group pills and the LED wall sit in a drawer over the stage, closed by default to keep the view clean. Closed, its
+// button names the selected group. Open or closed is a per-viewer convenience in browser storage.
+let drawerOpen=store.get('pillDrawer','closed')==='open';
+function applyDrawer(){
+ const g=group&&(group==='all'?{name:'All'}:show.groups.find(x=>x.id===group)),b=$('#pillToggle');$('#pillDrawer').classList.toggle('open',drawerOpen);
+ b.setAttribute('aria-expanded',String(drawerOpen));b.title=drawerOpen?'Hide the groups and LED wall':'Show the groups and LED wall';
+ b.classList.toggle('active',!drawerOpen&&!!g);setText(b.querySelector('.drawer-label'),drawerOpen?'Groups':g?(g.id?shortGroup(g):g.name):'Groups');
 }
 const shortGroup=g=>({movers:'Movers',rogues:'Beams',mh7s:'MH7s',backlights:'Backlights',audience:'Audience',grid:'Grid','rear-heads':'Rear heads'}[g.id]??g.name.split('·')[0].trim());
 // Selection lives in the engine so agents (selection.set/group) and the UI stay in step.
@@ -562,12 +570,27 @@ function drawLibraryGrid(){
  const keep=c=>({unused:()=>!pagesOf(c.id).length&&!mastersOf(c.id).length&&!triggersOf(c.id).length,masters:()=>mastersOf(c.id).length>0,page:()=>!!p?.cues.some(e=>e.cue===c.id),effects:()=>c.tracks.length>0,looks:()=>!c.tracks.length}[libFilter]??(()=>true))();
  const list=show.cues.filter(c=>(!q||c.name.toLowerCase().includes(q)||(c.description??'').toLowerCase().includes(q))&&keep(c));setText($('#libCount'),list.length===show.cues.length?`${list.length} cues`:`${list.length} of ${show.cues.length}`);
  el.innerHTML=list.map(c=>{const pgs=pagesOf(c.id),ms=mastersOf(c.id),tr=triggersOf(c.id);
-  return `<div class="lib-tile ${c.id===libCue?'selected':''}" draggable="true" data-lib-cue="${esc(c.id)}" tabindex="0" title="${esc(c.description??c.name)}"><div class="lt-top"><span class="pill-icon" data-icon="${c.tracks.length?'spark':'palette'}"></span><b class="live-dot" title="Running"></b><button class="round-button small eye" data-lib-preview="${esc(c.id)}" title="Preview on the stage (not live)" aria-label="Preview ${esc(c.name)}" data-icon="eye"></button></div><strong>${esc(c.name)}</strong><small>${cueKind(c)} · ${format(c.duration)} · ${c.loop?'loop':c.hold?'hold':'once'}</small><span class="lib-tags">${ms.map(m=>`<span class="tag key" title="Master ${slotIndex(m.id)+1} · ${ACTIONS[m.action][1]}">${m.key?esc(keyLabel(m.key)):'M'+(slotIndex(m.id)+1)}</span>`).join('')}${pgs.map(pg=>`<span class="tag" style="--page:${esc(pg.color??'#8bc9d0')}" title="On ${esc(pg.name)}">${esc(pg.name)}</span>`).join('')}${tr.length?`<span class="tag" title="Named triggers">${tr.length} trigger${tr.length===1?'':'s'}</span>`:''}${pgs.length||ms.length||tr.length?'':'<span class="tag muted">unused</span>'}</span></div>`}).join('')
+  return `<div class="lib-tile ${c.id===libCue?'selected':''}" data-lib-cue="${esc(c.id)}" tabindex="0" title="${esc(c.description??c.name)}"><div class="lt-top"><span class="pill-icon" data-icon="${c.tracks.length?'spark':'palette'}"></span><b class="live-dot" title="Running"></b><button class="round-button small eye" data-lib-preview="${esc(c.id)}" title="Preview on the stage (not live)" aria-label="Preview ${esc(c.name)}" data-icon="eye"></button></div><strong>${esc(c.name)}</strong><small>${cueKind(c)} · ${format(c.duration)} · ${c.loop?'loop':c.hold?'hold':'once'}</small><span class="lib-tags">${ms.map(m=>`<span class="tag key" title="Master ${slotIndex(m.id)+1} · ${ACTIONS[m.action][1]}">${m.key?esc(keyLabel(m.key)):'M'+(slotIndex(m.id)+1)}</span>`).join('')}${pgs.map(pg=>`<span class="tag" style="--page:${esc(pg.color??'#8bc9d0')}" title="On ${esc(pg.name)}">${esc(pg.name)}</span>`).join('')}${tr.length?`<span class="tag" title="Named triggers">${tr.length} trigger${tr.length===1?'':'s'}</span>`:''}${pgs.length||ms.length||tr.length?'':'<span class="tag muted">unused</span>'}</span></div>`}).join('')
   ||`<div class="panel-empty small"><p>${show.cues.length?'No cue matches.':'No cues yet. Record a look or make an effect cue.'}</p></div>`;
  fillIcons(el);libKey='';if(runtime)paintLibrary(runtime);
  $$('[data-lib-cue]').forEach(t=>{t.onclick=e=>{if(e.target.closest('button'))return;libCue=t.dataset.libCue;$$('[data-lib-cue]').forEach(x=>x.classList.toggle('selected',x===t));drawSide()};t.onkeydown=e=>{if(e.key==='Enter')t.click()};
-  t.ondragstart=e=>{e.dataTransfer.setData('text/x-cue',t.dataset.libCue);e.dataTransfer.effectAllowed='copy'}});
+  dragCueFrom(t,t.dataset.libCue)});
  $$('[data-lib-preview]').forEach(b=>b.onclick=()=>peekCue(b.dataset.libPreview));
+}
+// Dragging a cue onto a master uses pointer events, not HTML drag and drop: the desktop shell (Tauri) takes native drops
+// for files, so drop events never reach the page there. A press that moves less than 6 px is still a click.
+function dragCueFrom(el,id){
+ el.onpointerdown=e=>{
+  if(e.button!==0||e.target.closest('button'))return;const x0=e.clientX,y0=e.clientY;let ghost=null,over=null;
+  const move=ev=>{
+   if(!ghost){if(Math.hypot(ev.clientX-x0,ev.clientY-y0)<6)return;ghost=document.createElement('div');ghost.className='drag-ghost';ghost.textContent=show.cues.find(c=>c.id===id)?.name??id;document.body.append(ghost);document.body.classList.add('dragging-cue')}
+   ghost.style.transform=`translate(${ev.clientX+14}px,${ev.clientY+14}px)`;const slot=document.elementFromPoint(ev.clientX,ev.clientY)?.closest('[data-master]');
+   if(slot!==over){over?.classList.remove('drop');over=slot;over?.classList.add('drop')}
+  };
+  const end=ev=>{removeEventListener('pointermove',move);removeEventListener('pointerup',end);removeEventListener('pointercancel',end);if(!ghost)return;
+   ghost.remove();document.body.classList.remove('dragging-cue');over?.classList.remove('drop');if(ev.type==='pointerup'&&over)assignMaster(over.dataset.master,id)};
+  addEventListener('pointermove',move);addEventListener('pointerup',end);addEventListener('pointercancel',end);
+ };
 }
 // Previewing from the library shows the stage (visualizer only, not live); Back to the library returns.
 function peekCue(id){libPeek=true;applyStageView();previewCue({id,fade:1}).then(()=>toast('Previewing on the stage only, not live.'))}
@@ -610,7 +633,7 @@ function paintLibrary(r){
 // Flash (default) plays while the key is held; toggle, go, pause and release act on a press. The key sits bold in the
 // slot's corner: click it and press another key to change it. A key someone else has gets a Swap / Take it choice.
 const ACTIONS={flash:['bolt','Flash','Hold the key: the cue plays. Let go: it stops.'],toggle:['toggle','Toggle','Press: the cue plays. Press again: it stops.'],go:['play','Go','Press: the cue plays from the top. Pressing again restarts it.'],pause:['pause','Pause','Press: the running cue freezes. Press again: it carries on.'],release:['stop','Release','Press: the running cue stops, fading out over the fade time.']};
-const DESK_NAMES={highlight:'Highlight',clear:'Clear',blackout:'Blackout'};
+const DESK_NAMES={highlight:'Highlight',clear:'Clear',blackout:'Blackout',tap:'Tap tempo'};
 let learning=null,conflict=null,masterQueue=Promise.resolve();const heldMasters=new Set(),heldKeys=new Map();
 const slots=()=>show?.masters?.slots??[],slotIndex=id=>slots().findIndex(m=>m.id===id),slotOf=id=>slots().find(m=>m.id===id);
 const slotCue=m=>m?.cue?show.cues.find(c=>c.id===m.cue):null,slotName=m=>m.label??slotCue(m)?.name??'';
@@ -625,19 +648,19 @@ function applyPane(){
 function drawMasters(){
  const el=$('#masterBank');if(!el||!show)return;
  el.innerHTML=slots().map((m,i)=>{const cue=slotCue(m),[ic,label,hint]=ACTIONS[m.action],learn=learning===m.id,c=conflict?.slot===m.id?conflict:null;
-  return `<div class="master-slot ${cue?'':'empty'} ${learn?'learning':''}" data-master="${esc(m.id)}" title="Master ${i+1}${cue?` · ${label}: ${hint}`:' · click to choose a cue'}"><button class="m-key ${m.key?'':'none'}" data-master-key="${esc(m.id)}" title="${m.key?'Click, then press a new key':'Click, then press a key for this master'}">${learn?'Press a key…':m.key?esc(keyLabel(m.key)):'+ key'}</button>${cue?`<span class="m-action" title="${label}">${icon(ic)}</span>`:''}<button class="m-edit" data-master-edit="${esc(m.id)}" title="Cue, action, fade and key" aria-label="Edit master ${i+1}" data-icon="sliders"></button>${cue?`<strong class="m-name">${esc(slotName(m))}</strong><span class="m-state"><em></em><i><b></b></i></span>`:`<span class="m-empty">${icon('plus')}Assign cue</span>`}${c?`<div class="m-conflict" role="alert"><p><strong>${esc(keyLabel(c.key))}</strong> ${c.owner}</p><div>${c.swap?`<button class="chip-button" data-conflict="swap" title="${esc(c.swap)}">Swap</button>`:''}<button class="chip-button accent" data-conflict="take">Take it</button><button class="chip-button" data-conflict="cancel">Cancel</button></div></div>`:''}</div>`}).join('')
+  return `<div class="master-slot ${cue?'':'empty'} ${learn?'learning':''}" data-master="${esc(m.id)}" title="Master ${i+1}${cue?` · ${label}: ${hint}`:' · click to choose a cue'}"><button class="m-key ${m.key?'':'none'}" data-master-key="${esc(m.id)}" title="${m.key?'Click, then press a new key':'Click, then press a key for this master'}">${learn?'Press a key…':m.key?esc(keyLabel(m.key)):'+ key'}</button>${cue?`<span class="m-action" title="${label}">${m.sound?`<button class="m-badge ${m.sound.enabled===false?'off':''}" data-master-sound="${esc(m.id)}" title="Sound trigger ${m.sound.enabled===false?'off':'on'} · input ${m.sound.channel} · click${m.key?` or Shift+${esc(keyLabel(m.key))}`:''} to switch">${icon('wave')}</button>`:''}${icon(ic)}</span><div class="m-strip">${m.sound?`<span class="m-meter ${m.sound.enabled===false?'off':''}" data-master-meter="${esc(m.id)}" title="Input ${m.sound.channel} level · ${m.sound.mode==='follow'?'the line is where the lights start':'hits above the line flash it'}"><i></i><b style="bottom:${dbPct(-6-54*(m.sound.sensitivity??.5))}%"></b></span>`:''}<span class="m-level" data-master-level="${esc(m.id)}" title="Level: drag the fader"><i></i><b></b></span></div>`:''}<button class="m-edit" data-master-edit="${esc(m.id)}" title="Cue, action, fade and key" aria-label="Edit master ${i+1}" data-icon="sliders"></button>${cue?`<strong class="m-name">${esc(slotName(m))}</strong><span class="m-state"><em></em><i><b></b></i></span>`:`<span class="m-empty">${icon('plus')}Assign cue</span>`}${c?`<div class="m-conflict" role="alert"><p><strong>${esc(keyLabel(c.key))}</strong> ${c.owner}</p><div>${c.swap?`<button class="chip-button" data-conflict="swap" title="${esc(c.swap)}">Swap</button>`:''}<button class="chip-button accent" data-conflict="take">Take it</button><button class="chip-button" data-conflict="cancel">Cancel</button></div></div>`:''}</div>`}).join('')
   +(slots().length<60?`<button class="master-slot add-slot" id="addMaster" title="Add a master">${icon('plus')}Add master</button>`:'');
  fillIcons(el);bindMasters();paintBank();if(runtime)paintMasters(runtime,true);
 }
 function bindMasters(){
  $$('[data-master]').forEach(el=>{const id=el.dataset.master,up=()=>releaseMaster(id);
-  el.onpointerdown=e=>{if(e.button!==0||e.target.closest('button,.m-conflict')||!slotCue(slotOf(id)))return;e.preventDefault();el.setPointerCapture(e.pointerId);pressMaster(id)};
+  el.onpointerdown=e=>{if(e.button!==0||e.target.closest('button,.m-conflict,.m-level')||!slotCue(slotOf(id)))return;e.preventDefault();el.setPointerCapture(e.pointerId);pressMaster(id)};
   el.onpointerup=up;el.onpointercancel=up;el.onlostpointercapture=up;
   el.onclick=e=>{if(!e.target.closest('button,.m-conflict')&&!slotCue(slotOf(id)))cuePicker(id)};
   el.oncontextmenu=e=>{e.preventDefault();openMasterPop(id,el)};
-  el.ondragover=e=>{if(e.dataTransfer.types.includes('text/x-cue')){e.preventDefault();el.classList.add('drop')}};el.ondragleave=()=>el.classList.remove('drop');
-  el.ondrop=e=>{el.classList.remove('drop');const cue=e.dataTransfer.getData('text/x-cue');if(cue){e.preventDefault();assignMaster(id,cue)}};
  });
+ $$('[data-master-level]').forEach(dragLevel);
+ $$('[data-master-sound]').forEach(b=>b.onclick=e=>{e.stopPropagation();toggleSound(b.dataset.masterSound)});
  $$('[data-master-key]').forEach(b=>b.onclick=e=>{e.stopPropagation();startLearning(b.dataset.masterKey)});
  $$('[data-master-edit]').forEach(b=>b.onclick=e=>{e.stopPropagation();openMasterPop(b.dataset.masterEdit,b.closest('[data-master]'))});
  $$('[data-conflict]').forEach(b=>b.onclick=e=>{e.stopPropagation();resolveConflict(b.dataset.conflict)});
@@ -682,16 +705,38 @@ function openMasterPop(id,anchor){
   <label class="field-label">Cue</label><button class="chip-button wide mp-cue" id="mpCue"><span data-icon="${cue?.tracks?.length?'spark':'palette'}"></span><span>${cue?esc(cue.name):'Choose a cue…'}</span>${cue?'<small>Change</small>':''}</button>
   <label class="field-label">When the key is pressed</label><div class="segmented mp-actions">${Object.entries(ACTIONS).map(([a,[ic,label,hint]])=>`<button data-mp-action="${a}" class="${m.action===a?'active':''}" title="${esc(hint)}"><span data-icon="${ic}"></span>${label}</button>`).join('')}</div><p class="hint" id="mpHint">${ACTIONS[m.action][2]}</p>
   <div class="mp-row"><label class="mini"><span>Fade · s</span><input id="mpFade" type="number" min="0" max="60" step=".5" value="${m.fade??0}"></label><label class="mini"><span>Label</span><input id="mpLabel" type="text" maxlength="40" value="${esc(m.label??'')}" placeholder="${esc(cue?.name??'Cue name')}"></label></div>
+  <div class="mp-row"><label class="mini"><span>Pad colour</span><input id="mpColor" type="color" value="${esc(m.color??'#7fd3dc')}"></label><label class="mini"><span>MIDI note out (ProPresenter)</span><input id="mpNote" type="number" min="0" max="127" placeholder="none" value="${m.midi?.note??''}"></label></div>
+  <section class="mp-sound" id="mpSound"></section>
   ${cue?`<button class="ghost-button small danger" id="mpClear"><span data-icon="trash"></span>Clear this master</button>`:''}`;
  pop.hidden=false;fillIcons(pop);
- const r=anchor.getBoundingClientRect(),pr=pop.getBoundingClientRect();pop.style.left=Math.max(8,Math.min(r.left,innerWidth-pr.width-8))+'px';pop.style.top=Math.max(8,r.top-pr.height-10)+'px';
+ const place=()=>{const r=anchor.getBoundingClientRect(),pr=pop.getBoundingClientRect();pop.style.left=Math.max(8,Math.min(r.left,innerWidth-pr.width-8))+'px';pop.style.top=Math.max(8,Math.min(r.top-pr.height-10,innerHeight-pr.height-8))+'px'};place();popPlace=place;
+ if(!popObserver){popObserver=new ResizeObserver(()=>{if(!pop.hidden)popPlace?.()});popObserver.observe(pop)}
  $('#mpClose').onclick=closeMasterPop;$('#mpKey').onclick=()=>startLearning(id);$('#mpCue').onclick=()=>{closeMasterPop();cuePicker(id)};
  $$('[data-mp-action]').forEach(b=>b.onclick=()=>{$$('[data-mp-action]').forEach(x=>x.classList.toggle('active',x===b));setText($('#mpHint'),ACTIONS[b.dataset.mpAction][2]);quiet(command('masters.assign',{slot:id,action:b.dataset.mpAction}))});
  $('#mpFade').onchange=e=>quiet(command('masters.assign',{slot:id,fade:Math.max(0,Math.min(60,+e.target.value||0))}));
  $('#mpLabel').onchange=e=>quiet(command('masters.assign',{slot:id,label:e.target.value.trim()}));
  if($('#mpClear'))$('#mpClear').onclick=()=>{closeMasterPop();quiet(command('masters.assign',{slot:id,clear:true}))};
+ $('#mpColor').onchange=e=>quiet(command('masters.assign',{slot:id,color:e.target.value}));
+ $('#mpNote').onchange=e=>{const v=e.target.value.trim();quiet(command('masters.assign',v===''?{slot:id,clearMidi:true}:{slot:id,midi:{note:Math.max(0,Math.min(127,Math.round(+v))),channel:1}}))};
+ // Sound trigger: the panel is loaded only when the sound module is on.
+ const box=$('#mpSound');
+ if(show.settings.modules?.sound?.enabled)import('./sound-panel.js').then(({mountSoundPanel})=>{if(box.isConnected&&!$('#masterPop').hidden)popCleanup=mountSoundPanel(box,{slot:id,command,quiet,toast,esc,icon,fillIcons,slotOf,cueOf:cid=>show.cues.find(c=>c.id===cid),getRuntime:()=>runtime})});
+ else box.innerHTML=`<p class="hint">${icon('wave')} To flash this master from a drum or any audio input, turn on <strong>Sound triggers</strong> in Settings → Modules.</p>`;
 }
-function closeMasterPop(){$('#masterPop').hidden=true}
+// Switch a master's sound trigger on or off live (masters.sound): its badge, Shift + its key, or an APC40 Activator.
+function toggleSound(id){quiet(command('masters.sound',{slot:id}).then(v=>toast(`Master ${slotIndex(id)+1}${slotOf(id)?.key?` (${keyLabel(slotOf(id).key)})`:''}: sound trigger ${v.created.sound?'on':'off'}.`)))}
+function closeMasterPop(){$('#masterPop').hidden=true;popCleanup?.();popCleanup=null}
+let popCleanup=null,popPlace=null,popObserver=null;
+// Input meters and faders show −60…0 dBFS bottom to top, like a mixer channel strip.
+const dbPct=db=>Math.max(0,Math.min(100,(db+60)/60*100));
+// A master's level bar works like its fader (masters.level): drag it; at most one command every 60 ms while dragging.
+function dragLevel(bar){
+ const id=bar.dataset.masterLevel;let timer=null,next=null;const send=()=>{timer=null;if(next!==null){const v=next;next=null;quiet(command('masters.level',{slot:id,level:v}))}};
+ const at=e=>{const r=bar.getBoundingClientRect();return Math.round(Math.max(0,Math.min(1,(r.bottom-e.clientY)/r.height))*100)/100};
+ bar.onpointerdown=e=>{e.preventDefault();e.stopPropagation();bar.setPointerCapture(e.pointerId);next=at(e);send();
+  bar.onpointermove=ev=>{next=at(ev);bar.querySelector('i').style.height=next*100+'%';bar.querySelector('b').style.bottom=next*100+'%';timer??=setTimeout(send,60)};
+  bar.onpointerup=bar.onpointercancel=()=>{bar.onpointermove=null;clearTimeout(timer);send()}};
+}
 // Bank paging: the arrow keys or the chevrons move by as many masters as fit.
 function paintBank(){
  const el=$('#masterBank');if(!el||$('#mastersPane').hidden)return;const first=el.querySelector('.master-slot'),w=(first?.getBoundingClientRect().width??124)+8,n=slots().length;
@@ -704,7 +749,12 @@ function paintMasters(r,force=false){
  if(!show||$('#mastersPane').hidden)return;const running=new Map((r.running??[]).map(c=>[c.id,c])),held=new Set(r.masters?.held??[]);
  for(const el of $$('[data-master]')){const m=slotOf(el.dataset.master);if(!m?.cue)continue;const c=running.get(m.cue),st=held.has(m.id)?'held':c?(c.paused?'paused':'running'):'idle';
   if(force||el.dataset.st!==st){el.dataset.st=st;el.classList.toggle('held',st==='held');el.classList.toggle('running',st!=='idle'&&st!=='paused');el.classList.toggle('paused',st==='paused');setText(el.querySelector('.m-state em'),{held:'Held',running:'Running',paused:'Paused',idle:''}[st])}
-  const bar=el.querySelector('.m-state b'),w=c?Math.min(100,c.elapsed/c.duration*100).toFixed(1)+'%':'0%';if(bar&&bar.style.width!==w)bar.style.width=w}
+  const bar=el.querySelector('.m-state b'),w=c?Math.min(100,c.elapsed/c.duration*100).toFixed(1)+'%':'0%';if(bar&&bar.style.width!==w)bar.style.width=w;
+  const lv=el.querySelector('.m-level i'),cap=el.querySelector('.m-level b'),level=r.masters?.levels?.[m.id]??(c?1:0),h=Math.round(level*100)+'%';if(lv&&lv.style.height!==h){lv.style.height=h;cap.style.bottom=h}
+  const meter=el.querySelector('.m-meter i');if(meter){const db=r.sound?.meter?.[m.id],mh=(db===undefined?0:dbPct(db)).toFixed(1)+'%';if(meter.style.height!==mh)meter.style.height=mh}}
+ // The controller's fader bank (Bank ◀ ▶ on the APC40) is outlined on the eight masters it controls.
+ const bank=r.controller?.bank;if(bank!==paintMasters.bank){paintMasters.bank=bank;$$('[data-master]').forEach((el,i)=>el.classList.toggle('in-bank',bank!==undefined&&i>=bank*8&&i<bank*8+8));
+  if(bank!==undefined){const el=$$('[data-master]')[bank*8];el?.scrollIntoView({block:'nearest',inline:'start',behavior:'smooth'})}}
 }
 function designer(){
  dialog('Custom effect',`<div class="form-grid"><label class="mini"><span>Name</span><input id="fxName" value="My light study" type="text"></label><label class="mini"><span>Group</span><select id="fxGroup">${sortedGroups().map(g=>`<option value="${esc(g.id)}">${esc(g.name)}</option>`).join('')}</select></label><label class="mini"><span>Effect</span><select id="fxType">${Object.entries(schema.effects).map(([id,d])=>`<option value="${id}">${esc(d.name)}</option>`).join('')}</select></label><label class="mini"><span>Duration · s</span><input id="fxDuration" type="number" value="20" min="1" max="3600"></label><label class="mini color"><span>Colors</span><span class="color-pair"><input id="fxColor" type="color" value="#52d3ff"><input id="fxSecondary" type="color" value="#b758ef"></span></label><label class="mini"><span>Speed</span><input id="fxSpeed" type="range" min=".05" max="4" step=".05" value=".8"></label><label class="mini"><span>Level</span><input id="fxIntensity" type="range" min="0" max="1" step=".01" value=".7"></label></div><p class="hint">Agents can build any multi-track cue with lights_cue_save; this form covers one track.</p><div class="dialog-actions"><button id="fxPreview" class="ghost-button"><span data-icon="eye"></span>Preview</button><button id="fxSave" class="primary"><span data-icon="plus"></span>Save &amp; add to page</button></div>`);
@@ -809,6 +859,65 @@ function paintScene(r){
  $('#stopButton').title=sc?`Stop all running cues · fade back to scene ${sc.name}`:'Stop all running cues · fade to dark';
  if(railTab==='scenes'&&(sc?.id??'')!==sceneKey)drawPages();
 }
+// Tap tempo (tempo.tap / tempo.set / tempo.scale, docs/MIDI-AND-SOUND.md): cues with a bpm follow the live tempo. The
+// beat dot is a CSS animation restarted only when the tempo or the last tap changes.
+let tempoKey='';
+function paintTempo(r){
+ const t=r.tempo??{},bpm=t.bpm??t.cue;setText($('#bpmValue'),bpm?String(Math.round(bpm*10)/10):'—');setText($('#bpmSource'),t.bpm?(t.source==='tap'?'TAP':'BPM'):t.cue?'CUE':'BPM');
+ $('#tempo').classList.toggle('live',!!t.bpm);$('[data-tempo="reset"]').disabled=!t.bpm;$('#tapButton').title=t.bpm?`Live tempo ${t.bpm} BPM${t.cue?` (cue ${t.cue})`:''}: tap on the beat (T)`:t.cue?`The cue's own tempo, ${t.cue} BPM: tap on the beat (T) to follow the band`:'Tap tempo (T): tap on the beat';
+ const key=bpm+'|'+(t.anchorAgo===null?'':Math.round((Date.now()-t.anchorAgo*1000)/250));if(key===tempoKey)return;tempoKey=key;
+ const dot=$('#tapButton .beat-dot');dot.style.animation='none';if(!bpm)return;void dot.offsetWidth;const p=60/bpm;dot.style.animation=`beat ${p}s linear ${-((t.anchorAgo??0)%p)}s infinite`;
+}
+// Sound hits blink their master (runtime.sound.hits), so even a hit shorter than a desk frame is seen.
+const lastHits={};
+const blink=el=>{if(!el)return;el.classList.remove('hit-blink');void el.offsetWidth;el.classList.add('hit-blink')};
+function paintHits(r){for(const [id,n] of Object.entries(r.sound?.hits??{})){if(lastHits[id]!==undefined&&n!==lastHits[id])blink($(`[data-master="${CSS.escape(id)}"]`));lastHits[id]=n}}
+// Performance lock (performance.lock): one click locks; unlocking needs the padlock held for a second.
+let lockKey='';
+function paintLock(r){
+ const on=!!r.locked,key=on+'|'+mode;if(key===lockKey)return;lockKey=key;document.body.classList.toggle('locked',on);const b=$('#lockButton');b.setAttribute('aria-pressed',String(on));
+ b.innerHTML=`${icon(on?'lock':'unlock')}<span>${on?'Locked':'Unlocked'}</span><i class="hold-fill"></i>`;b.title=on?'Locked for the show: hold for 1 second to unlock':'Lock the show for the performance: editing off, playback on';$('#lockBanner').hidden=!(on&&mode!=='show');fillIcons($('#lockBanner'));
+}
+{const b=$('#lockButton');let hold=null;
+ b.onpointerdown=e=>{if(!runtime?.locked)return;e.preventDefault();b.classList.add('holding');hold=setTimeout(()=>{hold=null;b.classList.remove('holding');quiet(command('performance.lock',{enabled:false}).then(()=>toast('Unlocked: the show can be edited.')))},1000)};
+ b.onpointerup=b.onpointerleave=b.onpointercancel=()=>{if(hold){clearTimeout(hold);hold=null;b.classList.remove('holding');toast('Hold the padlock for a second to unlock.')}};
+ b.onclick=()=>{if(!runtime?.locked)quiet(command('performance.lock',{enabled:true}).then(()=>toast('Locked for the show. A version was saved. Hold the padlock to unlock.')))}}
+// After an unexpected engine restart during a show (runtime.resume): one press puts it back; nothing happens on its own.
+let resumeKey='';
+function paintResume(r){
+ const x=r.resume,key=x?JSON.stringify(x):'';if(key===resumeKey)return;resumeKey=key;const bar=$('#resumeBar');bar.hidden=!x;if(!x)return;
+ const at=x.at?new Date(x.at).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}):'',parts=[x.armed?'arm output':null,x.scene?`scene ${esc(x.scene)}`:null,x.cue?`${esc(x.page)} cue ${x.cue.number} “${esc(x.cue.name)}”`:null,x.tempo?`${x.tempo} BPM`:null].filter(Boolean);
+ bar.innerHTML=`${icon('warning')}<div><strong>The engine restarted${at?' at '+at:''} during the show.</strong><small>Resume puts it back: ${parts.join(' · ')||'nothing was live'}.${x.armed?' This arms physical output.':''}</small></div><button class="primary${x.armed?' danger':''}" id="resumeGo">Resume</button><button class="ghost-button" id="resumeNo">Dismiss</button>`;
+ $('#resumeGo').onclick=()=>quiet(command('resume.apply',x.armed?{confirmation:'ENABLE_PHYSICAL_OUTPUT'}:{}).then(()=>toast('Resumed where the show was.')));$('#resumeNo').onclick=()=>quiet(command('resume.dismiss',{}));
+}
+// Pre-show check (show.check): rig path, patch and safety in one list, plus rig check and lock.
+function preshowDialog(){
+ dialog('Pre-show check','<p class="hint">Checks the path to the rig, the patch and show safety. Sends no DMX.</p><ul class="check-list" id="checkRows"><li class="muted"><div><strong>Checking…</strong></div></li></ul><div class="dialog-actions"><button class="ghost-button" id="checkAgain"><span data-icon="restore"></span>Check again</button><button class="ghost-button" id="checkRig"><span data-icon="play"></span>Run rig check</button><button class="primary" id="checkLock"><span data-icon="lock"></span>Lock for the show</button></div>');
+ const run=async()=>{$('#checkRows').innerHTML='<li class="muted"><div><strong>Checking…</strong></div></li>';try{const c=await command('show.check',{});$('#checkRows').innerHTML=c.rows.map(r=>`<li class="${r.state}"><span class="ck">${icon(r.state==='pass'?'check':r.state==='fail'?'close':'warning')}</span><div><strong>${esc(r.label)}</strong><small>${esc(r.detail)}</small></div></li>`).join('')}catch{$('#checkRows').innerHTML=''}};
+ const rig=show.pages.find(p=>/rig/i.test(p.id+' '+p.name));$('#checkRig').disabled=!rig?.cues.length;$('#checkRig').title=rig?`GO “${rig.name}”`:'No rig check page';
+ $('#checkRig').onclick=()=>{$('#dialog').close();quiet(command('page.go',{id:rig.id,entry:rig.cues[0].id}))};$('#checkAgain').onclick=run;
+ $('#checkLock').disabled=!!runtime.locked;$('#checkLock').onclick=async()=>{await quiet(command('performance.lock',{enabled:true}));$('#dialog').close();toast('Locked for the show. Hold the padlock for a second to unlock.')};run();
+}
+// Show versions (show.versions / show.restore) and modules (modules.set) in Settings.
+async function drawVersions(){
+ const el=$('#versionList');if(!el)return;try{const {versions}=await command('show.versions');const label={edits:'Edits','performance-lock':'Locked for a show','before-import':'Before an import','before-restore':'Before a restore'};
+  el.innerHTML=versions.length?versions.slice(0,30).map(v=>`<div class="pool-row"><span class="pill-icon" data-icon="restore"></span><strong>${esc(new Date(v.at).toLocaleString([],{dateStyle:'medium',timeStyle:'short'}))}</strong><small>${esc(label[v.reason]??v.reason)} · ${Math.round(v.bytes/1024)} KB</small><button class="chip-button" data-restore="${esc(v.id)}">Restore</button></div>`).join(''):'<p class="hint">No versions yet: they appear after the first edits.</p>';fillIcons(el);
+  $$('[data-restore]').forEach(b=>b.onclick=()=>confirmDialog('Restore this version?','The current show is saved as a version first, so this can be undone. Network settings stay. Output must be off and the show unlocked.','Restore',async()=>{await command('show.restore',{id:b.dataset.restore});toast('Show restored.')}))}catch{el.innerHTML=''}
+}
+async function drawModules(){
+ const el=$('#modulesBody');if(!el)return;let m;try{m=await command('modules.status')}catch{return}
+ const sound=m.sound.enabled?await command('sound.status').catch(()=>null):null,midi=m.midi.enabled?await command('midi.status').catch(()=>null):null,helper=m.helper.error?`<p class="warning">${icon('warning')}${esc(m.helper.error)}</p>`:'';
+ el.innerHTML=`<div class="module-row"><label class="switch"><input type="checkbox" data-module="sound" ${m.sound.enabled?'checked':''}><span></span></label><div><strong>${icon('wave')}Sound triggers</strong><small>Flash a master from a drum on an audio input (Dante Virtual Soundcard or any interface). Give a master its channel in the master's ⚙.</small>
+   ${sound?`<div class="device-row"><label class="mini"><span>Input device</span><select id="soundDevice"><option value="">Choose…</option>${sound.devices.map(d=>`<option value="${esc(d.name)}" ${d.name===sound.device?'selected':''}>${esc(d.name)}${d.device?` (now ${esc(d.device)})`:''} · ${d.inputs} in</option>`).join('')}${sound.device&&!sound.devices.some(d=>d.name===sound.device)?`<option selected value="${esc(sound.device)}">${esc(sound.device)} · not connected</option>`:''}</select></label><button class="round-button small" id="soundRefresh" title="Look for audio devices again" aria-label="Refresh devices" data-icon="restore"></button></div><small>Any input works: Dante, an interface, a virtual device (BlackHole, Loopback) or the laptop mic. For the whole band, use the mixer's main mix with the Full band.</small><small>${sound.open?.ok?`Listening on ${esc(sound.open.device)} · ${sound.triggers.length} trigger${sound.triggers.length===1?'':'s'}`:sound.device?'Not listening yet':''}</small>`:''}</div></div>
+  <div class="module-row"><label class="switch"><input type="checkbox" data-module="midi" ${m.midi.enabled?'checked':''}><span></span></label><div><strong>${icon('midi')}MIDI</strong><small>A virtual “StageLight” MIDI port for ProPresenter, and the APC40 mkII.</small>
+   ${midi?`<label class="check-row"><input type="checkbox" id="midiVirtual" ${midi.virtualPort?'checked':''}> Virtual port “StageLight”</label><small>APC40 mkII: ${midi.controller?'connected':'not connected'}</small><button class="chip-button" id="editApc"><span data-icon="sliders"></span>Edit APC40 profile…</button>`:''}</div></div>${helper}`;
+ fillIcons(el);
+ $$('[data-module]').forEach(c=>c.onchange=async()=>{await quiet(command('modules.set',{[c.dataset.module]:{enabled:c.checked}}));setTimeout(drawModules,400)});
+ if($('#soundRefresh'))$('#soundRefresh').onclick=()=>drawModules();
+ if($('#soundDevice'))$('#soundDevice').onchange=async e=>{await quiet(command('modules.set',{sound:{enabled:true,device:e.target.value}}));setTimeout(drawModules,400)};
+ if($('#midiVirtual'))$('#midiVirtual').onchange=e=>quiet(command('modules.set',{midi:{enabled:true,virtualPort:e.target.checked}}));
+ if($('#editApc'))$('#editApc').onclick=()=>import('./controller-editor.js').then(({openControllerEditor})=>openControllerEditor({dialog,command,quiet,toast,esc,icon,fillIcons,getShow:()=>show,getRuntime:()=>runtime,back:settingsDialog}));
+}
 // Shown over the stage while lights are being driven but output is off, so "the rig does nothing" is never a mystery.
 let outputHintDismissed=false;
 function paintOutputHint(r){
@@ -819,9 +928,9 @@ function paintOutputHint(r){
 // Playback preferences live in the show (settings.set), so agents and every desk share them.
 function settingsDialog(){
  const row=(key,title,hint)=>`<section class="prop"><h3><span data-icon="${key==='clearFade'?'release':'blind'}"></span>${title}</h3><p class="hint">${hint}</p><div class="seg-row"><div class="segmented">${[[0,'Instant'],[1,'1 s'],[2,'2 s'],[3,'3 s'],[5,'5 s']].map(([v,l])=>`<button data-setting="${key}" data-value="${v}" class="${show.playback[key]===v?'active':''}">${l}</button>`).join('')}</div><label class="num"><input data-setting-number="${key}" type="number" min="0" max="30" step=".5" value="${show.playback[key]}">s</label></div></section>`;
- dialog('Settings',outputSection()+row('clearFade','Clear','How long Clear (C) takes to fade manual changes back to the running cue. Instant is a hard cut.')+row('blindFade','Blind','How long clearing blind changes, and Apply live, take to fade. Instant is a hard cut.')+'<p class="hint">Saved in the show, so it travels with exports and agents see it (lights_settings_set).</p>');
+ dialog('Settings',outputSection()+row('clearFade','Clear','How long Clear (C) takes to fade manual changes back to the running cue. Instant is a hard cut.')+row('blindFade','Blind','How long clearing blind changes, and Apply live, take to fade. Instant is a hard cut.')+'<p class="hint">Saved in the show, so it travels with exports and agents see it (lights_settings_set).</p>'+`<section class="prop" id="modulesSection"><h3><span data-icon="midi"></span>Modules</h3><p class="hint">A module that is off is not loaded at all: no background process, no ports, no audio.</p><div id="modulesBody"><p class="hint">Loading…</p></div></section><section class="prop"><h3><span data-icon="restore"></span>Show versions</h3><p class="hint">Saved by themselves: at most every five minutes of edits, before an import or restore, and when the show is locked.</p><div class="pool-list versions" id="versionList"><p class="hint">Loading…</p></div></section>`);
  const save=async(key,value)=>{if(!Number.isFinite(value)||value<0||value>30)return toast('Use 0 to 30 seconds.');try{await command('settings.set',{[key]:value});settingsDialog()}catch{}};
- wireOutputSection();
+ wireOutputSection();drawModules();drawVersions();
  $$('[data-setting]').forEach(b=>b.onclick=()=>save(b.dataset.setting,+b.dataset.value));
  $$('[data-setting-number]').forEach(el=>el.onchange=()=>save(el.dataset.settingNumber,Math.round(+el.value*10)/10));
 }
@@ -967,7 +1076,7 @@ function armDialog(){if(runtime.output.armed){quiet(command('output.disarm'));re
 // ── 10 Hz paint: readback only, no structural redraws ──
 function paint(r){
  paintOutputHint(r);paintOutputState();paintRunning(r);
- if(!r)return;runtime=r;paintAgentStatus(r);paintMasters(r);paintLibrary(r);if(show)paintScene(r);
+ if(!r)return;runtime=r;paintAgentStatus(r);paintMasters(r);paintLibrary(r);if(show){paintScene(r);paintTempo(r);paintLock(r);paintResume(r);paintHits(r)}
  if(show&&r.selection&&r.selection.revision>selectionRevision){const first=!selectionRevision;selectionRevision=r.selection.revision;if(!first||r.selection.ids.length)applySelection(r.selection.ids,r.selection.group)}$('#engineStatus').innerHTML='<i></i>Engine ready';document.body.classList.toggle('live',r.output.armed);
  setText($('#outputButton span'),r.output.armed?'LIVE':'Output off');setText($('.preview-label'),stage?.mode==='reference'?'Reference render · not live lighting':r.output.armed?'Live view · output on':'Live view · output off');drawPreviewBanner(r);
  stage?.setLedPlaying(!r.output.armed);
@@ -1049,10 +1158,13 @@ function layersDialog(){const v=show.visualizer??{hiddenGroups:[],hiddenFixtures
 $('#visLayers').onclick=layersDialog;
 $$('[data-view]').forEach(b=>b.onclick=()=>{stage.setView(b.dataset.view);$$('[data-view]').forEach(x=>x.classList.toggle('active',x===b));paint(runtime)});
 $('#ledButton').onclick=()=>{ledOpen=!ledOpen;drawLedTray()};
+$('#tapButton').onpointerdown=e=>{e.preventDefault();quiet(command('tempo.tap',{}))};
+$$('[data-tempo]').forEach(b=>b.onclick=()=>quiet(command(b.dataset.tempo==='reset'?'tempo.set':'tempo.scale',b.dataset.tempo==='reset'?{}:{factor:b.dataset.tempo==='half'?.5:2})));
+$('#pillToggle').onclick=()=>{drawerOpen=!drawerOpen;store.set('pillDrawer',drawerOpen?'open':'closed');applyDrawer()};
 $('#outputButton').onclick=armDialog;$('#outputHintArm').onclick=armDialog;$('#outputHintClose').onclick=()=>{outputHintDismissed=true;$('#outputHint').hidden=true};
 $('#menuButton').onclick=e=>{e.stopPropagation();const open=$('#menu').hidden;$('#menu').hidden=!open;$('#menuButton').setAttribute('aria-expanded',String(open))};
 document.addEventListener('click',e=>{if(!e.target.closest('#ctxMenu'))closeMenu();if(!$('#masterPop').hidden&&!e.target.closest('#masterPop,[data-master-edit]'))closeMasterPop();if(learning&&!e.target.closest('[data-master-key],#mpKey')){learning=null;drawMasters()}if(!$('#menu').hidden&&!e.target.closest('.menu-wrap')){$('#menu').hidden=true;$('#menuButton').setAttribute('aria-expanded','false')}});
-$$('[data-menu]').forEach(b=>b.onclick=()=>{$('#menu').hidden=true;({agent:agentHelp,connection,settings:settingsDialog,patch:patchSheet,network:networkSheet,export:()=>window.open('/api/show'),import:importDialog,help:helpDialog,update:updatesDialog})[b.dataset.menu]()});
+$$('[data-menu]').forEach(b=>b.onclick=()=>{$('#menu').hidden=true;({preshow:preshowDialog,agent:agentHelp,connection,settings:settingsDialog,patch:patchSheet,network:networkSheet,export:()=>window.open('/api/show'),import:importDialog,help:helpDialog,update:updatesDialog})[b.dataset.menu]()});
 $('#closeDialog').onclick=()=>$('#dialog').close();$('#dialog').onclick=e=>{if(e.target===$('#dialog'))$('#dialog').close()};
 // Keys: Space GO, Backspace back, Esc cancels, ← → page the masters; Clear, Highlight and Blackout and every master key
 // come from show.masters (desk shortcuts default to C, Shift+H, B). A held master key flashes until it is let go.
@@ -1064,8 +1176,11 @@ document.addEventListener('keydown',e=>{
  else if(e.key==='Backspace'){e.preventDefault();$('#backButton').click()}
  else if((e.key==='ArrowLeft'||e.key==='ArrowRight')&&paneShown()==='masters'){e.preventDefault();pageBank(e.key==='ArrowLeft'?-1:1)}
  else{const k=keyOf(e),desk=show?.masters.desk;if(!k||!desk)return;
-  if(k===desk.clear)$('#releaseButton').click();else if(k===desk.highlight)$('#highlightButton').click();else if(k===desk.blackout)$('#blackout').click();
-  else{const m=slots().find(x=>x.key===k);if(!m)return;e.preventDefault();if(e.repeat)return;
+  if(k===desk.clear)$('#releaseButton').click();else if(k===desk.highlight)$('#highlightButton').click();else if(k===desk.blackout)$('#blackout').click();else if(k===desk.tap){e.preventDefault();if(!e.repeat)quiet(command('tempo.tap',{}))}
+  else{const m=slots().find(x=>x.key===k);
+   // Shift + a master's key switches its sound trigger, unless that combination is bound to something itself.
+   if(!m){const base=k.startsWith('shift+')&&slots().find(x=>x.key===k.slice(6)&&x.sound);if(base){e.preventDefault();if(!e.repeat)toggleSound(base.id)}return}
+   e.preventDefault();if(e.repeat)return;
    if(!m.cue)return toast(`${keyLabel(k)} is master ${slotIndex(m.id)+1}, which has no cue yet. Click it to choose one.`);heldKeys.set(e.code,m.id);pressMaster(m.id)}}
 });
 document.addEventListener('keyup',e=>{const id=heldKeys.get(e.code);if(id){heldKeys.delete(e.code);releaseMaster(id)}});

@@ -40,6 +40,7 @@ const server=http.createServer(async(req,res)=>{
   if(req.method==='POST'&&url.pathname==='/api/media'){
    // Raw upload body; the engine validates type and size, then moves it into data/media.
    if(req.headers['x-lights-token']!==token)return json(res,403,{error:'Missing session token'});
+   if(engine.locked)return json(res,409,{error:'The performance lock is on: unlock it to change the show.'});
    const name=(url.searchParams.get('name')??'').trim().slice(0,100),ext=path.extname(url.searchParams.get('file')??'').toLowerCase();
    if(!name||!MEDIA_TYPES[ext])return json(res,400,{error:'Choose a png, jpg, webp, gif, mp4, webm, mov or m4v file'});
    if(Number(req.headers['content-length'])>500e6)return json(res,413,{error:'Media file exceeds 500 MB'});

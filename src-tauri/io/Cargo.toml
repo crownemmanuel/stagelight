@@ -1,0 +1,18 @@
+[package]
+name = "stagelight-io"
+version = "0.1.0"
+description = "StageLight's native helper: audio hit detection and MIDI ports for the sound and MIDI modules"
+edition = "2021"
+publish = false
+
+[[bin]]
+name = "stagelight-io"
+path = "src/main.rs"
+
+[dependencies]
+cpal = "0.15"
+midir = "0.10"
+serde_json = "1"
+
+[profile.release]
+opt-level = 3

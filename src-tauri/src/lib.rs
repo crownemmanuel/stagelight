@@ -82,6 +82,7 @@ pub fn run() {
             std::thread::spawn(move || match engine::ensure(&cfg) {
                 Ok(()) => {
                     let _ = window.navigate(cfg.url().parse().unwrap());
+                    engine::watch(cfg.clone());
                 }
                 Err(e) => status(&window, "The lighting engine did not start", &e, true),
             });

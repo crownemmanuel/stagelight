@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Sound triggers (docs/MIDI-AND-SOUND.md) listen to an audio input such as Dante Virtual Soundcard. -->
+	<key>NSMicrophoneUsageDescription</key>
+	<string>StageLight listens to the audio input you choose (for example the kick drum on Dante Virtual Soundcard) only while Sound triggers are on, to flash lights on each hit. Nothing is recorded.</string>
+</dict>
+</plist>

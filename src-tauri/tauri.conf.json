@@ -5,8 +5,8 @@
   "identifier": "org.salvation.stagelight",
   "build": {
     "frontendDist": "splash",
-    "beforeDevCommand": "node scripts/fetch-node.mjs",
-    "beforeBuildCommand": "node scripts/fetch-node.mjs"
+    "beforeDevCommand": "node scripts/fetch-node.mjs && node scripts/build-io.mjs --dev",
+    "beforeBuildCommand": "node scripts/fetch-node.mjs && node scripts/build-io.mjs"
   },
   "app": {
     "windows": [],
@@ -20,7 +20,7 @@
     "createUpdaterArtifacts": true,
     "category": "Entertainment",
     "shortDescription": "Lighting desk, 3D stage preview and show control",
-    "externalBin": ["binaries/node"],
+    "externalBin": ["binaries/node", "binaries/stagelight-io"],
     "resources": {
       "../engine/": "app/engine/",
       "../public/": "app/public/",

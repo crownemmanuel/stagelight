@@ -67,4 +67,17 @@ See docs/MASTERS-AND-SCENES.md.
 - **One trigger path.** Every press goes through `masters.trigger {slot, down}` (`lights_masters_trigger`), the same path for keyboard, mouse, MCP, OSC (`/stagelight/masters/trigger`) and future USB/Stream Deck. A flash lets go only of a cue it started, and never retires the cues it covers. Held flashes are transient (`runtime.masters.held`).
 - **Scenes** (`scene.capture/save/go/release/delete`) are saved base looks that stay on underneath every cue. Releasing the last cue, a cue ending or `cue.stop` fades back to the active scene instead of to dark. The active scene is transient: never restored at startup, dropped on disarm, and arming is refused while one is active.
 - **Library** is the third top tab. It shows cue tiles in the stage's place, and the right panel is the selected cue's sheet: how it plays, what fires it (pages, masters, triggers, OSC/MCP), its effects and look, plus rename, preview, delete and put-on-master. Drag a tile onto a master.
-- **Panel widths** and collapsed state, and the bottom-pane choice, are per-viewer browser storage, not show data.
+- **Panel widths** and collapsed state, the bottom-pane choice, and the drawer over the stage (group pills and LED wall, closed by default, its button naming the selected group) are per-viewer browser storage, not show data.
+
+## Live show: tempo, sound, MIDI, APC40, show safety — 2026-10-29
+See docs/MIDI-AND-SOUND.md, docs/SHOW-SAFETY.md and docs/ROADMAP.md (later work: sACN, timecode, MIDI in from tracks, generic learn, park…).
+- **Tap tempo.** `tempo.tap` and the T key. Cues with a `bpm` play at live tempo ÷ bpm. Never change cue timing math without `rebase()`.
+- **Master levels.** `masters.level` scales only the cue that master started. Hog-style fader-go releases only what the fader started. A held flash ignores the level (full, on top; `bumps` for a cue already running), and master-held cues are never retired for being covered.
+- **Modules.** Sound and MIDI are modules (`modules.set`). Off means `engine/modules/` is never imported, no `stagelight-io` helper runs, and nothing is added to the tick. Keep it that way: modules react to events, never per frame. Test hardware logic with `tests/fixtures/fake-io.mjs` (`LIGHTS_IO_BIN`).
+- **Sound triggers.** `masters.sound` switches one on or off live, also while locked; Shift + the master key and the APC40 Activator buttons do the same. These live on master slots (`slot.sound`): a hit is a master press plus an auto let-go after holdMs. In follow mode (`mode:'follow'`) the helper streams levels at about 30 Hz and the master level rides them through `masterLevel`, unlogged; 2 s of silence releases the cue.
+- **MIDI out.** The virtual StageLight port carries notes for ProPresenter: entry sends `{message:'midi'}` and `slot.midi`.
+- **APC40 mkII.** The profile is `engine/controllers/apc40mk2.mjs`, from Akai's protocol v1.2. Never invent other controllers' maps. The grid row order (top row = notes 32–39) is still to be confirmed on the operator's unit. Profiles are saved in `show.controllers` and edited visually.
+- **Performance lock.** It refuses every `SHOW_EDITS` command. Add new show-editing commands to that set.
+- **Versions.** Show versions are in `<data>/versions`.
+- **Resume.** Crash resume is an offer (`runtime.resume`), applied only by `resume.apply` with the arm confirmation. The shell watchdog restarts a crashed engine it started.
+- **Not hardware-tested.** The APC40, Dante Virtual Soundcard and ProPresenter mapping have not been tested here; only the helper's virtual port and device listing were run on this Mac.

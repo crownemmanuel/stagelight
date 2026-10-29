@@ -17,14 +17,15 @@ Object.assign(PARAMS.properties,wheelAttrs);
 // A track runs on a group or on an explicit fixture list; layer makes it modify (not replace) what is below it.
 export const LAYER={enum:['position','intensity','color']};
 const track=object({group:id,fixtures:array(id,1,512),layer:LAYER,effect:{enum:Object.keys(EFFECTS)},start:number(0,3600),duration:number(.1,3600),params:PARAMS,fadeIn:number(0,60),fadeOut:number(0,60)},['effect','start','duration','params']);
-export const CUE=object({look:array(object({id,values:attrs,over:bool},['id','values']),0,256),id,name:string,description:{type:'string',maxLength:500},duration:number(.1,3600),loop:bool,hold:bool,tracks:array(track,0,64)},['id','name','duration','loop','tracks']);
+export const CUE=object({look:array(object({id,values:attrs,over:bool},['id','values']),0,256),id,name:string,description:{type:'string',maxLength:500},duration:number(.1,3600),loop:bool,hold:bool,bpm:number(20,400),tracks:array(track,0,64)},['id','name','duration','loop','tracks']);
 // A page is a cue list. It references library cues; the same cue may appear on several pages.
 // fade: seconds this entry takes to crossfade in (0 = hard cut). follow: 'auto' fires the NEXT entry
 // once this one has run `wait` seconds (default: the cue duration).
 // What a cue-list entry sends to network targets when it GOes (look summary, cue announcement or a custom OSC message).
 const oscAddress={type:'string',pattern:'^/[!-~]{1,120}$'};
 // preset: recall one of the target app's own presets (its id as published or typed), sent before a look on the same cue; fade optional.
-export const SEND=object({target:id,message:{enum:['look','cue','osc','preset']},address:oscAddress,args:array({},0,16),preset:{type:'string',pattern:'^[^\\u0000-\\u001f]{1,100}$'},fade:number(0,600)},['target','message']);
+// midi: a note on the virtual StageLight MIDI port (MIDI module, docs/MIDI-AND-SOUND.md); it needs no target.
+export const SEND=object({target:id,message:{enum:['look','cue','osc','preset','midi']},address:oscAddress,args:array({},0,16),preset:{type:'string',pattern:'^[^\\u0000-\\u001f]{1,100}$'},fade:number(0,600),note:integer(0,127),channel:integer(1,16),velocity:integer(1,127)},['message']);
 export const ENTRY=object({id,cue:id,label:string,fade:number(0,60),follow:{enum:['manual','auto']},wait:number(0,3600),send:array(SEND,0,16)},['id','cue','fade','follow']);
 // Sister-app links. Targets receive OSC (UDP, lowest latency) or HTTP JSON; triggers map a name to one show-control command.
 // Look Link (docs/LOOK-LINK.md). A zone is a named set of fixtures with one role; targets choose zones (none = every zone),
@@ -49,8 +50,26 @@ export const SCENE=object({id,name:string,color:hex,look:array(object({id,values
 // Space, Backspace, Esc, Tab, Enter and the arrows stay with the desk, so the pattern leaves them out.
 export const KEY={type:'string',pattern:"^(shift\\+)?([a-z0-9;,./'`=\\[\\]\\\\-]|f([1-9]|1[0-2]))$"};
 export const MASTER_ACTIONS=['flash','toggle','go','pause','release'];
-export const SLOT=object({id,key:KEY,cue:id,action:{enum:MASTER_ACTIONS},fade:number(0,60),label:{type:'string',minLength:1,maxLength:40}},['id','action','fade']);
-export const MASTERS=object({slots:array(SLOT,0,60),desk:object({highlight:KEY,clear:KEY,blackout:KEY},[])});
+// sound: one input channel of the sound module's device drives the master (docs/MIDI-AND-SOUND.md). band filters it
+// (kick, snare, hat, full). mode hit (default): sensitivity 0..1 sets the threshold, each hit flashes the master for
+// holdMs, at most one per gapMs. mode follow: the master's level rides the channel's level, from silent at the
+// sensitivity threshold to full rangeDb above it, smoothed by attackMs / releaseMs; 2 s of silence releases the cue.
+// enabled:false keeps the settings but stops listening. midi: a note sent on the virtual port while the master is pressed.
+export const SOUND_BANDS=['kick','snare','hat','full'];
+export const SLOT_SOUND=object({enabled:bool,channel:integer(1,128),band:{enum:SOUND_BANDS},mode:{enum:['hit','follow']},sensitivity:number(0,1),holdMs:integer(10,2000),gapMs:integer(20,2000),rangeDb:number(6,60),attackMs:integer(1,2000),releaseMs:integer(10,5000)},['channel']);
+export const SLOT_MIDI=object({note:integer(0,127),channel:integer(1,16)},['note']);
+export const SLOT=object({id,key:KEY,cue:id,action:{enum:MASTER_ACTIONS},fade:number(0,60),label:{type:'string',minLength:1,maxLength:40},color:hex,sound:SLOT_SOUND,midi:SLOT_MIDI},['id','action','fade']);
+export const MASTERS=object({slots:array(SLOT,0,60),desk:object({highlight:KEY,clear:KEY,blackout:KEY,tap:KEY},[])});
+// Optional modules (docs/MIDI-AND-SOUND.md). Off means never loaded: no helper process, no ports, no audio.
+export const MODULES=object({sound:object({enabled:bool,device:string},['enabled']),midi:object({enabled:bool,virtualPort:bool},['enabled'])},[]);
+// Controller profiles: a control ID from the model's table (engine/controllers/) mapped to an action. Only changes from
+// the model's default map are stored; none = the control does nothing.
+export const CONTROLLER_ACTIONS=['none','master.press','master.release','master.level','master.sound','bank.press','bank.release','bank.level','bank.sound','bank.prev','bank.next','scene','scene.release','grand','go','back','stop','clear','highlight','blackout','tap','tempo.nudge','tempo.half','tempo.double','tempo.reset','tempo.fine'];
+export const CONTROLLER_ACTION=object({do:{enum:CONTROLLER_ACTIONS},n:integer(1,60),delta:number(-20,20)},['do']);
+const CONTROL_MAP={type:'object',additionalProperties:CONTROLLER_ACTION};
+export const CONTROLLER=object({id,model:{enum:['apc40mk2']},name:string,map:CONTROL_MAP},['id','model','map']);
+// Commands that change the saved show; the performance lock refuses them (playback, masters and output keep working).
+export const SHOW_EDITS=new Set(['look.capture','cue.save','cue.delete','cue.record','effect.apply','effect.save','scene.capture','scene.save','scene.delete','masters.assign','masters.key','masters.save','fixture.patch','fixture.place','fixture.color.save','fixture.colors.save','calibration.align','group.save','group.edit','group.delete','palette.save','palette.delete','point.save','point.delete','page.save','page.delete','trigger.save','trigger.delete','target.save','target.delete','zone.save','zone.delete','network.configure','preset.save','preset.delete','settings.set','output.configure','show.import','show.restore','media.import','media.delete','visualizer.hide','ledwall.set','controller.save','controller.reset']);
 export const LEDWALL=object({media:id,brightness:number(0,1),fit});
 // Groups/fixtures left out of the 3D visualizer entirely (preview only; output unaffected).
 export const VISUALIZER=object({hiddenGroups:array(id,0,64),hiddenFixtures:array(id,0,512)});
@@ -120,7 +139,29 @@ export const COMMANDS={
  'scene.go':cmd('Make a saved scene the active scene, like a Hog scene: it stays on underneath every cue. Fixtures no running cue uses show it, and when the last cue is released, ends or cue.stop runs, the rig fades back to it instead of to dark. Optional fade seconds (default show.playback.sceneFade). One scene is active at a time; startup never restores it. Reaches fixtures only while output is armed. Read runtime.scene.',object({id,fade:number(0,60)},['id']),true,true),
  'scene.release':cmd('Release the active scene: with no cue running the rig fades to zero with positions held; cues keep running. Optional fade seconds (default sceneFade).',object({fade:number(0,60)},[]),true,true),
  'masters.trigger':cmd('Press (down:true) or let go of (down:false) a master slot, exactly like its key on the desk. Its action decides: flash = down starts the cue, up releases it (only a cue the flash started); toggle = down starts or releases; go = down starts or restarts; pause = down pauses or resumes it while running; release = down releases it. Cues start on top of what runs, keeping manual changes and the page cue list. slot = a slot ID from status show.masters.slots. Read runtime.masters.held and runtime.running.',object({slot:id,down:bool}),true,true),
- 'masters.assign':cmd('Set what a master slot does: cue (a library cue ID), action flash|toggle|go|pause|release (default flash), fade seconds used to start and release (0 = cut), label (empty string removes it). clear:true empties the slot (cue and label). Saved in the show.',object({slot:id,cue:id,clear:bool,action:{enum:MASTER_ACTIONS},fade:number(0,60),label:{type:'string',minLength:0,maxLength:40}},['slot']),true),
+ 'masters.assign':cmd('Set what a master slot does: cue (a library cue ID), action flash|toggle|go|pause|release (default flash), fade seconds used to start and release (0 = cut), label (empty string removes it), color (its pad colour on a controller). sound {channel, band kick|snare|hat|full, mode hit|follow, sensitivity 0..1, holdMs, gapMs, rangeDb, attackMs, releaseMs}: in hit mode each hit on that input channel flashes it; in follow mode its level rides the loudness of that channel (lights breathe with a guitar, keys or pad); midi {note, channel} sends that note on the virtual StageLight MIDI port while it is pressed. clearSound / clearMidi remove them; clear:true empties the slot. Saved in the show.',object({slot:id,cue:id,clear:bool,action:{enum:MASTER_ACTIONS},fade:number(0,60),label:{type:'string',minLength:0,maxLength:40},color:hex,sound:SLOT_SOUND,midi:SLOT_MIDI,clearSound:bool,clearMidi:bool},['slot']),true),
+ 'masters.sound':cmd('Switch a master\'s sound trigger on or off during the show (enabled true/false; leave it out to toggle). Its channel, band and sensitivity are kept. Works while the performance lock is on; saved in the show. Shift + the master\'s key and the APC40 Activator buttons do the same.',object({slot:id,enabled:bool},['slot']),true,true),
+ 'masters.level':cmd('Set a master slot\'s level 0..1, like its fader: it scales the intensity of the cue that master started (1 = as programmed). With go (default true) it behaves like a Hog fader: raising it from zero starts the cue, and bringing it back to zero releases the cue if the fader started it. Transient: never saved. Read runtime.masters.levels.',object({slot:id,level:number(0,1),go:bool},['slot','level']),true,true),
+ 'tempo.tap':cmd('Tap tempo: call on each beat. Two or more taps less than 2 s apart set the live tempo (average of the last four). Cues that have a bpm play at live tempo / cue bpm, so their tracks, effects and auto-follow waits all speed up or slow down together. Read runtime.tempo.',object({}),true,true),
+ 'tempo.set':cmd('Set the live tempo in BPM, or leave bpm out to go back to each cue\'s own tempo.',object({bpm:number(20,400)},[]),true,true),
+ 'tempo.scale':cmd('Halve (0.5) or double (2) the live tempo (from the running cue\'s own tempo when none is set).',object({factor:{enum:[.5,2]}}),true,true),
+ 'tempo.nudge':cmd('Move the live tempo by delta BPM (from the running cue\'s own tempo when none is set).',object({delta:number(-20,20)}),true,true),
+ 'performance.lock':cmd('Performance lock on/off. While on, every command that changes the saved show (cues, pages, scenes, masters set-up, patch, groups, settings, import, restore…) is refused, for people and agents; playback, masters, tempo, scenes, overrides, blind, output and sound trigger tuning (masters.assign with only slot and sound) keep working. Turning it on saves a pre-show version. Survives an engine restart. Read runtime.locked.',object({enabled:bool}),true,true),
+ 'show.versions':cmd('List saved show versions, newest first: {id, at, reason}. Versions are written at most every five minutes of edits, before an import or restore, and when the performance lock goes on.',object({})),
+ 'show.restore':cmd('Restore a saved show version by id (from show.versions). The current show is saved as a version first; this Mac\'s network settings stay. Refused while output is armed or the performance lock is on.',object({id:{type:'string',pattern:'^[\\w.-]{1,120}$'}}),true),
+ 'show.check':cmd('Pre-show check: rows of {id, label, state pass|warn|fail, detail} for the Art-Net path (network:false skips the ping), output, universe routing, fixtures, last saved version, performance lock, engine timing, modules and the rig check page. Sends no DMX.',object({network:bool},[]),false),
+ 'resume.apply':cmd('After the engine restarted unexpectedly during a show (runtime.resume), put it back: re-arm output (needs confirmation ENABLE_PHYSICAL_OUTPUT when it was armed), master, tempo, the scene, and GO the page entry that was live. Never automatic.',object({confirmation:{const:'ENABLE_PHYSICAL_OUTPUT'}},[]),true,true),
+ 'resume.dismiss':cmd('Forget the offer to resume after an unexpected restart.',object({}),true),
+ 'modules.status':cmd('Optional modules and their state: sound (sound triggers from an audio input, e.g. Dante Virtual Soundcard) and midi (virtual StageLight MIDI port, APC40 mkII). A module that is off is not loaded at all.',object({})),
+ 'modules.set':cmd('Turn modules on or off and choose their device: sound {enabled, device (input device name from sound.status)}, midi {enabled, virtualPort}. Saved in this show\'s settings. Off stops the helper process and closes every port.',object({sound:MODULES.properties.sound,midi:MODULES.properties.midi},[]),true),
+ 'sound.status':cmd('Sound module: input devices with channel counts, the open device, each master\'s sound trigger, and live meter levels while metering is on. Refused while the module is off.',object({})),
+ 'sound.meter':cmd('Start or stop live input levels for the sound panel (runtime.sound.meter, dBFS per trigger channel). Stops by itself after 30 s.',object({on:bool}),true),
+ 'sound.test':cmd('Fire a master\'s sound trigger once, as if its channel had a hit.',object({slot:id}),true,true),
+ 'midi.status':cmd('MIDI module: the virtual StageLight port, connected controllers (APC40 mkII) and the last notes sent. Refused while the module is off.',object({})),
+ 'midi.test':cmd('Send one note on the virtual StageLight MIDI port (note on, then off after 200 ms), e.g. to map it in ProPresenter.',object({note:integer(0,127),channel:integer(1,16),velocity:integer(1,127)},['note']),true,true),
+ 'controller.save':cmd('Change a controller profile: map control IDs (from midi.status controls) to actions {do, n?, delta?}. do is one of '+CONTROLLER_ACTIONS.join(', ')+'. n is a master number (master.*), a fader-bank column 1-8 (bank.*), or a scene number (scene). Only the changed controls need sending; they are merged into the saved profile.',object({id,model:{enum:['apc40mk2']},name:string,map:CONTROL_MAP},['id','map']),true),
+ 'controller.reset':cmd('Put a controller profile back to its default map.',object({id}),true),
+ 'controller.test':cmd('Run the action a controller control is mapped to, as if it was pressed (value 0..1 for faders).',object({id,control:{type:'string',pattern:'^[a-z0-9-]{1,40}$'},value:number(0,1)},['id','control']),true,true),
  'masters.key':cmd('Give a master slot its keyboard key (lowercase a–z, 0–9, punctuation or f1–f12, optional "shift+"), or clear:true to remove it. A key already on another slot or a desk shortcut (Highlight shift+h, Clear c, Blackout b) is refused with the owner named, unless conflict is "swap" (the owner gets this slot\'s old key) or "take" (the owner is left without a key). Saved in the show.',object({slot:id,key:KEY,clear:bool,conflict:{enum:['swap','take']}},['slot']),true),
  'masters.save':cmd('Replace the whole master bank (slots, at most 60) and/or the desk shortcut keys {highlight, clear, blackout}. Use it to add or remove slots. Keys must be unique.',object({slots:array(SLOT,0,60),desk:MASTERS.properties.desk},[]),true),
  'effect.preview':cmd('Run an unsaved effect as a temporary cue. Preview-only: refuses while armed.',object({group:id,effect:{enum:Object.keys(EFFECTS)},params:PARAMS,duration:number(1,3600)},['group','effect','params']),true),
@@ -157,7 +198,7 @@ export function validate(schema,value,path='arguments'){
  if(schema.type==='object'){
   if(!value||typeof value!=='object'||Array.isArray(value))throw Error(`${path}: expected object`);
   for(const k of schema.required??[])if(!Object.hasOwn(value,k))throw Error(`${path}.${k}: required`);
-  for(const [k,v] of Object.entries(value)){if(!Object.hasOwn(schema.properties,k))throw Error(`${path}.${k}: unknown field`);validate(schema.properties[k],v,`${path}.${k}`)}
+  for(const [k,v] of Object.entries(value)){if(schema.properties&&Object.hasOwn(schema.properties,k))validate(schema.properties[k],v,`${path}.${k}`);else if(typeof schema.additionalProperties==='object')validate(schema.additionalProperties,v,`${path}.${k}`);else throw Error(`${path}.${k}: unknown field`)}
  }
  if(schema.type==='array'){
   if(!Array.isArray(value)||value.length<(schema.minItems??0)||value.length>(schema.maxItems??1e6))throw Error(`${path}: invalid array length`);
@@ -187,6 +228,10 @@ export function validateShow(s){
  if(new Set(s.cues.map(c=>c.id)).size!==s.cues.length)throw Error('Duplicate cue ID');
  const cueIds=new Set(s.cues.map(c=>c.id));
  if(s.scenes){for(const sc of s.scenes){validate(SCENE,sc,'scene');for(const e of sc.look){if(!ids.has(e.id))throw Error('Unknown fixture in scene '+sc.name);validateWheelAttributes(s.fixtures.find(f=>f.id===e.id),e.values)}}if(new Set(s.scenes.map(x=>x.id)).size!==s.scenes.length)throw Error('Duplicate scene ID')}
+ if(s.settings.modules)validate(MODULES,s.settings.modules,'settings.modules');
+ for(const c of s.controllers??[]){validate(CONTROLLER,c,'controller');if(!c.map||typeof c.map!=='object'||Array.isArray(c.map)||Object.keys(c.map).length>300)throw Error('A controller map is an object of control IDs');
+  for(const [k,a] of Object.entries(c.map)){if(!/^[a-z0-9-]{1,40}$/.test(k))throw Error('Unknown control '+k);validate(CONTROLLER_ACTION,a,'controller '+c.id+'.'+k)}}
+ if(new Set((s.controllers??[]).map(c=>c.id)).size!==(s.controllers??[]).length)throw Error('Duplicate controller ID');
  if(s.masters){validate(MASTERS,s.masters,'masters');if(new Set(s.masters.slots.map(m=>m.id)).size!==s.masters.slots.length)throw Error('Duplicate master ID');
   for(const m of s.masters.slots)if(m.cue&&!cueIds.has(m.cue))throw Error(`Master ${m.id} uses unknown cue ${m.cue}`);
   const keys=[...s.masters.slots.map(m=>m.key),...Object.values(s.masters.desk)].filter(Boolean);if(new Set(keys).size!==keys.length)throw Error('A key is used twice in the masters')}
@@ -203,7 +248,7 @@ export function validateShow(s){
  for(const z of s.zones??[]){validate(ZONE,z,'zone');if(zoneIds.has(z.id))throw Error('Duplicate zone ID');zoneIds.add(z.id);if(!(z.groups?.length||z.fixtures?.length))throw Error(`Zone ${z.name} needs a group or a fixture`);
   for(const g of z.groups??[])if(!groupIds.has(g))throw Error(`Zone ${z.name} uses unknown group ${g}`);for(const id of z.fixtures??[])if(!ids.has(id))throw Error(`Zone ${z.name} uses unknown fixture ${id}`)}
  for(const t of s.targets??[]){const l=t.look;if(!l)continue;for(const z of l.zones??[])if(!zoneIds.has(z))throw Error(`Target ${t.name} uses unknown zone ${z}`);if(new Set(l.zones??[]).size!==(l.zones??[]).length)throw Error('Duplicate zone in target');if(l.heartbeat>0&&l.heartbeat<1)throw Error('Heartbeat is 0 (off) or at least 1 second')}
- for(const p of s.pages??[])for(const e of p.cues)for(const x of e.send??[]){if(!targetIds.has(x.target))throw Error(`Unknown target ${x.target}`);if(x.message==='osc'&&!x.address)throw Error('A custom OSC send needs an address');if(x.message==='preset'&&!x.preset)throw Error('A preset send needs a preset id');if(x.message!=='preset'&&(x.preset!==undefined||x.fade!==undefined))throw Error('preset and fade belong to preset sends');for(const a of x.args??[])if(!(typeof a==='string'&&a.length<=200)&&!(typeof a==='number'&&Number.isFinite(a)))throw Error('OSC args must be strings or numbers')}
+ for(const p of s.pages??[])for(const e of p.cues)for(const x of e.send??[]){if(x.message==='midi'){if(x.note===undefined)throw Error('A MIDI send needs a note');continue}if(!targetIds.has(x.target))throw Error(`Unknown target ${x.target}`);if(x.message==='osc'&&!x.address)throw Error('A custom OSC send needs an address');if(x.message==='preset'&&!x.preset)throw Error('A preset send needs a preset id');if(x.message!=='preset'&&(x.preset!==undefined||x.fade!==undefined))throw Error('preset and fade belong to preset sends');for(const a of x.args??[])if(!(typeof a==='string'&&a.length<=200)&&!(typeof a==='number'&&Number.isFinite(a)))throw Error('OSC args must be strings or numbers')}
  for(const p of s.presets??[]){validate(PRESET,p,'preset');if(Object.hasOwn(EFFECT_PRESETS,p.id))throw Error(`Preset ${p.id} is a built-in name`)}
  if(new Set((s.presets??[]).map(p=>p.id)).size!==(s.presets??[]).length)throw Error('Duplicate preset ID');
  if(s.visualizer){validate(VISUALIZER,s.visualizer,'visualizer');for(const g of s.visualizer.hiddenGroups??[])if(!s.groups.some(x=>x.id===g))throw Error('Unknown hidden group '+g);for(const id of s.visualizer.hiddenFixtures??[])if(!ids.has(id))throw Error('Unknown hidden fixture '+id)}

@@ -66,13 +66,17 @@ export function fixtureIndex(show){const list=show.fixtures;let m=indexes.get(li
 export const zoneFixtures=(show,zone)=>[...new Set([...(zone.groups??[]).flatMap(g=>show.groups.find(x=>x.id===g)?.fixtures??[]),...(zone.fixtures??[])])];
 // Masters start blank and flash: slots 1–9 on the home row A S D F G H J K L, Highlight on Shift+H (docs/MASTERS-AND-SCENES.md).
 export const MASTER_KEYS=['a','s','d','f','g','h','j','k','l'];
-export const defaultMasters=()=>({slots:Array.from({length:18},(_,i)=>({id:'m'+(i+1),...(MASTER_KEYS[i]?{key:MASTER_KEYS[i]}:{}),action:'flash',fade:0})),desk:{highlight:'shift+h',clear:'c',blackout:'b'}});
+export const defaultMasters=()=>({slots:Array.from({length:18},(_,i)=>({id:'m'+(i+1),...(MASTER_KEYS[i]?{key:MASTER_KEYS[i]}:{}),action:'flash',fade:0})),desk:{highlight:'shift+h',clear:'c',blackout:'b',tap:'t'}});
 // Shows saved before pages existed get one page holding every cue, in order.
 export function migrate(show){
  if(!show.pages)show.pages=[{id:'scene-1',name:'Scene 1',color:'#8bc9d0',cues:show.cues.map((c,i)=>({id:'entry-'+(i+1),cue:c.id,fade:2,follow:'manual'}))}];
  if(!show.groups.some(g=>g.id==='movers'))show.groups.push({id:'movers',name:'All moving heads',fixtures:show.fixtures.filter(f=>f.enabled&&['rogue','mh7','beam200','beam7r'].includes(f.profile)).map(f=>f.id)});
- show.media??=[];show.playback??={clearFade:3,blindFade:2};show.presets??=[];show.targets??=[];show.triggers??=[];show.zones??=[];show.visualizer??={hiddenGroups:[],hiddenFixtures:[]};show.ledWall??={media:'salvation-title',brightness:.85,fit:'cover'};
+ show.media??=[];show.playback??={clearFade:3,blindFade:2};show.presets??=[];show.targets??=[];show.triggers??=[];show.zones??=[];show.visualizer??={hiddenGroups:[],hiddenFixtures:[]};show.ledWall??={media:'off',brightness:.85,fit:'cover'};
  show.scenes??=[];show.masters??=defaultMasters();show.playback.sceneFade??=2;
+ if(!show.masters.desk.tap&&!Object.values(show.masters.desk).includes('t')&&!show.masters.slots.some(m=>m.key==='t'))show.masters.desk.tap='t';
+ // Cues written with "… at 102.975 BPM" in their notes follow tap tempo at that tempo (docs/MIDI-AND-SOUND.md).
+ for(const c of show.cues){if(c.bpm!==undefined)continue;const m=/\bat\s+(\d+(?:\.\d+)?)\s*BPM\b/i.exec(c.description??'');if(m&&+m[1]>=20&&+m[1]<=400)c.bpm=+m[1]}
+ show.settings.modules??={sound:{enabled:false},midi:{enabled:false,virtualPort:true}};
  return show;
 }
 const track=(group,effect,start,duration,params={})=>({group,effect,start,duration,params,fadeIn:1,fadeOut:1});
@@ -98,7 +102,7 @@ export function defaults(){
     {...track('backlights','static',57,3,{color:'#ffe2ba',brightness:.8}),fadeIn:.3,fadeOut:2.5},{...track('rogues','static',57,3,{color:'#fff0d7',brightness:.65}),fadeIn:.3,fadeOut:2.5}]},
    {id:'afterglow',name:'Afterglow',description:'A slow gold and lavender breathing look.',duration:30,loop:true,tracks:[track('backlights','wave',0,30,{color:'#f1b65b',secondary:'#9f72e8',brightness:.45,speed:.25}),track('rogues','static',0,30,{color:'#ffb54a',brightness:.22,prism:1,frost:.3})]}],
   pages:[{id:'scene-1',name:'Opening',color:'#8bc9d0',cues:[{id:'entry-1',cue:'first-light',fade:3,follow:'manual'},{id:'entry-2',cue:'prism-dance',fade:2,follow:'auto'},{id:'entry-3',cue:'afterglow',fade:4,follow:'manual'}]}],
-  media:[],ledWall:{media:'salvation-title',brightness:.85,fit:'cover'},
+  media:[],ledWall:{media:'off',brightness:.85,fit:'cover'},
   settings:{source:'10.0.0.50',target:'10.0.0.1',port:6454,fps:30,mappings:{3:2,4:3,5:4}},stage:{width:19,depth:10,height:7,estimated:true,notes:'Approximate geometry traced from the stage photo. Fixture order for Rogue IDs is provisional; calibrate in the room.'}});
 }
 

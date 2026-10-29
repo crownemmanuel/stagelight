@@ -10,7 +10,7 @@ const press=async(e,slot)=>{await e.command('masters.trigger',{slot,down:true});
 
 test('a new show has 18 blank flash masters on A S D F G H J K L, with Highlight on Shift+H',()=>{
  const {e}=rig(),m=e.show.masters;assert.equal(m.slots.length,18);assert.deepEqual(m.slots.slice(0,9).map(s=>s.key),MASTER_KEYS);assert.ok(MASTER_KEYS.includes('h'));
- assert.ok(m.slots.every(s=>s.action==='flash'&&!s.cue&&s.fade===0));assert.ok(m.slots.slice(9).every(s=>!s.key));assert.deepEqual(m.desk,{highlight:'shift+h',clear:'c',blackout:'b'});
+ assert.ok(m.slots.every(s=>s.action==='flash'&&!s.cue&&s.fade===0));assert.ok(m.slots.slice(9).every(s=>!s.key));assert.deepEqual(m.desk,{highlight:'shift+h',clear:'c',blackout:'b',tap:'t'});
  const old=defaults();delete old.masters;delete old.scenes;validateShow(migrate(old));
 });
 

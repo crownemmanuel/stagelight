@@ -8,12 +8,13 @@ import {ICONS} from '../public/icons.js';
 import {outputRGB} from '../public/fixture-colors.js';
 import {hiddenFixtureIds} from '../public/visibility.js';
 import {OSC_ADDRESSES} from './osc-routes.mjs';
-import {COMMANDS,validate,validateShow,validateWheelAttributes} from './spec.mjs';
+import {COMMANDS,SHOW_EDITS,validate,validateShow,validateWheelAttributes} from './spec.mjs';
+import {Versions,LiveState} from './safety.mjs';
 import {render,compose,applyOverrides,finish,blend,blendState,encode,layerEffect,trackFixtures} from './render.mjs';
 import {Output,validateNetwork,checkConnection} from './output.mjs';
 const copy=x=>structuredClone(x);
 // Master slots and their keys (show.masters). A key is on one slot or one desk shortcut at most.
-const DESK_KEYS={highlight:'Highlight',clear:'Clear',blackout:'Blackout'};
+const DESK_KEYS={highlight:'Highlight',clear:'Clear',blackout:'Blackout',tap:'Tap tempo'};
 const keyName=k=>k.split('+').map(p=>p.length===1?p.toUpperCase():p[0].toUpperCase()+p.slice(1)).join('+');
 const masterSlot=(s,id)=>{const m=s.masters.slots.find(x=>x.id===id);if(!m)throw Error('Unknown master '+id);return m};
 const slotName=(s,m)=>`Master ${s.masters.slots.indexOf(m)+1}`+(m.cue?' · '+(m.label??s.cues.find(c=>c.id===m.cue)?.name??m.cue):'');
@@ -40,7 +41,10 @@ export class Engine{
  constructor({dataDir,output,clock=()=>performance.now()/1000}={}){
   this.dir=dataDir;this.clock=clock;this.logs=[];this.output=output??new Output(m=>this.log(m));this.show=defaults();const seed=new URL('../show-template.json',import.meta.url);if(fs.existsSync(seed)){this.show=migrate(JSON.parse(fs.readFileSync(seed,'utf8')));validateShow(this.show)}
   if(dataDir){fs.mkdirSync(dataDir,{recursive:true});const file=path.join(dataDir,'show.json');if(fs.existsSync(file)){const raw=JSON.parse(fs.readFileSync(file,'utf8')),added=!raw.pages;this.show=migrate(raw);validateShow(this.show);if(added)this.save()}else this.save();}
-  this.layers=[];this.highlight=false;this.scene=null;this.flashes=new Map();this.agents=new Map();this.net={in:[],out:[],count:{in:0,out:0,rejected:0},listener:{listening:false},presets:{}};this.looks=new Map();this.presetBursts=new Map();this.presetAsks=new Map();this.sendHook=null;this.onNetworkChange=null;this.selection={ids:[],group:'backlights',revision:0};this.lampCommands=new Map();this.revision=1;this.playback=null;this.overrides={};this.fx=[];this.master=.8;this.blackout=false;this.held=null;this.fading=null;this.transition=null;this.stack=null;this.release=null;this.programmed=null;this.raw=null;this.preview=null;this.previewFrames=null;this.blind=false;this.blindOverrides={};this.blindRelease=null;this.blindStates=null;this.fxPreview=null;this.requests=new Map();this.listeners=new Set();this.tickCount=0;this.dropped=0;this.lastTick=null;this.frames=render(this.show,null,0);this.log('Engine ready in preview. Physical output is disarmed.');
+  this.layers=[];this.highlight=false;this.scene=null;this.flashes=new Map();this.bumps=new Set();this.tempo={bpm:null,source:null,taps:[],anchor:null};this.levels=new Map();this.faderOwned=new Set();this.mods=null;this.soundHolds=new Map();this.agents=new Map();this.net={in:[],out:[],count:{in:0,out:0,rejected:0},listener:{listening:false},presets:{}};this.looks=new Map();this.presetBursts=new Map();this.presetAsks=new Map();this.sendHook=null;this.onNetworkChange=null;this.selection={ids:[],group:'backlights',revision:0};this.lampCommands=new Map();this.revision=1;this.playback=null;this.overrides={};this.fx=[];this.master=.8;this.blackout=false;this.held=null;this.fading=null;this.transition=null;this.stack=null;this.release=null;this.programmed=null;this.raw=null;this.preview=null;this.previewFrames=null;this.blind=false;this.blindOverrides={};this.blindRelease=null;this.blindStates=null;this.fxPreview=null;this.requests=new Map();this.listeners=new Set();this.tickCount=0;this.dropped=0;this.lastTick=null;this.frames=render(this.show,null,0);this.log('Engine ready in preview. Physical output is disarmed.');
+  // Show safety (docs/SHOW-SAFETY.md): the lock survives a restart; an unclean live-state file becomes an offer to resume.
+  this.versions=new Versions(dataDir,()=>this.clock());this.live=new LiveState(dataDir);const prev=this.live.read();this.locked=!!prev?.locked;
+  this.resume=prev&&!prev.clean&&(prev.armed||prev.scene||prev.stack)?prev:null;if(this.resume)this.log('The engine restarted unexpectedly during a show: offering to resume.');
  }
  save(){if(!this.dir)return;const f=path.join(this.dir,'show.json');fs.writeFileSync(f+'.tmp',JSON.stringify(this.show,null,2));fs.renameSync(f+'.tmp',f)}
  // Audit log is append-only and asynchronous so a GO never waits on the disk; rotates at ~2 MB.
@@ -49,13 +53,13 @@ export class Engine{
   if(!this.audit){this.auditBytes=fs.existsSync(f)?fs.statSync(f).size:0;this.audit=fs.createWriteStream(f,{flags:'a'});this.audit.on('error',()=>{this.audit=null})}
   if(this.auditBytes>2e6){const old=this.audit;this.audit=null;old.end(()=>{try{fs.renameSync(f,f+'.previous')}catch{}});this.auditBytes=0;this.audit=fs.createWriteStream(f,{flags:'a'});this.audit.on('error',()=>{this.audit=null})}
   this.auditBytes+=line.length;this.audit?.write(line)}
- elapsed(){if(!this.playback)return 0;return this.playback.paused?this.playback.offset:this.playback.offset+this.clock()-this.playback.started;}
+ elapsed(){return this.playback?this.sourceTime(this.playback,true):0}
  tick(){
   const now=this.clock();if(this.lastTick!==null&&now-this.lastTick>.1)this.dropped++;this.lastTick=now;this.tickCount++;
   this.follow();
-  this.layers=this.layers.filter(l=>{const c=l.cue,done=!c.loop&&!c.hold&&this.sourceTime(l,true)>=c.duration;if(done)this.log(`Cue complete underneath · ${c.name}`);return !done});
+  this.layers=this.layers.filter(l=>{const c=l.cue,done=!c.loop&&!c.hold&&this.sourceTime(l,true)>=c.duration;if(done){this.log(`Cue complete underneath · ${c.name}`);this.mods?.changed()}return !done});
   let t=this.elapsed();let cue=this.playback?.cue;
-  if(cue&&t>=cue.duration){if(cue.loop)t%=cue.duration;else if(cue.hold)t=cue.duration-1e-6;else{if(!this.scene)this.held=copy(this.frames).map(f=>({...f,intensity:0}));else if(!this.layers.length)this.toFloor(this.sceneFade(),copy(this.raw??this.frames));this.log(`Cue complete · ${cue.name}`+(this.layers.length?'; the cue underneath takes over':this.scene?`; back to scene ${this.scene.name}`:'; intensity zero, final positions held.'));this.playback=this.layers.pop()??null;if(!this.playback)this.stack=null;cue=this.playback?.cue??null;t=cue?this.sourceTime(this.playback):0}}
+  if(cue&&t>=cue.duration){if(cue.loop)t%=cue.duration;else if(cue.hold)t=cue.duration-1e-6;else{if(!this.scene)this.held=copy(this.frames).map(f=>({...f,intensity:0}));else if(!this.layers.length)this.toFloor(this.sceneFade(),copy(this.raw??this.frames));this.log(`Cue complete · ${cue.name}`+(this.layers.length?'; the cue underneath takes over':this.scene?`; back to scene ${this.scene.name}`:'; intensity zero, final positions held.'));this.playback=this.layers.pop()??null;if(!this.playback)this.stack=null;cue=this.playback?.cue??null;this.mods?.changed();t=cue?this.sourceTime(this.playback):0}}
   let base=cue?this.composite(this.playback,this.layers):this.held?copy(this.held):this.floor();
   if(this.transition){const tr=this.transition,k=Math.min(1,(now-tr.start)/Math.max(.001,tr.duration));base=blend(tr.from.cue?this.composite(tr.from,tr.from.layers??[]):tr.from.frames,base,k);if(k>=1)this.transition=null}
   this.raw=base;let states=this.applyFx(applyOverrides(this.show,base,this.overrides),this.fx,now);
@@ -76,23 +80,42 @@ export class Engine{
   this.watchLooks();
   for(const f of this.listeners)f();
  }
- sourceTime(p,raw=false){const cue=p.cue,t=p.paused?p.offset:p.offset+this.clock()-p.started;return raw?t:cue.loop?t%cue.duration:Math.min(t,cue.duration-1e-6)}
+ sourceTime(p,raw=false){const cue=p.cue,t=p.paused?p.offset:p.offset+(this.clock()-p.started)*(p.rate??1);return raw?t:cue.loop?t%cue.duration:Math.min(t,cue.duration-1e-6)}
+ // Restart a running cue's clock where it is now, so a pause, a seek or a tempo change never makes it jump.
+ rebase(r){r.offset=this.sourceTime(r,true);r.started=this.clock()}
+ // Tap tempo (docs/MIDI-AND-SOUND.md): a cue with a bpm plays at live tempo / its bpm, so its tracks, effect speeds,
+ // loops and auto-follow waits all scale together. Crossfades stay in real seconds.
+ rateFor(cue){const b=cue.bpm,t=this.tempo.bpm;return b&&t?t/b:1}
+ setTempo(bpm,source){
+  for(const r of this.running())this.rebase(r);this.tempo.bpm=bpm?Math.round(Math.max(20,Math.min(400,bpm))*100)/100:null;this.tempo.source=this.tempo.bpm?source:null;
+  if(!this.tempo.bpm)this.tempo.taps=[];for(const r of this.running())r.rate=this.rateFor(r.cue);
+ }
+ tempoBase(){return this.tempo.bpm??this.playback?.cue.bpm??this.running().find(r=>r.cue.bpm)?.cue.bpm??120}
+ tapTempo(){
+  const now=this.clock(),t=this.tempo;if(t.taps.length&&now-t.taps.at(-1)>2)t.taps=[];t.taps.push(now);if(t.taps.length>5)t.taps.shift();t.anchor=now;
+  if(t.taps.length>=2)this.setTempo(60*(t.taps.length-1)/(t.taps.at(-1)-t.taps[0]),'tap');
+ }
+ tempoStatus(){const t=this.tempo,top=this.playback;return {bpm:t.bpm,source:t.source,cue:top?.cue.bpm??null,rate:top?+(top.rate??1).toFixed(4):1,anchorAgo:t.anchor===null?null:+(this.clock()-t.anchor).toFixed(3)}}
  // Running cues (docs/CUE-PLAYBACK.md): the newest cue is this.playback; earlier cues keep running underneath in this.layers.
  // A fixture follows the newest running cue that uses it (its look entries or track groups). A cue whose fixtures are all
  // taken by newer cues has nothing left to show and retires, so stepping through full-look cues behaves as before.
  controls(cue){return new Set([...(cue.look??[]).map(e=>e.id),...cue.tracks.flatMap(tr=>trackFixtures(this.show,tr))])}
  composite(top,layers){
-  const states=compose(this.show,top.cue,this.sourceTime(top)),floor=this.scene&&this.floor();if(!layers.length&&!floor)return states;
+  const states=compose(this.show,top.cue,this.sourceTime(top)),floor=this.scene&&this.floor(),dim=r=>!r.master||!this.levels.size||this.flashes.get(r.master)===r.cue.id||this.bumps.has(r.master)?1:this.levels.get(r.master)??1;
+  if(!layers.length&&!floor&&dim(top)===1)return states;
   const taken=new Set(top.controls??this.controls(top.cue)),index=new Map(states.map((st,i)=>[st.id,i]));
+  // A master's fader level scales only the fixtures its own cue shows.
+  const topLevel=dim(top);if(topLevel<1)for(const id of taken){const i=index.get(id);if(i!==undefined)states[i]={...states[i],intensity:states[i].intensity*topLevel}}
   for(let i=layers.length-1;i>=0;i--){const l=layers[i],ids=[...(l.controls??this.controls(l.cue))].filter(id=>!taken.has(id)&&index.has(id));if(!ids.length)continue;
-   const own=new Map(compose(this.show,l.cue,this.sourceTime(l)).map(st=>[st.id,st]));for(const id of ids){states[index.get(id)]=own.get(id);taken.add(id)}}
+   const own=new Map(compose(this.show,l.cue,this.sourceTime(l)).map(st=>[st.id,st])),k=dim(l);for(const id of ids){const st=own.get(id);states[index.get(id)]=k<1?{...st,intensity:st.intensity*k}:st;taken.add(id)}}
   // Fixtures no running cue uses show the active scene instead of resting dark.
   if(floor)for(const st of floor)if(!taken.has(st.id)&&index.has(st.id))states[index.get(st.id)]=st;
   return states;
  }
  pruneLayers(){
   const taken=new Set(this.playback?.controls??[]),keep=[];
-  for(let i=this.layers.length-1;i>=0;i--){const l=this.layers[i],own=[...l.controls].some(id=>!taken.has(id));if(own&&keep.length<7)keep.unshift(l);else this.log(`Cue retired · ${l.cue.name} (every fixture taken by newer cues)`);for(const id of l.controls)taken.add(id)}
+  // A cue held by a master (its key or fader) is never retired by being covered: it stays underneath, ready to show again.
+  for(let i=this.layers.length-1;i>=0;i--){const l=this.layers[i],own=!!l.master||[...l.controls].some(id=>!taken.has(id));if(own&&keep.length<7)keep.unshift(l);else this.log(`Cue retired · ${l.cue.name} (every fixture taken by newer cues)`);for(const id of l.controls)taken.add(id)}
   this.layers=keep;
  }
  running(){return [...this.layers,this.playback].filter(Boolean)}
@@ -133,20 +156,40 @@ export class Engine{
   if(!slot.cue){if(down)throw Error(`Master ${slots.indexOf(slot)+1} has no cue`);return}
   const cue=this.show.cues.find(c=>c.id===slot.cue),run=this.running().find(l=>l.cue.id===slot.cue),fade=slot.fade??0;
   const start=(keep=false)=>{this.startCue(cue,{fade,keep});this.playback.master=slot.id};
-  if(!down){if(slot.action==='flash'&&this.flashes.get(slot.id)===slot.cue){this.flashes.delete(slot.id);if(run)this.releaseCue(run,fade)}return}
-  if(slot.action==='flash'){if(!run){start(true);this.flashes.set(slot.id,cue.id)}}
+  if(slot.midi)this.mods?.midi?.note(slot.midi,down);
+  if(!down){if(slot.action==='flash'&&this.flashes.get(slot.id)===slot.cue){this.flashes.delete(slot.id);if(run)this.releaseCue(run,fade)}else this.bumps.delete(slot.id);return}
+  // A held flash is the master at full and on top, whatever its fader says (like a Hog flash button). Over its own
+  // cue that is already running (its fader started it) it bumps it to full and to the top until let go.
+  if(slot.action==='flash'){if(!run){start(true);this.flashes.set(slot.id,cue.id)}else if(run.master===slot.id){this.bumps.add(slot.id);this.bringToTop(run)}}
   else if(slot.action==='toggle'){if(run)this.releaseCue(run,fade);else start()}
   else if(slot.action==='go')start();
-  else if(slot.action==='pause'){if(run){run.offset=this.sourceTime(run,true);run.started=this.clock();run.paused=!run.paused;this.log(`${run.paused?'Paused':'Resumed'} · ${run.cue.name}`)}}
+  else if(slot.action==='pause'){if(run){this.rebase(run);run.paused=!run.paused;this.log(`${run.paused?'Paused':'Resumed'} · ${run.cue.name}`)}}
   else if(slot.action==='release'&&run)this.releaseCue(run,fade);
  }
- mastersStatus(){const running=new Set(this.running().map(l=>l.cue.id));return {held:[...this.flashes].filter(([,cue])=>running.has(cue)).map(([slot])=>slot)}}
+ // Put a running cue on top without restarting it, so it wins every fixture it uses.
+ bringToTop(run){if(run===this.playback)return;this.layers=this.layers.filter(l=>l!==run);if(this.playback)this.layers.push(this.playback);this.playback=run}
+ mastersStatus(){const running=new Set(this.running().map(l=>l.cue.id));return {held:[...[...this.flashes].filter(([,cue])=>running.has(cue)).map(([slot])=>slot),...this.bumps],levels:Object.fromEntries(this.levels)}}
+ // A master's level (its fader) scales the cue that master started. Like a Hog fader, raising it from zero starts the
+ // cue and bringing it back to zero releases it, but only if the fader started it.
+ masterLevel(id,level,go=true){
+  const slot=this.show.masters.slots.find(x=>x.id===id);if(!slot)throw Error('Unknown master '+id);
+  if(level>=1)this.levels.delete(id);else this.levels.set(id,level);if(!go||!slot.cue)return;
+  const run=this.running().find(l=>l.cue.id===slot.cue);
+  if(level>0&&!run){this.startCue(this.show.cues.find(c=>c.id===slot.cue),{fade:slot.fade??0});this.playback.master=slot.id;this.faderOwned.add(id)}
+  else if(level===0&&run&&this.faderOwned.has(id)){this.faderOwned.delete(id);this.releaseCue(run,slot.fade??0)}
+ }
+ // A sound hit (sound module) presses the master and lets go after its hold; another hit during the hold extends it.
+ soundHit(id){
+  const slot=this.show.masters.slots.find(x=>x.id===id);if(!slot?.cue)return;const hold=slot.sound?.holdMs??80,held=this.soundHolds.get(id);
+  if(held)clearTimeout(held);else this.masterTrigger(id,true);
+  const timer=setTimeout(()=>{this.soundHolds.delete(id);try{this.masterTrigger(id,false);this.tick();this.mods?.changed()}catch(e){this.log('Sound trigger: '+e.message)}},hold);timer.unref?.();this.soundHolds.set(id,timer);
+ }
  // Start a cue, crossfading from whatever is showing. Outgoing cues keep running during the fade. A flash (keep) is
  // temporary, so it never retires the cues it covers: letting go shows them again.
  startCue(cue,{fade=0,keep=false}={}){
   if(fade>0)this.transition={start:this.clock(),duration:fade,from:this.playback?{...this.playback,layers:[...this.layers]}:{frames:copy(this.raw??this.frames)}};else this.transition=null;
   const c=copy(cue);if(this.playback&&this.playback.cue.id!==cue.id)this.layers.push(this.playback);this.layers=this.layers.filter(l=>l.cue.id!==cue.id);
-  this.playback={cue:c,started:this.clock(),offset:0,paused:false,controls:this.controls(c)};if(keep)this.layers=this.layers.slice(-7);else this.pruneLayers();this.held=null;this.fading=null;
+  this.playback={cue:c,started:this.clock(),offset:0,paused:false,rate:this.rateFor(c),controls:this.controls(c)};if(keep)this.layers=this.layers.slice(-7);else this.pruneLayers();this.held=null;this.fading=null;
  }
  // Preview playback: same renderer as live, master applied, no overrides or blackout, never encoded.
  // Blind adds its own programmer buffer on top: over the preview cue, or over the live look when nothing is previewed.
@@ -182,13 +225,14 @@ export class Engine{
  goEntry(page,index,fade){
   const entry=page.cues[index],cue=this.show.cues.find(c=>c.id===entry.cue);if(!cue)throw Error('Unknown cue '+entry.cue);
   this.startCue(cue,{fade:fade??entry.fade});this.playback.page=page.id;this.playback.entry=entry.id;this.stack={page:page.id,entry:entry.id,index};
-  this.fireSends(page,entry,index,cue,fade??entry.fade);
+  this.fireSends(page,entry,index,cue,fade??entry.fade);this.live.schedule(()=>this.liveSnapshot());
  }
  // Every GO (UI, MCP, OSC, auto-follow) tells announce targets and runs the entry's sends. Never blocks: the server's sendHook is async.
  // Preset sends go before the look; a target gets one look per GO (explicit look send, or its look mode cue/change).
  fireSends(page,entry,index,cue,fade=entry.fade){
+  for(const x of entry.send??[])if(x.message==='midi'){if(this.mods?.midi)this.mods.midi.note(x,true,200);else this.log('MIDI send skipped: the MIDI module is off')}
   const targets=this.show.targets.filter(t=>t.enabled!==false);if(!targets.length)return;
-  const info=this.cueInfo(page,entry,index,cue),sends=(entry.send??[]).map(x=>({x,t:targets.find(t=>t.id===x.target)})).filter(s=>s.t),looked=new Set();
+  const info=this.cueInfo(page,entry,index,cue),sends=(entry.send??[]).filter(x=>x.message!=='midi').map(x=>({x,t:targets.find(t=>t.id===x.target)})).filter(s=>s.t),looked=new Set();
   for(const t of targets.filter(t=>t.announce))this.emitCue(t,info,'announce');
   for(const {x,t} of sends.filter(s=>s.x.message==='preset'))this.emitPreset(t,x,info);
   for(const {x,t} of sends){
@@ -325,7 +369,7 @@ export class Engine{
   this.goEntry(page,i+1);this.log(`Auto-follow · ${page.name} → ${page.cues[i+1].label??page.cues[i+1].cue}`);
   // The next entry starts when the wait ran out, not on the tick that noticed, so a chain of auto entries stays on the
   // show clock (beat-locked to a song) instead of each adding up to a frame of lag. Longer stalls are not caught up.
-  if(late<.5){this.playback.started-=late;if(this.transition)this.transition.start-=late}
+  if(late<.5){this.playback.started-=late/(this.playback.rate??1);if(this.transition)this.transition.start-=late/(run.rate??1)}
  }
  stackStatus(){
   const page=this.activePage();if(!page)return null;const i=this.stackIndex(page),entry=page.cues[i],next=page.cues[i+1];
@@ -344,9 +388,9 @@ export class Engine{
  }
  // Agents count as connected while their MCP server keeps saying hello (every 10 s).
  connectedAgents(){const now=this.clock();for(const [k,a] of this.agents)if(now-a.lastSeen>30)this.agents.delete(k);return [...this.agents.values()].map(a=>({client:a.client,version:a.version,connectedFor:Math.round(now-a.connectedAt)}))}
- runtime(){return {agents:this.connectedAgents(),selection:copy(this.selection),lampCommands:Object.fromEntries([...this.lampCommands].map(([id,p])=>[id,{action:p.action,remaining:Math.max(0,p.until-this.clock())}])),revision:this.revision,running:this.runningStatus(),highlight:this.highlight,scene:this.scene?{id:this.scene.id,name:this.scene.name}:null,masters:this.mastersStatus(),playback:this.playback?{id:this.playback.cue.id,name:this.playback.cue.name,duration:this.playback.cue.duration,loop:this.playback.cue.loop,hold:!!this.playback.cue.hold,paused:this.playback.paused,elapsed:Math.min(this.elapsed()% (this.playback.cue.loop?this.playback.cue.duration:Infinity),this.playback.cue.duration)}:null,stack:this.stackStatus(),net:{in:this.net.count.in,out:this.net.count.out,rejected:this.net.count.rejected,listening:!!this.net.listener.listening,last:this.net.in[0]?.address??null},preview:this.previewStatus(),fx:this.fx.map(x=>this.fxSummary(x)),fxPreview:this.fxSummary(this.fxPreview),blind:{enabled:this.blind,fixtures:Object.keys(this.blindOverrides),overrides:this.blindOverrides,release:this.blindRelease?{fixtures:Object.keys(this.blindRelease.frames),progress:Math.min(1,(this.clock()-this.blindRelease.start)/Math.max(.001,this.blindRelease.duration))}:null},previewFrames:this.previewFrames,transition:this.transition?{from:this.transition.from.cue?.id??null,duration:this.transition.duration,progress:Math.min(1,(this.clock()-this.transition.start)/Math.max(.001,this.transition.duration))}:null,release:this.release?{fixtures:Object.keys(this.release.frames),progress:Math.min(1,(this.clock()-this.release.start)/Math.max(.001,this.release.duration))}:null,master:this.master,blackout:this.blackout,overrides:this.overrides,frames:this.frames,output:this.output.status(),tickCount:this.tickCount,slowFrames:this.dropped,logs:this.logs.slice(-15)}}
+ runtime(){return {agents:this.connectedAgents(),selection:copy(this.selection),lampCommands:Object.fromEntries([...this.lampCommands].map(([id,p])=>[id,{action:p.action,remaining:Math.max(0,p.until-this.clock())}])),revision:this.revision,running:this.runningStatus(),highlight:this.highlight,tempo:this.tempoStatus(),locked:this.locked,resume:this.resumeStatus(),...(this.mods?.live()??{}),scene:this.scene?{id:this.scene.id,name:this.scene.name}:null,masters:this.mastersStatus(),playback:this.playback?{id:this.playback.cue.id,name:this.playback.cue.name,duration:this.playback.cue.duration,loop:this.playback.cue.loop,hold:!!this.playback.cue.hold,paused:this.playback.paused,elapsed:Math.min(this.elapsed()% (this.playback.cue.loop?this.playback.cue.duration:Infinity),this.playback.cue.duration)}:null,stack:this.stackStatus(),net:{in:this.net.count.in,out:this.net.count.out,rejected:this.net.count.rejected,listening:!!this.net.listener.listening,last:this.net.in[0]?.address??null},preview:this.previewStatus(),fx:this.fx.map(x=>this.fxSummary(x)),fxPreview:this.fxSummary(this.fxPreview),blind:{enabled:this.blind,fixtures:Object.keys(this.blindOverrides),overrides:this.blindOverrides,release:this.blindRelease?{fixtures:Object.keys(this.blindRelease.frames),progress:Math.min(1,(this.clock()-this.blindRelease.start)/Math.max(.001,this.blindRelease.duration))}:null},previewFrames:this.previewFrames,transition:this.transition?{from:this.transition.from.cue?.id??null,duration:this.transition.duration,progress:Math.min(1,(this.clock()-this.transition.start)/Math.max(.001,this.transition.duration))}:null,release:this.release?{fixtures:Object.keys(this.release.frames),progress:Math.min(1,(this.clock()-this.release.start)/Math.max(.001,this.release.duration))}:null,master:this.master,blackout:this.blackout,overrides:this.overrides,frames:this.frames,output:this.output.status(),tickCount:this.tickCount,slowFrames:this.dropped,logs:this.logs.slice(-15)}}
  snapshot(){return {show:copy(this.show),runtime:this.runtime()}}
- update(fn){const next=copy(this.show);fn(next);validateShow(next);this.show=next;this.revision++;this.save()}
+ update(fn){const next=copy(this.show);fn(next);validateShow(next);this.show=next;this.revision++;this.save();this.versions.edited(this.show)}
  appendEntry(s,pageId,cue,fade=2,after){const page=s.pages.find(p=>p.id===pageId);if(!page)throw Error('Unknown page');const id=shortId('entry'),at=after?page.cues.findIndex(e=>e.id===after):-1;page.cues.splice(at<0?page.cues.length:at+1,0,{id,cue,fade,follow:'manual'});return id}
  // What is seen right now (blind view while blind), with master removed, as look entries. Highlight is never recorded.
  snapshotLook(){const seen=this.blind?this.previewFrames:this.highlight&&this.programmed?finish(this.show,this.programmed,this.master,this.blackout):this.frames;return seen.filter(f=>this.show.fixtures.some(x=>x.id===f.id&&x.enabled)).map(({id,...values})=>({id,values:{...values,intensity:this.master>0?Math.min(1,values.intensity/this.master):0,color:'#'+values.color.map(v=>Math.round(v*255).toString(16).padStart(2,'0')).join('')}}))}
@@ -375,10 +419,15 @@ export class Engine{
  fxSummary(fx){return fx&&{id:fx.id,name:fx.name,preset:fx.preset,effect:fx.effect,layer:fx.layer,fixtures:fx.fixtures,params:fx.params}}
  upsert(list,item){const i=list.findIndex(x=>x.id===item.id);if(i<0)list.push(copy(item));else list[i]=copy(item)}
  ensureIds(ids){for(const id of ids)if(!this.show.fixtures.some(f=>f.id===id))throw Error('Unknown fixture '+id)}
- async disarm(){this.lampCommands.clear();this.scene=null;this.flashes.clear();const dark=copy(this.frames).map(f=>({...f,intensity:0}));this.playback=null;this.layers=[];this.overrides={};this.fx=[];this.fading=null;this.transition=null;this.release=null;this.stack=null;this.held=copy(dark);this.frames=copy(dark);if(this.output.armed){for(let i=0;i<5;i++){this.output.send(encode(this.show,dark,{physical:true}));await new Promise(r=>setTimeout(r,34))}this.output.close();}this.playback=null;this.overrides={};this.fx=[];this.fading=null;this.held=copy(this.frames).map(f=>({...f,intensity:0}));this.frames=copy(this.held);this.log('Physical output stopped. Hog channel handback remains manual.')}
+ async disarm(){this.lampCommands.clear();this.scene=null;this.flashes.clear();this.bumps.clear();const dark=copy(this.frames).map(f=>({...f,intensity:0}));this.playback=null;this.layers=[];this.overrides={};this.fx=[];this.fading=null;this.transition=null;this.release=null;this.stack=null;this.held=copy(dark);this.frames=copy(dark);if(this.output.armed){for(let i=0;i<5;i++){this.output.send(encode(this.show,dark,{physical:true}));await new Promise(r=>setTimeout(r,34))}this.output.close();}this.playback=null;this.overrides={};this.fx=[];this.fading=null;this.held=copy(this.frames).map(f=>({...f,intensity:0}));this.frames=copy(this.held);this.log('Physical output stopped. Hog channel handback remains manual.')}
  // lean: skip building the full runtime in the reply (show-control triggers do not need it).
  async command(name,args={},{lean=false}={}){
   if(!Object.hasOwn(COMMANDS,name))throw Error('Unknown command '+name);const def=COMMANDS[name];validate(def.schema,args);
+  // Sound trigger tuning (channel, band, sensitivity, hold, gap) is a live adjustment like a fader, so it stays open.
+  const soundTuning=name==='masters.assign'&&Object.keys(args).every(k=>['slot','sound','clearSound'].includes(k));
+  if(this.locked&&SHOW_EDITS.has(name)&&!soundTuning)throw Error('The performance lock is on: unlock it to change the show.');
+  if(name==='show.versions')return {versions:this.versions.list()};if(name==='show.check')return this.showCheck(args);if(name==='modules.status')return this.modulesStatus();
+  if(['sound.status','midi.status'].includes(name)){const m=this.mods?.[name.split('.')[0]];if(!m)throw Error(this.moduleOff(name.split('.')[0]));return m.status()}
   if(name==='agent.hello'){const known=this.agents.get(args.session);this.agents.set(args.session,{session:args.session,client:args.client,version:args.version??'',connectedAt:known?.connectedAt??this.clock(),lastSeen:this.clock()});if(!known)this.log(`Agent connected · ${args.client}${args.version?' '+args.version:''}`);return {ok:true}}
   if(name==='status')return this.snapshot();if(name==='visualizer.status')return this.visualizerStatus();if(name==='patch.report')return this.patchReport();if(name==='network.status')return this.networkStatus();if(name==='look.report')return this.lookReport(args);
   if(name==='output.status')return this.outputStatus();if(name==='output.check'){const c={...this.show.settings,...Object.fromEntries(Object.entries(args).filter(([,v])=>v))};this.lastCheck=await(this.output.check?this.output.check(c):checkConnection(c));this.log(`Connection check · ${c.target} · ${this.lastCheck.ok?'all good':this.lastCheck.steps.filter(x=>!x.ok).map(x=>x.id).join(', ')+' failed'}`);return this.lastCheck}
@@ -406,11 +455,11 @@ export class Engine{
     const cue=this.show.cues.find(c=>c.id===args.id);if(!cue)throw Error('Unknown cue');
     this.overrides={};this.fx=[];this.release=null;this.stack=null;this.startCue(cue,{fade:args.fade??0});
     if(args.requestId){this.requests.set(args.requestId,this.clock());if(this.requests.size>1000)this.requests.delete(this.requests.keys().next().value)}break;}
-   case 'cue.pause':{const r=args.id===undefined?this.playback:this.runningCue(args.id);if(r&&r.paused!==args.paused){r.offset=this.sourceTime(r,true);r.started=this.clock();r.paused=args.paused;this.log(`${args.paused?'Paused':'Resumed'} · ${r.cue.name}`)}break}
+   case 'cue.pause':{const r=args.id===undefined?this.playback:this.runningCue(args.id);if(r&&r.paused!==args.paused){this.rebase(r);r.paused=args.paused;this.log(`${args.paused?'Paused':'Resumed'} · ${r.cue.name}`)}break}
    case 'cue.release':this.releaseCue(this.runningCue(args.id),args.fade??1.5);break;
    case 'highlight.set':this.highlight=args.enabled;this.log(`Highlight ${args.enabled?'on':'off'}`);break;
    case 'cue.seek':if(this.playback){this.playback.offset=Math.min(args.seconds,this.playback.cue.duration);this.playback.started=this.clock()}break;
-   case 'cue.stop':{const lit=copy(this.programmed??this.raw??this.frames);this.playback=null;this.layers=[];this.overrides={};this.fx=[];this.transition=null;this.release=null;this.stack=null;this.flashes.clear();
+   case 'cue.stop':{const lit=copy(this.programmed??this.raw??this.frames);this.playback=null;this.layers=[];this.overrides={};this.fx=[];this.transition=null;this.release=null;this.stack=null;this.flashes.clear();this.bumps.clear();
     if(this.scene)this.toFloor(args.fade??1.5,lit);else this.fading={start:this.clock(),duration:args.fade??1.5,frames:copy(this.frames)};break}
    case 'scene.capture':{const old=this.show.scenes.find(x=>x.id===args.id),color=args.color??old?.color,look=this.snapshotLook();this.update(s=>this.upsert(s.scenes,{id:args.id,name:args.name,...(color?{color}:{}),look}));created={scene:args.id};break}
    case 'scene.save':this.update(s=>this.upsert(s.scenes,args.scene));break;
@@ -420,8 +469,30 @@ export class Engine{
    case 'scene.release':this.dropScene(args.fade??this.sceneFade());break;
    case 'masters.trigger':this.masterTrigger(args.slot,args.down);break;
    case 'masters.assign':{if(args.cue&&!this.show.cues.some(c=>c.id===args.cue))throw Error('Unknown cue '+args.cue);
-    this.update(s=>{const m=masterSlot(s,args.slot);if(args.clear){delete m.cue;delete m.label}if(args.cue)m.cue=args.cue;if(args.action)m.action=args.action;if(args.fade!==undefined)m.fade=args.fade;if(args.label!==undefined){if(args.label)m.label=args.label;else delete m.label}});
-    if(args.clear||args.cue)this.flashes.delete(args.slot);break}
+    this.update(s=>{const m=masterSlot(s,args.slot);if(args.clear){delete m.cue;delete m.label}if(args.cue)m.cue=args.cue;if(args.action)m.action=args.action;if(args.fade!==undefined)m.fade=args.fade;if(args.label!==undefined){if(args.label)m.label=args.label;else delete m.label}
+     if(args.color)m.color=args.color;if(args.sound)m.sound=args.sound;if(args.clearSound)delete m.sound;if(args.midi)m.midi=args.midi;if(args.clearMidi)delete m.midi});
+    if(args.clear||args.cue)this.flashes.delete(args.slot);if(args.sound||args.clearSound||args.clear)await this.mods?.sound?.configure();break}
+   case 'masters.level':this.masterLevel(args.slot,args.level,args.go??true);break;
+   case 'masters.sound':{const m=this.show.masters.slots.find(x=>x.id===args.slot);if(!m)throw Error('Unknown master '+args.slot);if(!m.sound)throw Error(`Master ${this.show.masters.slots.indexOf(m)+1} has no sound trigger: give it one in its editor first`);
+    const on=args.enabled??m.sound.enabled===false;this.update(s=>{masterSlot(s,args.slot).sound.enabled=on});if(!on&&this.soundHolds.has(args.slot)){clearTimeout(this.soundHolds.get(args.slot));this.soundHolds.delete(args.slot);this.masterTrigger(args.slot,false)}
+    this.mods?.sound?.configure();this.log(`Master ${this.show.masters.slots.indexOf(m)+1} sound trigger ${on?'on':'off'}`);created={slot:args.slot,sound:on};break}
+   case 'tempo.tap':this.tapTempo();break;
+   case 'tempo.set':this.setTempo(args.bpm??null,'set');break;
+   case 'tempo.scale':this.setTempo(this.tempoBase()*args.factor,this.tempo.source??'set');break;
+   case 'tempo.nudge':this.setTempo(this.tempoBase()+args.delta,this.tempo.source??'set');break;
+   case 'performance.lock':if(args.enabled&&!this.locked)this.versions.snapshot(this.show,'performance-lock');this.locked=args.enabled;this.log(`Performance lock ${args.enabled?'on':'off'}`);break;
+   case 'show.restore':{if(this.output.armed)throw Error('Disarm output before restoring a show version.');const next=migrate(this.versions.read(args.id));next.settings=copy(this.show.settings);validateShow(next);
+    this.versions.snapshot(this.show,'before-restore');this.resetLive();this.update(s=>{for(const k of Object.keys(s))delete s[k];Object.assign(s,next)});this.log('Show restored from version '+args.id);break}
+   case 'resume.apply':{const r=this.resume;if(!r)throw Error('Nothing to resume');if(r.armed&&args.confirmation!=='ENABLE_PHYSICAL_OUTPUT')throw Error('Resuming re-arms output: pass confirmation ENABLE_PHYSICAL_OUTPUT');this.resume=null;
+    if(r.tempo)this.setTempo(r.tempo,'resume');if(typeof r.master==='number')this.master=r.master;if(r.armed&&!this.output.armed)await this.output.arm(this.show.settings);
+    const sc=r.scene&&this.show.scenes.find(s=>s.id===r.scene);if(sc)this.scene={id:sc.id,name:sc.name,rev:-1};
+    const pg=r.stack&&this.show.pages.find(p=>p.id===r.stack.page),i=pg?pg.cues.findIndex(e=>e.id===r.stack.entry):-1;if(i>=0)this.goEntry(pg,i,0);
+    this.log('Resumed after an unexpected restart'+(sc?' · scene '+sc.name:'')+(i>=0?` · ${pg.name} cue ${i+1}`:''));break}
+   case 'resume.dismiss':this.resume=null;this.live.write(this.liveSnapshot());break;
+   case 'modules.set':this.update(s=>{const m=s.settings.modules??={};if(args.sound)m.sound={...m.sound,...args.sound};if(args.midi)m.midi={...m.midi,...args.midi}});await this.syncModules();break;
+   case 'sound.meter':case 'sound.test':case 'midi.test':case 'controller.test':{const which=name.startsWith('sound')?'sound':'midi',mod=this.mods?.[which];if(!mod)throw Error(this.moduleOff(which));created=await mod.command(name,args);break}
+   case 'controller.save':this.update(s=>{const list=s.controllers??=[],c=list.find(x=>x.id===args.id);if(c){Object.assign(c.map,args.map);if(args.name)c.name=args.name}else list.push({id:args.id,model:args.model??'apc40mk2',...(args.name?{name:args.name}:{}),map:args.map})});this.mods?.changed(true);break;
+   case 'controller.reset':this.update(s=>{s.controllers=(s.controllers??[]).filter(c=>c.id!==args.id)});this.mods?.changed(true);break;
    case 'masters.key':{if(!args.clear&&!args.key)throw Error('Give a key, or clear:true');this.update(s=>setMasterKey(s,args.slot,args.clear?null:args.key,args.conflict));break}
    case 'masters.save':this.update(s=>{if(args.slots)s.masters.slots=args.slots;if(args.desk)s.masters.desk=args.desk});for(const id of [...this.flashes.keys()])if(!this.show.masters.slots.some(m=>m.id===id&&m.cue===this.flashes.get(id)))this.flashes.delete(id);break;
    case 'effect.preview':{
@@ -467,7 +538,7 @@ export class Engine{
    case 'show.import':{
     if(!args.show||typeof args.show!=='object')throw Error('Invalid show');
     const next=migrate(copy(args.show));next.settings=copy(this.show.settings);validateShow(next);
-    if(this.dir)fs.writeFileSync(path.join(this.dir,'show-before-import-'+Date.now()+'.json'),JSON.stringify(this.show,null,2));
+    if(this.dir)fs.writeFileSync(path.join(this.dir,'show-before-import-'+Date.now()+'.json'),JSON.stringify(this.show,null,2));this.versions.snapshot(this.show,'before-import');
     this.selection={ids:[],group:'all',revision:this.selection.revision+1};this.preview=null;this.blind=false;this.blindOverrides={};this.playback=null;this.layers=[];this.overrides={};this.fx=[];this.held=null;this.fading=null;this.transition=null;this.release=null;this.stack=null;this.blackout=false;this.update(s=>{for(const k of Object.keys(s))delete s[k];Object.assign(s,next)});break;
    }
    case 'fixture.patch':this.update(s=>this.upsert(s.fixtures,args.fixture));break;
@@ -590,8 +661,35 @@ export class Engine{
    case 'output.arm':if(this.scene)throw Error('Release the scene before arming.');if(this.playback||this.layers.length||Object.keys(this.overrides).length||this.fx.length||this.fading||this.transition||this.release)throw Error('Stop preview and clear overrides before arming.');await this.output.arm(this.show.settings);break;
    case 'output.disarm':await this.disarm();break;
   }
-  this.log(`${name}${args.id?' · '+args.id:''}${args.slot?' · '+args.slot:''}${args.cue?.name?' · '+args.cue.name:''}${args.page?.name?' · '+args.page.name:''}`);this.tick();return {ok:true,...(created?{created}:{}),...(lean?{}:{runtime:this.runtime()})};
+  this.log(`${name}${args.id?' · '+args.id:''}${args.slot?' · '+args.slot:''}${args.cue?.name?' · '+args.cue.name:''}${args.page?.name?' · '+args.page.name:''}`);this.tick();this.live.schedule(()=>this.liveSnapshot());this.mods?.changed();return {ok:true,...(created?{created}:{}),...(lean?{}:{runtime:this.runtime()})};
  }
- start(){this.timer=setInterval(()=>{try{this.tick()}catch(e){this.log('Engine error: '+e.message);this.output.close()}},1000/30)}
- async close(){clearInterval(this.timer);await this.disarm();const audit=this.audit;this.audit=null;await new Promise(r=>audit?audit.end(r):r())}
+// Modules (docs/MIDI-AND-SOUND.md) are imported only while one is on; when none is, nothing of them exists.
+ async syncModules(){
+  const m=this.show.settings.modules??{},on=!!(m.sound?.enabled||m.midi?.enabled);
+  if(on&&!this.mods){const {Modules}=await import('./modules/index.mjs');this.mods=new Modules(this)}
+  if(this.mods){if(on)await this.mods.apply(m);else{await this.mods.close();this.mods=null;this.log('Modules off')}}
+ }
+ moduleOff(name){return `The ${name==='sound'?'sound':'MIDI'} module is off: turn it on with modules.set {${name}:{enabled:true}}.`}
+ modulesStatus(){const m=this.show.settings.modules??{};return {sound:{enabled:!!m.sound?.enabled,device:m.sound?.device??null,...(this.mods?.sound?.summary()??{})},midi:{enabled:!!m.midi?.enabled,virtualPort:m.midi?.virtualPort!==false,...(this.mods?.midi?.summary()??{})},helper:this.mods?.io?.summary()??{running:false}}}
+ liveSnapshot(){const st=this.stack;return {clean:false,at:new Date().toISOString(),armed:!!this.output.armed,scene:this.scene?.id??null,stack:st?{page:st.page,entry:st.entry}:null,master:this.master,tempo:this.tempo.bpm,locked:this.locked}}
+ resumeStatus(){const r=this.resume;if(!r)return null;const pg=r.stack&&this.show.pages.find(p=>p.id===r.stack.page),i=pg?pg.cues.findIndex(e=>e.id===r.stack.entry):-1,e=i>=0?pg.cues[i]:null;
+  return {at:r.at,armed:!!r.armed,scene:this.show.scenes.find(s=>s.id===r.scene)?.name??null,page:pg?.name??null,cue:e?{number:i+1,name:e.label??this.show.cues.find(c=>c.id===e.cue)?.name??e.cue}:null,master:r.master,tempo:r.tempo??null}}
+ resetLive(){this.selection={ids:[],group:'all',revision:this.selection.revision+1};this.preview=null;this.blind=false;this.blindOverrides={};this.playback=null;this.layers=[];this.overrides={};this.fx=[];this.held=null;this.fading=null;this.transition=null;this.release=null;this.stack=null;this.blackout=false;this.scene=null;this.flashes.clear();this.bumps.clear();this.levels.clear();this.faderOwned.clear()}
+ // Pre-show check: one list of what to look at before doors. Sends no DMX.
+ async showCheck({network=true}={}){
+  const rows=[],add=(id,label,state,detail)=>rows.push({id,label,state,detail}),out=this.outputStatus(),rep=this.patchReport();
+  if(network){const c=await(this.output.check?this.output.check(this.show.settings):checkConnection(this.show.settings));this.lastCheck=c;add('network','Art-Net path to '+this.show.settings.target,c.ok?'pass':'fail',c.ok?'Source, subnet, ping and ArtPoll all answered':(c.steps.find(x=>!x.ok)?.label??'The check failed')+' Open Settings → Art-Net output for every step.')}
+  add('output','Output',out.armed?'pass':'warn',out.armed?'Armed and sending':'Off: arm it before the show');
+  const unrouted=rep.fixtures.filter(f=>f.state==='unrouted').length,unverified=rep.fixtures.filter(f=>f.enabled&&f.state==='unverified').length,enabled=rep.fixtures.filter(f=>f.enabled).length;
+  add('routing','Universes routed',unrouted?'fail':'pass',unrouted?`${unrouted} fixtures are on a universe with no Art-Net route`:`${rep.universes.filter(u=>u.artnet!==null).length} universes routed`);
+  add('fixtures','Fixtures',unverified?'warn':'pass',`${enabled} enabled`+(unverified?` · ${unverified} unverified (preview only, never sent)`:''));
+  const v=this.versions.list()[0];add('saved','Show saved',this.dir?'pass':'warn',this.dir?(v?`Latest version ${v.at}`:'Saved; no version yet'):'No data folder: nothing is saved');
+  add('lock','Performance lock',this.locked?'pass':'warn',this.locked?'On':'Off: lock the show before it starts');
+  add('timing','Engine timing',this.dropped>10?'warn':'pass',this.dropped?`${this.dropped} slow frames since start`:'No slow frames');
+  if(this.mods)rows.push(...this.mods.checks());
+  const rig=this.show.pages.find(p=>/rig/i.test(p.id+' '+p.name)&&p.cues.length);add('rig','Rig check',rig?'pass':'warn',rig?`Page “${rig.name}” is ready to run`:'No rig check page with a cue');
+  return {ok:!rows.some(r=>r.state==='fail'),rows,at:new Date().toISOString()};
+ }
+ start(){this.live.write(this.liveSnapshot());this.syncModules().catch(e=>this.log('Modules: '+e.message));this.timer=setInterval(()=>{try{this.tick()}catch(e){this.log('Engine error: '+e.message);this.output.close()}},1000/30)}
+ async close(){clearInterval(this.timer);this.live.close(this.liveSnapshot());await this.mods?.close();this.mods=null;await this.disarm();const audit=this.audit;this.audit=null;await new Promise(r=>audit?audit.end(r):r())}
 }

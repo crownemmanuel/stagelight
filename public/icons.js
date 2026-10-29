@@ -91,7 +91,13 @@ const P={
  key:'<rect x="3" y="6" width="18" height="12" rx="2.5"/><path d="M7 10h.01M11 10h.01M15 10h.01M8 14h8"/>',
  scene:'<path d="M4 18h16"/><path d="M6 18V9l6-4 6 4v9"/><path d="M10 18v-5h4v5"/>',
  collapseLeft:'<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16M15 10l-2 2 2 2"/>',
- collapseRight:'<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M15 4v16M9 10l2 2-2 2"/>'
+ collapseRight:'<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M15 4v16M9 10l2 2-2 2"/>',
+ lock:'<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>',
+ unlock:'<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 7.5-2"/>',
+ checklist:'<path d="M9 6h11M9 12h11M9 18h11"/><path d="m3.5 6 1.5 1.5L7.5 5M3.5 12l1.5 1.5L7.5 11M3.5 18l1.5 1.5L7.5 17"/>',
+ wave:'<path d="M3 12h2l2-6 3 12 3-9 2 5 2-2h4"/>',
+ midi:'<circle cx="12" cy="12" r="9"/><circle cx="8" cy="10" r=".8"/><circle cx="16" cy="10" r=".8"/><circle cx="9.5" cy="14.5" r=".8"/><circle cx="14.5" cy="14.5" r=".8"/><circle cx="12" cy="16" r=".8"/>',
+ restore:'<path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v4h4"/><path d="M12 8v4l3 2"/>'
 };
 export function icon(name,cls=''){return `<svg class="i ${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${P[name]??P.spark}</svg>`}
 export const ICONS=Object.keys(P);
