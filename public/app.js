@@ -94,15 +94,17 @@ function drawGroups(){
 }
 const shortGroup=g=>({movers:'Movers',rogues:'Beams',mh7s:'MH7s',backlights:'Backlights',audience:'Audience',grid:'Grid','rear-heads':'Rear heads'}[g.id]??g.name.split('·')[0].trim());
 // Selection lives in the engine so agents (selection.set/group) and the UI stay in step.
-function applySelection(ids,context){cancelAlignment();group=context??null;selected=ids.filter(id=>fixture(id));afterSelection()}
+function applySelection(ids,context){cancelAlignment();group=context??null;const next=ids.filter(id=>fixture(id)),changed=next.length!==selected.length||next.some(id=>!selected.includes(id));selected=next;afterSelection(changed)}
 function selectGroup(id){applySelection(idsForGroup(id),id);quiet(command('selection.group',{group:id}))}
 function selectFixture(id,event={}){
- cancelAlignment();if(!fixture(id))return;
+ cancelAlignment();if(!fixture(id)){if(id==null&&!event.shiftKey&&selected.length){applySelection([]);quiet(command('selection.set',{ids:[]}))}return}
  const ids=event.shiftKey?(selected.includes(id)?selected.filter(x=>x!==id):[...selected,id]):[id],context=group&&idsForGroup().includes(id)?group:undefined;
  applySelection(ids,context);quiet(command('selection.set',{ids,...(context?{group:context}:{})}));
 }
-function afterSelection(){
- if(selected.length){if(mode==='build')side='program'}else if(side!=='cues')side='cues';
+// A new selection opens its settings in the right panel (Show and Build); clearing it returns to the cue list.
+// Engine echoes of an unchanged selection leave the panel alone, so “back to cues” sticks.
+function afterSelection(changed=true){
+ if(selected.length){if(changed)side=mode==='show'?'override':'program'}else if(side!=='cues')side='cues';
  stage?.select(selected);drawGroups();drawChips();drawSelectionBar();drawSide();
 }
 function drawChips(){
@@ -113,9 +115,9 @@ function drawChips(){
 function selectionTitle(){if(!selected.length)return 'Nothing selected';if(selected.length===1){const f=fixture(selected[0]);return f?(f.colorSlots?.length?f.name.replace(' · color slots pending',''):f.name):selected[0]}const g=show.groups.find(g=>g.id===group);return g&&g.fixtures.length===selected.length?g.name:`${selected.length} fixtures`}
 function drawSelectionBar(){
  const bar=$('#selectionBar');bar.hidden=!selected.length;if(!selected.length)return;
- const action=mode==='show'?(side==='override'?`<button id="selCues" class="chip-button"><span data-icon="list"></span>Cue list</button>`:`<button id="selOverride" class="chip-button accent"><span data-icon="sliders"></span>Override</button>`):`<button id="selProgram" class="chip-button accent"><span data-icon="sliders"></span>Programmer</button>`;
+ const action=mode==='show'&&side!=='override'?`<button id="selOverride" class="chip-button accent"><span data-icon="sliders"></span>Override</button>`:'';
  bar.innerHTML=`<span class="sel-count">${selected.length}</span><span class="sel-name">${esc(selectionTitle())}</span>${action}<button id="selClear" class="round-button small" aria-label="Clear selection" data-icon="close"></button>`;fillIcons(bar);
- if($('#selOverride'))$('#selOverride').onclick=()=>{side='override';drawSide()};if($('#selCues'))$('#selCues').onclick=()=>{side='cues';drawSide()};if($('#selProgram'))$('#selProgram').onclick=()=>{side='program';drawSide()};
+ if($('#selOverride'))$('#selOverride').onclick=()=>{side='override';drawSide()};
  $('#selClear').onclick=()=>{applySelection([]);quiet(command('selection.set',{ids:[]}))};
 }
 // Groups: right-click (or long-press) any group tile or pill for edits; the editor creates and edits members.
@@ -814,7 +816,7 @@ $$('[data-menu]').forEach(b=>b.onclick=()=>{$('#menu').hidden=true;({agent:agent
 $('#closeDialog').onclick=()=>$('#dialog').close();$('#dialog').onclick=e=>{if(e.target===$('#dialog'))$('#dialog').close()};
 document.addEventListener('keydown',e=>{
  if(['INPUT','TEXTAREA','SELECT'].includes(document.activeElement.tagName)||$('#dialog').open||document.activeElement.id==='joystick')return;
- if(e.key==='Escape'){if(!$('#ctxMenu').hidden){closeMenu()}else if(runtime?.preview){stopPreview()}else if(aligning){cancelAlignment();drawSide()}else if(!$('#menu').hidden)$('#menu').hidden=true;else if(ledOpen){ledOpen=false;drawLedTray()}else if(side!=='cues'&&mode==='show'){side='cues';drawSide()}return}
+ if(e.key==='Escape'){if(!$('#ctxMenu').hidden){closeMenu()}else if(runtime?.preview){stopPreview()}else if(aligning){cancelAlignment();drawSide()}else if(!$('#menu').hidden)$('#menu').hidden=true;else if(ledOpen){ledOpen=false;drawLedTray()}else if(selected.length){applySelection([]);quiet(command('selection.set',{ids:[]}))}return}
  if(e.code==='Space'){e.preventDefault();$('#goButton').click()}
  else if(e.key==='Backspace'){e.preventDefault();$('#backButton').click()}
  else if(e.key.toLowerCase()==='c'&&!e.metaKey&&!e.ctrlKey)$('#releaseButton').click();

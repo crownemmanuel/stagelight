@@ -23,7 +23,7 @@ export class Stage{
   this.lights=Array.from({length:LIGHT_BUDGET},()=>{const light=new THREE.SpotLight(0xffffff,0,28,.3,.65,1);this.scene.add(light);this.scene.add(light.target);return {light,node:null,since:0}});
   this.buildRoom();for(const f of fixtures)this.makeFixture(f);
   this.ray=new THREE.Raycaster();this.pointer=new THREE.Vector2();let down;
-  this.renderer.domElement.addEventListener('pointerdown',e=>down=[e.clientX,e.clientY]);this.renderer.domElement.addEventListener('pointerup',e=>{if(!down||Math.hypot(e.clientX-down[0],e.clientY-down[1])>5)return;const r=this.renderer.domElement.getBoundingClientRect();this.pointer.set((e.clientX-r.left)/r.width*2-1,-(e.clientY-r.top)/r.height*2+1);this.ray.setFromCamera(this.pointer,this.camera);const hits=this.ray.intersectObjects(this.targets);if(hits.length)this.onSelect(hits[0].object.userData.id,{shiftKey:e.shiftKey})});
+  this.renderer.domElement.addEventListener('pointerdown',e=>down=[e.clientX,e.clientY]);this.renderer.domElement.addEventListener('pointerup',e=>{if(!down||Math.hypot(e.clientX-down[0],e.clientY-down[1])>5)return;const r=this.renderer.domElement.getBoundingClientRect();this.pointer.set((e.clientX-r.left)/r.width*2-1,-(e.clientY-r.top)/r.height*2+1);this.ray.setFromCamera(this.pointer,this.camera);const hits=this.ray.intersectObjects(this.targets);this.onSelect(hits.length?hits[0].object.userData.id:null,{shiftKey:e.shiftKey})});
   this.resizeObserver=new ResizeObserver(()=>this.resize());this.resizeObserver.observe(container);this.resize();this.last=performance.now();this.animate();
  }
  material(color,roughness=.7){return new THREE.MeshStandardMaterial({color,roughness,metalness:.25})}

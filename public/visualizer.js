@@ -30,7 +30,8 @@ function paint(r){
  if(show&&r.revision!==rev){rev=r.revision;refresh().catch(()=>{})}
 }
 function select(id,event={}){
- const cur=runtime?.selection?.ids??[],ids=event.shiftKey?(cur.includes(id)?cur.filter(x=>x!==id):[...cur,id]):[id];
+ const cur=runtime?.selection?.ids??[];if(id==null){if(!event.shiftKey&&cur.length)command('selection.set',{ids:[]}).catch(()=>{});return}
+ const ids=event.shiftKey?(cur.includes(id)?cur.filter(x=>x!==id):[...cur,id]):[id];
  command('selection.set',{ids}).catch(()=>{});
 }
 window.addEventListener('message',e=>{if(e.origin===location.origin&&e.data?.type==='view-source'){source=e.data.source;if(runtime)paint(runtime)}});
