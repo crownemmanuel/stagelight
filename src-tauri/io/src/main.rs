@@ -121,7 +121,23 @@ fn open_audio(name: &str, triggers: &Value, tx: &Sender<String>) -> Result<Audio
 
 fn find_port<T: midir::MidiIO>(io: &T, name: &str) -> Option<T::Port> { io.ports().into_iter().find(|p| io.port_name(p).map(|n| n == name).unwrap_or(false)) }
 
+#[cfg(target_os = "macos")]
+#[link(name = "CoreFoundation", kind = "framework")]
+extern "C" { fn CFRunLoopRun(); }
+
+// CoreMIDI only learns of devices added or removed after launch through the run loop that was current when the
+// process created its first MIDI client. Without one running, every scan keeps returning the launch-time list and a
+// controller plugged in later never appears. So the first client is made on a thread that runs a run loop forever.
+#[cfg(target_os = "macos")]
+fn coremidi_run_loop() {
+    let (ready, wait) = channel::<()>();
+    std::thread::spawn(move || { let _client = MidiInput::new("StageLight notify"); let _ = ready.send(()); unsafe { CFRunLoopRun() } });
+    let _ = wait.recv();
+}
+
 fn main() {
+    #[cfg(target_os = "macos")]
+    coremidi_run_loop();
     let (tx, rx) = channel::<String>();
     std::thread::spawn(move || { let out = std::io::stdout(); for line in rx { let mut o = out.lock(); let _ = writeln!(o, "{line}"); let _ = o.flush(); } });
     // Hot-plug: report the device list again whenever it changes (an APC40 plugged in, Dante starting).

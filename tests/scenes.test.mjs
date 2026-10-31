@@ -42,3 +42,21 @@ test('scenes are saved in the show; the active scene is never restored at startu
   const again=new Engine({dataDir:dir,output:output()});assert.equal(again.runtime().scene,null);assert.deepEqual(again.show.scenes,[base]);validateShow(JSON.parse(fs.readFileSync(path.join(dir,'show.json'),'utf8')));
  }finally{fs.rmSync(dir,{recursive:true,force:true})}
 });
+
+test('updating the active scene from the current look (Save → Update a scene) takes effect at once and keeps its colour',async()=>{
+ const {e,at,frame}=rig();await e.command('master.set',{value:1});await e.command('scene.save',{scene:{...base,color:'#eac28a'}});await e.command('scene.go',{id:'base',fade:0});at(1);assert.equal(frame('401').intensity,.5);
+ await e.command('fixture.set',{ids:['401'],values:{intensity:.9}});at(1.5);await e.command('scene.capture',{id:'base',name:'Warm base'});
+ const sc=e.show.scenes.find(s=>s.id==='base');assert.equal(sc.color,'#eac28a');assert.equal(sc.look.find(x=>x.id==='401').values.intensity,.9);
+ await e.command('override.release',{fade:0});at(3);assert.equal(frame('401').intensity,.9,'the active scene now shows the updated look');validateShow(e.show);
+});
+
+test('recording a new cue keeps only lit or changed fixtures; a scene and all:true keep the whole rig',async()=>{
+ const {e,at}=rig();await e.command('master.set',{value:1});
+ await e.command('fixture.set',{ids:['401'],values:{intensity:.8}});await e.command('fixture.set',{ids:['402'],values:{intensity:0}});at(1);
+ await e.command('cue.record',{id:'house',name:'House'});const c=e.show.cues.find(x=>x.id==='house');
+ assert.deepEqual(c.look.map(x=>x.id).sort(),['401','402'],'401 is lit, 402 was set to zero on purpose; nothing else');
+ await e.command('look.capture',{id:'lk',name:'Lk'});assert.deepEqual(e.show.cues.find(x=>x.id==='lk').look.map(x=>x.id).sort(),['401','402']);
+ await e.command('look.capture',{id:'all',name:'All',all:true});assert.equal(e.show.cues.find(x=>x.id==='all').look.length,e.show.fixtures.filter(f=>f.enabled).length);
+ await e.command('scene.capture',{id:'sc',name:'Sc'});assert.equal(e.show.scenes.find(x=>x.id==='sc').look.length,e.show.fixtures.filter(f=>f.enabled).length,'a scene is a whole base look');
+ await e.command('override.release',{fade:0});at(2);await assert.rejects(e.command('look.capture',{id:'none',name:'None'}),/Nothing is lit/);
+});

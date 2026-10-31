@@ -31,6 +31,7 @@ Sound triggers and MIDI are **modules**, off by default. Switch them in Settings
   - It speaks newline-delimited JSON on stdin/stdout. The full protocol is at the top of `src-tauri/io/src/main.rs`.
   - The desktop app bundles it next to its Node. A dev build uses `src-tauri/target/{debug,release}/stagelight-io`, and `LIGHTS_IO_BIN` overrides both; the tests point it at `tests/fixtures/fake-io.mjs`.
   - Without the helper, the module reports "helper not installed" and nothing else changes.
+  - **Hot-plug (2026-10-30).** The helper rescans every 2 s, but CoreMIDI only updates a process's device list through the run loop that was current when the process made its first MIDI client. The helper therefore makes that first client on its own thread running `CFRunLoopRun`. Before this fix, a running helper never saw an APC40 plugged in after it started, and the desk said "not connected" even though macOS had found the controller.
 
 ## Sound triggers
 
@@ -39,6 +40,23 @@ A kick (or any drum) on an audio input flashes a master.
 1. Turn on **Sound triggers** in Settings → Modules and choose the input device: **Dante Virtual Soundcard**, or any interface, listed with its channel count.
 2. Open the master's ⚙ (for example a "Backlight hit" master). Under **Sound trigger**, pick the input channel the kick is on and the band: Kick, Snare, Hat or Full.
 3. Set **Sensitivity** against the live meter. Each hit that crosses the white line flashes the master. **Hold** is how long each hit holds the cue (default 80 ms), and **Gap** is the shortest time between hits (default 90 ms). **Test hit** fires it once.
+
+### Step on notes
+
+The third mode, for keys and melodic parts: each note moves a chase on by **one light**, instead of flashing or following the level.
+
+- **The cue.** Use the **Note step** effect (`step`, intensity layer) on a group. It is dark until the first note, lights one fixture per note in group order and wraps round. It reads no time, so play faster and the lights chase faster; hold a note and that light stays; the next note moves it on.
+- **The master.** Give it the cue with action **toggle**, and a sound trigger with mode **Step on notes**. The key starts and stops the experience; hits never start or release the cue, they only step it while it runs.
+- **Crossfade.** Each step crossfades over 40% of the time since the previous note (at least 30 ms, at most 0.3 s): slow playing glides, fast playing snaps.
+- **Not saved.** The step position lives in the running copy of the cue and starts again from the first light each time the cue starts.
+- **MCP:** `lights_masters_step {slot}` steps it once, like a note; `lights_sound_test {slot}` does the same through the trigger.
+- **Keys over audio.** Detection is onset-based, so a sustained pad or a chord with a slow attack may not count as a new note. Tune Sensitivity and Gap against the meter.
+
+### Input names
+
+Name each sound card channel after what the mixer sends on it, in Settings → Modules → **Input names** (editable with the module off). Every sound trigger's channel picker then reads "3 · KIK IN" instead of "Input 3". The names are saved in the show as `audioInputs [{channel, name}]`. MCP: `lights_sound_inputs` reads them; `lights_sound_inputs_set {inputs:[{channel, name}], replace?}` names or renames channels, and an empty name removes one.
+
+The venue's dLive sends channel direct outs 1:1 to Surface I/O Port 5 (photographed 2026-10-30), so Dante channel *n* is mixer input *n*: 1 SUB KIK, 2 KIKOUT, 3 KIK IN, 4 SN1TP, 5 SN1BT, 6 SN2TP, 7 SN2BT, 8 HIHAT, 9–13 TOM 1–5, 14/15 OH L/R, 16 RIDE, 17 LoopDrum, 18/19 SPD L/R, 20 Bass, 21/22 GTR L/R, 23/24 FANTOM L/R, 25/26 MONTG L/R, 27 MONTG2 L. Only 1–16 are visible patched in the photos; 17–27 assume the same diagonal.
 
 ### Switching a trigger on and off live
 
@@ -104,7 +122,8 @@ Default map:
 | Activator 1–8 | switch the fader bank masters' sound triggers on and off (lit while on) |
 
 Behaviour:
-- **Pad colours.** Pads show each master's **pad colour** (set in the master's ⚙), or its cue's page colour, matched to the nearest of Akai's 128 LED colours. Dim means assigned, full means running, pulsing means held, blinking means paused, off means empty.
+- **Pad colours.** Each master has its own colour without anyone choosing one: by position, 1 red, 2 orange, 3 yellow, 4 green, 5 sky, 6 blue, 7 violet, 8 magenta, repeating every eight like the track numbers. A **pad colour** chosen in the master's ⚙ or the APC40 editor replaces it. Colours are matched to the nearest of Akai's 128 LED colours. Dim (Akai's own darker shade of that colour, so an idle cyan pad stays cyan rather than grey) means assigned, full means running, pulsing means held, blinking means paused, off means empty.
+- **Only the pads are colour.** The 40 grid pads and 5 scene buttons have RGB LEDs. Clip Stop, Track Select, Activator and the other buttons have one colour: on, off or blinking. A master's colour can therefore only show on a pad.
 - **Scene buttons.** They show each scene's own colour, and the active scene pulses.
 - **LED traffic.** LEDs are diffed: only changes are sent.
 - **Fader pickup.** After a bank change or at start, a fader takes over only once it reaches the value it controls, so nothing jumps.
@@ -113,4 +132,6 @@ Behaviour:
 **Visual editor** (Settings → Modules → MIDI → *Edit APC40 profile…*):
 - **The board.** The unit is drawn from its own control table, with live LEDs. Press any real control and it lights and is selected.
 - **Changing a control.** Choose what the control does; *With Shift held* gives a button a second function. **Test** runs the control as if pressed, **Default** puts one control back, and *Reset whole profile* puts them all back.
+- **Master colours.** With no control selected, the side panel shows the current fader bank's eight masters as numbered chips. Pick one and choose a swatch: every swatch is a colour the pads show exactly, and the rainbow swatch takes any colour (the pad shows the nearest). Selecting a pad, track or clip-stop control that fires a master shows that master's swatches too. This is `masters.assign {color}` (`clearColor: true` goes back to the automatic colour), the same as *Pad colour* in the master's ⚙.
+- **Masters on the desk (2026-10-30).** Two profile settings, also in Settings → Modules → MIDI: **track numbers 1–8 instead of keys**, and **pad colours** on the masters under the stage. Each is *Auto* (default: only while the APC40 is connected), *On* or *Off* (`lights_controller_save {deskNumbers, deskColors}`). Numbers repeat per fader bank of eight (master 9 is 1 of bank 2), matching the numbered track buttons. Keyboard keys still work and are named in the tooltip. The desk shows the colour the pad shows: `public/pad-colors.js` holds the palette and the colour rule for both the engine and the desk. `lights_midi_status` reads back the settings (`profile`) and every master's colour and pad colour (`masterColors`).
 - **Saving.** Changes are stored in the show (`show.controllers`) through `lights_controller_save`; `lights_controller_reset` and `lights_controller_test` do the rest. `lights_midi_status` lists the ports, controls, current LEDs and the last input.

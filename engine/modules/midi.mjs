@@ -1,7 +1,7 @@
 // MIDI (docs/MIDI-AND-SOUND.md): a virtual "StageLight" output port that ProPresenter and other apps can map notes from,
 // and native controllers (APC40 mkII) with a default profile the operator changes in the visual editor. Every control
 // goes through the same engine commands as the desk, MCP and OSC, one at a time in the order they arrive.
-import * as APC from '../controllers/apc40mk2.mjs';
+import * as APC from '../controllers/apc40mk2.mjs';import {masterColor,padColor} from '../../public/pad-colors.js';
 const PROFILE='apc40mk2';
 export class Midi{
  constructor(engine,io){
@@ -16,7 +16,7 @@ export class Midi{
   else if(!input&&this.apc){this.apc=null;this.io.send({op:'midi.close',id:'apc'});this.engine.log('APC40 mkII disconnected')}
   this.metronome();
  }
- profile(){const saved=(this.engine.show.controllers??[]).find(c=>c.id===PROFILE);return {id:PROFILE,model:'apc40mk2',name:saved?.name??'APC40 mkII',map:{...APC.DEFAULT_MAP,...saved?.map}}}
+ profile(){const saved=(this.engine.show.controllers??[]).find(c=>c.id===PROFILE);return {id:PROFILE,model:'apc40mk2',name:saved?.name??'APC40 mkII',map:{...APC.DEFAULT_MAP,...saved?.map},deskNumbers:saved?.deskNumbers??'auto',deskColors:saved?.deskColors??'auto'}}
  // A note on the virtual port; GO sends turn themselves off after offMs so ProPresenter sees a clean press.
  note({note,channel=1,velocity=100},down,offMs){
   this.io.send({op:'midi.send',port:'virtual',bytes:down?[0x90|(channel-1),note,velocity]:[0x80|(channel-1),note,0]});
@@ -75,8 +75,8 @@ export class Midi{
  // Also read by the editor, so it mirrors the LEDs even with no unit plugged in.
  wanted(){
   const e=this.engine,want=new Map(),running=new Map(e.running().map(r=>[r.cue.id,r])),held=new Set(e.mastersStatus().held);
-  const color=s=>s.color??e.show.pages.find(p=>p.cues.some(x=>x.cue===s.cue))?.color??'#7fd3dc';
-  const pad=(id,hex,state)=>{if(!hex||state==='empty')return want.set(id,[[...APC.ledMessage(id,0)]]);const full=APC.nearestColor(hex,1),dim=APC.nearestColor(hex,.28);
+  const color=s=>masterColor(e.show,s);
+  const pad=(id,hex,state)=>{if(!hex||state==='empty')return want.set(id,[[...APC.ledMessage(id,0)]]);const full=APC.nearestColor(hex,1),dim=APC.dimColor(hex);
    want.set(id,state==='held'?[APC.ledMessage(id,dim,APC.LED.solid),APC.ledMessage(id,full,APC.LED.pulse)]:state==='paused'?[APC.ledMessage(id,full,APC.LED.solid),APC.ledMessage(id,dim,APC.LED.blink)]:[APC.ledMessage(id,state==='running'?full:dim,APC.LED.solid)])};
   const stateOf=s=>!s?.cue?'empty':held.has(s.id)?'held':running.get(s.cue)?.paused?'paused':running.has(s.cue)?'running':'idle';
   const map=this.profile().map;
@@ -101,7 +101,7 @@ export class Midi{
   const v=args.value??1;this.run(a,{control:args.control,value:c.kind==='encoder'?1:v},c);if(c.kind==='pad'||c.kind==='button')this.run(a,{control:args.control,value:0},c);await this.queue;return {control:args.control,action:a};
  }
  live(){if(!this.apc)return null;const bpm=this.engine.tempo.bpm??this.engine.playback?.cue.bpm;if(bpm!==this.beatBpm)this.metronome();return {connected:true,bank:this.bank,last:this.last}}
- async status(){await this.io.ready();return {virtualPort:this.cfg().virtualPort===false?null:'StageLight',ports:{in:this.io.devices?.midiIn??[],out:this.io.devices?.midiOut??[]},controller:this.apc?{model:'apc40mk2',...this.apc,bank:this.bank}:null,profile:this.profile(),defaults:APC.DEFAULT_MAP,controls:APC.CONTROLS,palette:APC.PALETTE,leds:Object.fromEntries(this.wanted()),last:this.last,sent:this.sent}}
+ async status(){await this.io.ready();return {virtualPort:this.cfg().virtualPort===false?null:'StageLight',ports:{in:this.io.devices?.midiIn??[],out:this.io.devices?.midiOut??[]},controller:this.apc?{model:'apc40mk2',...this.apc,bank:this.bank}:null,profile:this.profile(),masterColors:this.engine.show.masters.slots.map((s,i)=>{const c=masterColor(this.engine.show,s);return {master:i+1,slot:s.id,color:c,pad:padColor(c),own:!!s.color}}),defaults:APC.DEFAULT_MAP,controls:APC.CONTROLS,palette:APC.PALETTE,leds:Object.fromEntries(this.wanted()),last:this.last,sent:this.sent}}
  summary(){return {virtualPort:this.cfg().virtualPort!==false,controller:this.apc?'APC40 mkII':null}}
  checks(){return [{id:'midi',label:'MIDI',state:'pass',detail:this.cfg().virtualPort===false?'No virtual port':'Virtual port “StageLight” open'},{id:'apc',label:'APC40 mkII',state:this.apc?'pass':'warn',detail:this.apc?'Connected':'Not connected'}]}
  close(){for(const off of this.offs)off();clearInterval(this.beat);if(this.apc)this.io.send({op:'midi.close',id:'apc'});this.io.send({op:'midi.virtual',name:null});this.apc=null}

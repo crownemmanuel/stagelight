@@ -1,14 +1,14 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import {performance} from 'node:perf_hooks';
-import {defaults,migrate,zoneFixtures,fixtureIndex,EFFECTS,PROFILE_DEFS,EFFECT_PRESETS,BUILTIN_MEDIA} from './model.mjs';
+import {defaults,migrate,syncGroups,zoneFixtures,fixtureIndex,EFFECTS,PROFILE_DEFS,EFFECT_PRESETS,BUILTIN_MEDIA} from './model.mjs';
 import {LOOK_PROTOCOL,measure,lookSnap,lookDiffers,CHANGE,STILL} from './look.mjs';
 import crypto from 'node:crypto';
 import {ICONS} from '../public/icons.js';
 import {outputRGB} from '../public/fixture-colors.js';
 import {hiddenFixtureIds} from '../public/visibility.js';
 import {OSC_ADDRESSES} from './osc-routes.mjs';
-import {COMMANDS,SHOW_EDITS,validate,validateShow,validateWheelAttributes} from './spec.mjs';
+import {COMMANDS,SHOW_EDITS,validate,validateShow,validateWheelAttributes,groupDescendants} from './spec.mjs';
 import {Versions,LiveState} from './safety.mjs';
 import {render,compose,applyOverrides,finish,blend,blendState,encode,layerEffect,trackFixtures} from './render.mjs';
 import {Output,validateNetwork,checkConnection} from './output.mjs';
@@ -41,7 +41,7 @@ export class Engine{
  constructor({dataDir,output,clock=()=>performance.now()/1000}={}){
   this.dir=dataDir;this.clock=clock;this.logs=[];this.output=output??new Output(m=>this.log(m));this.show=defaults();const seed=new URL('../show-template.json',import.meta.url);if(fs.existsSync(seed)){this.show=migrate(JSON.parse(fs.readFileSync(seed,'utf8')));validateShow(this.show)}
   if(dataDir){fs.mkdirSync(dataDir,{recursive:true});const file=path.join(dataDir,'show.json');if(fs.existsSync(file)){const raw=JSON.parse(fs.readFileSync(file,'utf8')),added=!raw.pages;this.show=migrate(raw);validateShow(this.show);if(added)this.save()}else this.save();}
-  this.layers=[];this.highlight=false;this.scene=null;this.flashes=new Map();this.bumps=new Set();this.tempo={bpm:null,source:null,taps:[],anchor:null};this.levels=new Map();this.faderOwned=new Set();this.mods=null;this.soundHolds=new Map();this.agents=new Map();this.net={in:[],out:[],count:{in:0,out:0,rejected:0},listener:{listening:false},presets:{}};this.looks=new Map();this.presetBursts=new Map();this.presetAsks=new Map();this.sendHook=null;this.onNetworkChange=null;this.selection={ids:[],group:'backlights',revision:0};this.lampCommands=new Map();this.revision=1;this.playback=null;this.overrides={};this.fx=[];this.master=.8;this.blackout=false;this.held=null;this.fading=null;this.transition=null;this.stack=null;this.release=null;this.programmed=null;this.raw=null;this.preview=null;this.previewFrames=null;this.blind=false;this.blindOverrides={};this.blindRelease=null;this.blindStates=null;this.fxPreview=null;this.requests=new Map();this.listeners=new Set();this.tickCount=0;this.dropped=0;this.lastTick=null;this.frames=render(this.show,null,0);this.log('Engine ready in preview. Physical output is disarmed.');
+  this.layers=[];this.highlight=false;this.find=null;this.scene=null;this.flashes=new Map();this.bumps=new Set();this.tempo={bpm:null,source:null,taps:[],anchor:null};this.levels=new Map();this.faderOwned=new Set();this.mods=null;this.soundHolds=new Map();this.agents=new Map();this.net={in:[],out:[],count:{in:0,out:0,rejected:0},listener:{listening:false},presets:{}};this.looks=new Map();this.presetBursts=new Map();this.presetAsks=new Map();this.sendHook=null;this.onNetworkChange=null;this.selection={ids:[],group:'backlights',revision:0};this.lampCommands=new Map();this.revision=1;this.playback=null;this.overrides={};this.fx=[];this.master=.8;this.blackout=false;this.held=null;this.fading=null;this.transition=null;this.stack=null;this.release=null;this.programmed=null;this.raw=null;this.preview=null;this.previewFrames=null;this.blind=false;this.blindOverrides={};this.blindRelease=null;this.blindStates=null;this.fxPreview=null;this.requests=new Map();this.listeners=new Set();this.tickCount=0;this.dropped=0;this.lastTick=null;this.frames=render(this.show,null,0);this.log('Engine ready in preview. Physical output is disarmed.');
   // Show safety (docs/SHOW-SAFETY.md): the lock survives a restart; an unclean live-state file becomes an offer to resume.
   this.versions=new Versions(dataDir,()=>this.clock());this.live=new LiveState(dataDir);const prev=this.live.read();this.locked=!!prev?.locked;
   this.resume=prev&&!prev.clean&&(prev.armed||prev.scene||prev.stack)?prev:null;if(this.resume)this.log('The engine restarted unexpectedly during a show: offering to resume.');
@@ -67,6 +67,8 @@ export class Engine{
   this.programmed=states;this.frames=finish(this.show,this.highlighted(states),this.master,this.blackout);
   this.previewFrames=this.preview||this.blind||this.fxPreview?this.renderPreview(now):null;
   if(this.fading){const factor=Math.max(0,1-(now-this.fading.start)/Math.max(.001,this.fading.duration));this.frames=this.fading.frames.map(f=>({...f,intensity:this.blackout?0:f.intensity*factor}));if(factor===0){this.held=copy(this.frames);this.fading=null}}
+  // Parked fixtures (docs/PARK.md) hold their captured output over cues, programmer, Highlight and master; blackout still wins.
+  if(this.show.parked?.length){const pk=this.parkIndex();this.frames=this.frames.map(f=>{const p=pk.get(f.id);return p?{...p,id:f.id,intensity:this.blackout?0:p.intensity}:f})}
   // Packets are only built while they can be sent; the patch sheet encodes its own readback.
   const packets=this.output.armed?encode(this.show,this.frames,{physical:true}):new Map();
   for(const [id,pulse] of this.lampCommands){
@@ -100,7 +102,16 @@ export class Engine{
  // A fixture follows the newest running cue that uses it (its look entries or track groups). A cue whose fixtures are all
  // taken by newer cues has nothing left to show and retires, so stepping through full-look cues behaves as before.
  controls(cue){return new Set([...(cue.look??[]).map(e=>e.id),...cue.tracks.flatMap(tr=>trackFixtures(this.show,tr))])}
+ // A master with highest precedence (slot.priority) wins its fixtures over every other running cue, however new, and the
+ // scene, like a high-priority Hog cuelist. Among several, the newest wins. Programmer, Highlight, park, master and
+ // blackout still apply on top.
+ byPrecedence(top,layers){
+  if(!layers.length||![top,...layers].some(r=>r.master))return [top,layers];const slots=this.show.masters.slots,hi=r=>!!r.master&&!!slots.find(s=>s.id===r.master)?.priority;
+  const all=[...layers,top];if(!all.some(hi)||hi(top)&&layers.every(l=>!hi(l)))return [top,layers];
+  const order=[...all.filter(r=>!hi(r)),...all.filter(hi)];return [order.at(-1),order.slice(0,-1)];
+ }
  composite(top,layers){
+  [top,layers]=this.byPrecedence(top,layers);
   const states=compose(this.show,top.cue,this.sourceTime(top)),floor=this.scene&&this.floor(),dim=r=>!r.master||!this.levels.size||this.flashes.get(r.master)===r.cue.id||this.bumps.has(r.master)?1:this.levels.get(r.master)??1;
   if(!layers.length&&!floor&&dim(top)===1)return states;
   const taken=new Set(top.controls??this.controls(top.cue)),index=new Map(states.map((st,i)=>[st.id,i]));
@@ -120,9 +131,29 @@ export class Engine{
  }
  running(){return [...this.layers,this.playback].filter(Boolean)}
  runningCue(id){const list=this.running(),r=id===undefined?this.playback:list.find(l=>l.cue.id===id);if(!r)throw Error(id===undefined?'No cue is running':'Cue '+id+' is not running');return r}
- runningStatus(){const top=this.playback;return this.running().map(l=>({id:l.cue.id,name:l.cue.name,top:l===top,paused:l.paused,elapsed:+this.sourceTime(l).toFixed(2),duration:l.cue.duration,loop:!!l.cue.loop,hold:!!l.cue.hold,fixtures:l.controls.size,page:l.page??null,entry:l.entry??null})).reverse()}
+ runningStatus(){const top=this.playback,slots=this.show.masters.slots;return this.running().map(l=>({id:l.cue.id,name:l.cue.name,top:l===top,...(l.master?{master:l.master,...(slots.find(s=>s.id===l.master)?.priority?{priority:true}:{})}:{}),paused:l.paused,elapsed:+this.sourceTime(l).toFixed(2),duration:l.cue.duration,loop:!!l.cue.loop,hold:!!l.cue.hold,fixtures:l.controls.size,page:l.page??null,entry:l.entry??null})).reverse()}
  // Highlight (Hog-style): the selected fixtures show full, open white, beams open; position, zoom and focus unchanged.
  // Applied after the programmer so it is never recorded, saved or sent to look reports; master and blackout still apply.
+ // Find mode (docs/FIND-MODE.md): Highlight on one fixture at a time from a list, Hog Next/Back style. Transient.
+ findStart({group,ids,at=0}){
+  const enabled=this.show.fixtures.filter(f=>f.enabled),known=new Set(enabled.map(f=>f.id)),g=group&&group!=='all'?this.show.groups.find(x=>x.id===group):null;
+  if(group&&group!=='all'&&!g)throw Error('Unknown group '+group);if(ids)this.ensureIds(ids);
+  const cur=this.selection.ids.length>1?this.selection.ids:null,list=(ids??g?.fixtures??cur??enabled.map(f=>f.id).sort((a,b)=>a.localeCompare(b,undefined,{numeric:true}))).filter(id=>known.has(id));
+  if(!list.length)throw Error('Nothing to find: no enabled fixtures in that list');
+  this.find={ids:list,group:g?.id??(ids||cur?this.selection.group??null:null),index:0};this.highlight=true;this.findGo(at);this.log(`Find on · ${list.length} fixtures`);
+ }
+ findGo(i){const f=this.find,n=f.ids.length;f.index=((i%n)+n)%n;this.selection={ids:[f.ids[f.index]],group:f.group,revision:this.selection.revision+1};this.highlight=true}
+ findStatus(){const f=this.find;if(!f)return {active:false};const id=f.ids[f.index],x=fixtureIndex(this.show).get(id);
+  return {active:true,index:f.index,total:f.ids.length,id,name:x?.name??id,profile:x?.profile??null,patch:x?.address?`${x.universe}:${x.address}`:null,group:f.group}}
+ parkIndex(){const list=this.show.parked;if(this.parkCache?.list!==list)this.parkCache={list,map:new Map(list.map(p=>[p.id,p.values]))};return this.parkCache.map}
+ // Park: capture what each fixture shows right now (after master) and hold it; unpark lets playback take it back.
+ park(args){
+  const ids=args.ids??(args.group==='all'?this.show.fixtures.map(f=>f.id):args.group?this.show.groups.find(g=>g.id===args.group)?.fixtures:this.selection.ids);
+  if(!ids)throw Error('Unknown group '+args.group);if(!ids.length)throw Error('Nothing to park: give ids or group, or select fixtures');this.ensureIds(ids);
+  const set=new Set(ids),now=new Map(this.frames.map(f=>[f.id,f]));
+  this.update(s=>{const kept=(s.parked??[]).filter(p=>!set.has(p.id));s.parked=args.parked===false?kept:[...kept,...ids.filter(id=>now.has(id)).map(id=>{const {id:_,...values}=now.get(id);return {id,values:copy(values)}})]});
+  this.log(`${args.parked===false?'Unparked':'Parked'} ${ids.length} fixture${ids.length===1?'':'s'}`);
+ }
  highlighted(states){
   if(!this.highlight||!this.selection.ids.length)return states;const ids=new Set(this.selection.ids);
   return states.map(st=>{if(!ids.has(st.id))return st;const {colorWheel,colorWheel2,...rest}=st;return {...rest,intensity:1,color:[1,1,1],white:0,gobo:0,goboShake:0,prism:0,prismRotation:0,frost:0,opticalMode:'beam'}});
@@ -181,8 +212,16 @@ export class Engine{
  // A sound hit (sound module) presses the master and lets go after its hold; another hit during the hold extends it.
  soundHit(id){
   const slot=this.show.masters.slots.find(x=>x.id===id);if(!slot?.cue)return;const hold=slot.sound?.holdMs??80,held=this.soundHolds.get(id);
+  if(slot.sound?.mode==='step'){try{this.stepMaster(id)}catch{}return}
   if(held)clearTimeout(held);else this.masterTrigger(id,true);
   const timer=setTimeout(()=>{this.soundHolds.delete(id);try{this.masterTrigger(id,false);this.tick();this.mods?.changed()}catch(e){this.log('Sound trigger: '+e.message)}},hold);timer.unref?.();this.soundHolds.set(id,timer);
+ }
+ // Note step (docs/MIDI-AND-SOUND.md): advance every step track of the master's running cue. The crossfade is 40% of
+ // the time since the last step, at most 0.3 s, so slow playing glides and fast playing snaps. Only the running copy changes.
+ stepMaster(id){
+  const slot=this.show.masters.slots.find(x=>x.id===id),run=slot?.cue&&this.running().find(l=>l.cue.id===slot.cue);if(!run)throw Error(`Master ${id}'s cue is not running`);
+  const now=this.sourceTime(run);
+  for(const tr of run.cue.tracks)if(tr.effect==='step'){const p=tr.params,t=now-tr.start;p.stepFade=p.step===undefined?.15:Math.min(.3,Math.max(.03,.4*(t-(p.stepAt??t))));p.step=(p.step??-1)+1;p.stepAt=t}
  }
  // Start a cue, crossfading from whatever is showing. Outgoing cues keep running during the fade. A flash (keep) is
  // temporary, so it never retires the cues it covers: letting go shows them again.
@@ -388,11 +427,15 @@ export class Engine{
  }
  // Agents count as connected while their MCP server keeps saying hello (every 10 s).
  connectedAgents(){const now=this.clock();for(const [k,a] of this.agents)if(now-a.lastSeen>30)this.agents.delete(k);return [...this.agents.values()].map(a=>({client:a.client,version:a.version,connectedFor:Math.round(now-a.connectedAt)}))}
- runtime(){return {agents:this.connectedAgents(),selection:copy(this.selection),lampCommands:Object.fromEntries([...this.lampCommands].map(([id,p])=>[id,{action:p.action,remaining:Math.max(0,p.until-this.clock())}])),revision:this.revision,running:this.runningStatus(),highlight:this.highlight,tempo:this.tempoStatus(),locked:this.locked,resume:this.resumeStatus(),...(this.mods?.live()??{}),scene:this.scene?{id:this.scene.id,name:this.scene.name}:null,masters:this.mastersStatus(),playback:this.playback?{id:this.playback.cue.id,name:this.playback.cue.name,duration:this.playback.cue.duration,loop:this.playback.cue.loop,hold:!!this.playback.cue.hold,paused:this.playback.paused,elapsed:Math.min(this.elapsed()% (this.playback.cue.loop?this.playback.cue.duration:Infinity),this.playback.cue.duration)}:null,stack:this.stackStatus(),net:{in:this.net.count.in,out:this.net.count.out,rejected:this.net.count.rejected,listening:!!this.net.listener.listening,last:this.net.in[0]?.address??null},preview:this.previewStatus(),fx:this.fx.map(x=>this.fxSummary(x)),fxPreview:this.fxSummary(this.fxPreview),blind:{enabled:this.blind,fixtures:Object.keys(this.blindOverrides),overrides:this.blindOverrides,release:this.blindRelease?{fixtures:Object.keys(this.blindRelease.frames),progress:Math.min(1,(this.clock()-this.blindRelease.start)/Math.max(.001,this.blindRelease.duration))}:null},previewFrames:this.previewFrames,transition:this.transition?{from:this.transition.from.cue?.id??null,duration:this.transition.duration,progress:Math.min(1,(this.clock()-this.transition.start)/Math.max(.001,this.transition.duration))}:null,release:this.release?{fixtures:Object.keys(this.release.frames),progress:Math.min(1,(this.clock()-this.release.start)/Math.max(.001,this.release.duration))}:null,master:this.master,blackout:this.blackout,overrides:this.overrides,frames:this.frames,output:this.output.status(),tickCount:this.tickCount,slowFrames:this.dropped,logs:this.logs.slice(-15)}}
+ runtime(){return {agents:this.connectedAgents(),selection:copy(this.selection),lampCommands:Object.fromEntries([...this.lampCommands].map(([id,p])=>[id,{action:p.action,remaining:Math.max(0,p.until-this.clock())}])),revision:this.revision,running:this.runningStatus(),highlight:this.highlight,find:this.findStatus(),parked:(this.show.parked??[]).map(p=>p.id),tempo:this.tempoStatus(),locked:this.locked,resume:this.resumeStatus(),...(this.mods?.live()??{}),scene:this.scene?{id:this.scene.id,name:this.scene.name}:null,masters:this.mastersStatus(),playback:this.playback?{id:this.playback.cue.id,name:this.playback.cue.name,duration:this.playback.cue.duration,loop:this.playback.cue.loop,hold:!!this.playback.cue.hold,paused:this.playback.paused,elapsed:Math.min(this.elapsed()% (this.playback.cue.loop?this.playback.cue.duration:Infinity),this.playback.cue.duration)}:null,stack:this.stackStatus(),net:{in:this.net.count.in,out:this.net.count.out,rejected:this.net.count.rejected,listening:!!this.net.listener.listening,last:this.net.in[0]?.address??null},preview:this.previewStatus(),fx:this.fx.map(x=>this.fxSummary(x)),fxPreview:this.fxSummary(this.fxPreview),blind:{enabled:this.blind,fixtures:Object.keys(this.blindOverrides),overrides:this.blindOverrides,release:this.blindRelease?{fixtures:Object.keys(this.blindRelease.frames),progress:Math.min(1,(this.clock()-this.blindRelease.start)/Math.max(.001,this.blindRelease.duration))}:null},previewFrames:this.previewFrames,transition:this.transition?{from:this.transition.from.cue?.id??null,duration:this.transition.duration,progress:Math.min(1,(this.clock()-this.transition.start)/Math.max(.001,this.transition.duration))}:null,release:this.release?{fixtures:Object.keys(this.release.frames),progress:Math.min(1,(this.clock()-this.release.start)/Math.max(.001,this.release.duration))}:null,master:this.master,blackout:this.blackout,overrides:this.overrides,frames:this.frames,output:this.output.status(),tickCount:this.tickCount,slowFrames:this.dropped,logs:this.logs.slice(-15)}}
  snapshot(){return {show:copy(this.show),runtime:this.runtime()}}
- update(fn){const next=copy(this.show);fn(next);validateShow(next);this.show=next;this.revision++;this.save();this.versions.edited(this.show)}
+ update(fn){const next=copy(this.show);fn(next);if(next.groups?.some(g=>g.children))syncGroups(next);validateShow(next);this.show=next;this.revision++;this.save();this.versions.edited(this.show)}
  appendEntry(s,pageId,cue,fade=2,after){const page=s.pages.find(p=>p.id===pageId);if(!page)throw Error('Unknown page');const id=shortId('entry'),at=after?page.cues.findIndex(e=>e.id===after):-1;page.cues.splice(at<0?page.cues.length:at+1,0,{id,cue,fade,follow:'manual'});return id}
  // What is seen right now (blind view while blind), with master removed, as look entries. Highlight is never recorded.
+ // Cues record only what they light or what was changed (docs/MASTERS-AND-SCENES.md): a fixture at zero that nobody touched
+ // stays out, so playing the cue never blacks out the rest of the rig. keep = extra IDs to keep (e.g. the cue's own). Scenes and
+ // all:true still record every fixture.
+ activeLook(look,keep=[]){const src=this.blind?this.blindOverrides:this.overrides,touched=new Set([...Object.keys(src),...(this.blind?[]:this.fx.flatMap(x=>x.fixtures)),...keep]);return look.filter(e=>e.values.intensity>.001||touched.has(e.id))}
  snapshotLook(){const seen=this.blind?this.previewFrames:this.highlight&&this.programmed?finish(this.show,this.programmed,this.master,this.blackout):this.frames;return seen.filter(f=>this.show.fixtures.some(x=>x.id===f.id&&x.enabled)).map(({id,...values})=>({id,values:{...values,intensity:this.master>0?Math.min(1,values.intensity/this.master):0,color:'#'+values.color.map(v=>Math.round(v*255).toString(16).padStart(2,'0')).join('')}}))}
  // Programmer effects: one per fixture per layer, layered on top of cue + overrides.
  applyFx(states,list,now){
@@ -426,7 +469,7 @@ export class Engine{
   // Sound trigger tuning (channel, band, sensitivity, hold, gap) is a live adjustment like a fader, so it stays open.
   const soundTuning=name==='masters.assign'&&Object.keys(args).every(k=>['slot','sound','clearSound'].includes(k));
   if(this.locked&&SHOW_EDITS.has(name)&&!soundTuning)throw Error('The performance lock is on: unlock it to change the show.');
-  if(name==='show.versions')return {versions:this.versions.list()};if(name==='show.check')return this.showCheck(args);if(name==='modules.status')return this.modulesStatus();
+  if(name==='show.versions')return {versions:this.versions.list()};if(name==='show.check')return this.showCheck(args);if(name==='modules.status')return this.modulesStatus();if(name==='sound.inputs')return {inputs:this.show.audioInputs??[]};
   if(['sound.status','midi.status'].includes(name)){const m=this.mods?.[name.split('.')[0]];if(!m)throw Error(this.moduleOff(name.split('.')[0]));return m.status()}
   if(name==='agent.hello'){const known=this.agents.get(args.session);this.agents.set(args.session,{session:args.session,client:args.client,version:args.version??'',connectedAt:known?.connectedAt??this.clock(),lastSeen:this.clock()});if(!known)this.log(`Agent connected · ${args.client}${args.version?' '+args.version:''}`);return {ok:true}}
   if(name==='status')return this.snapshot();if(name==='visualizer.status')return this.visualizerStatus();if(name==='patch.report')return this.patchReport();if(name==='network.status')return this.networkStatus();if(name==='look.report')return this.lookReport(args);
@@ -435,19 +478,23 @@ export class Engine{
  if(name==='schema')return {version:1,commands:COMMANDS,profiles:PROFILE_DEFS,effects:EFFECTS,presets:this.allPresets(),icons:ICONS,media:BUILTIN_MEDIA};let created;
   if(this.output.armed&&['show.import','fixture.patch','output.configure','cue.seek','effect.preview'].includes(name))throw Error('Disarm physical output before this operation.');
   switch(name){
+   case 'park.set':this.park(args);break;
+   case 'find.start':this.findStart(args);break;
+   case 'find.step':if(!this.find)this.findStart({});this.findGo(this.find.index+(args.direction==='back'?-1:1));break;
+   case 'find.stop':if(this.find){const {ids,group}=this.find;this.find=null;this.highlight=false;this.selection={ids,group,revision:this.selection.revision+1};this.log('Find off')}break;
    case 'selection.set':{
     this.ensureIds(args.ids);if(args.group&&args.group!=='all'&&!this.show.groups.some(g=>g.id===args.group))throw Error('Unknown selection group');
     // Without an explicit group the old one stays only while every ID is still in it, so clearing the selection (or
     // picking outside the group) drops it and the UI's fixture buttons go back to the whole rig.
     const ids=[...new Set(args.ids)],prev=this.selection.group,members=prev==='all'?null:this.show.groups.find(g=>g.id===prev)?.fixtures;
     const keep=prev&&ids.length&&(prev==='all'||members&&ids.every(id=>members.includes(id)));
-    this.selection={ids,group:args.group??(keep?prev:null),revision:this.selection.revision+1};break;
+    this.selection={ids,group:args.group??(keep?prev:null),revision:this.selection.revision+1};if(this.find&&!(ids.length===1&&this.find.ids.includes(ids[0])))this.find=null;else if(this.find)this.find.index=this.find.ids.indexOf(ids[0]);break;
    }
    case 'selection.group':{
     const ids=args.group==='all'?this.show.fixtures.filter(f=>f.enabled).map(f=>f.id):this.show.groups.find(g=>g.id===args.group)?.fixtures;
     if(!ids)throw Error('Unknown selection group');this.selection={ids:[...ids],group:args.group,revision:this.selection.revision+1};break;
    }
-   case 'look.capture':{const look=this.snapshotLook();this.update(s=>{this.upsert(s.cues,{id:args.id,name:args.name,duration:30,loop:true,tracks:[],look});if(args.page)created={cue:args.id,entry:this.appendEntry(s,args.page,args.id,args.fade)}});created??={cue:args.id};break;}
+   case 'look.capture':{const look=args.all?this.snapshotLook():this.activeLook(this.snapshotLook());if(!look.length)throw Error('Nothing is lit or changed to record');this.update(s=>{this.upsert(s.cues,{id:args.id,name:args.name,duration:30,loop:true,tracks:[],look});if(args.page)created={cue:args.id,entry:this.appendEntry(s,args.page,args.id,args.fade)}});created??={cue:args.id};break;}
    case 'cue.save':this.update(s=>this.upsert(s.cues,args.cue));break;
    case 'cue.delete':this.update(s=>{s.cues=s.cues.filter(c=>c.id!==args.id);for(const p of s.pages)p.cues=p.cues.filter(e=>e.cue!==args.id);for(const m of s.masters.slots)if(m.cue===args.id)delete m.cue});break;
    case 'cue.play':{
@@ -457,7 +504,7 @@ export class Engine{
     if(args.requestId){this.requests.set(args.requestId,this.clock());if(this.requests.size>1000)this.requests.delete(this.requests.keys().next().value)}break;}
    case 'cue.pause':{const r=args.id===undefined?this.playback:this.runningCue(args.id);if(r&&r.paused!==args.paused){this.rebase(r);r.paused=args.paused;this.log(`${args.paused?'Paused':'Resumed'} · ${r.cue.name}`)}break}
    case 'cue.release':this.releaseCue(this.runningCue(args.id),args.fade??1.5);break;
-   case 'highlight.set':this.highlight=args.enabled;this.log(`Highlight ${args.enabled?'on':'off'}`);break;
+   case 'highlight.set':this.highlight=args.enabled;if(!args.enabled)this.find=null;this.log(`Highlight ${args.enabled?'on':'off'}`);break;
    case 'cue.seek':if(this.playback){this.playback.offset=Math.min(args.seconds,this.playback.cue.duration);this.playback.started=this.clock()}break;
    case 'cue.stop':{const lit=copy(this.programmed??this.raw??this.frames);this.playback=null;this.layers=[];this.overrides={};this.fx=[];this.transition=null;this.release=null;this.stack=null;this.flashes.clear();this.bumps.clear();
     if(this.scene)this.toFloor(args.fade??1.5,lit);else this.fading={start:this.clock(),duration:args.fade??1.5,frames:copy(this.frames)};break}
@@ -467,10 +514,11 @@ export class Engine{
    case 'scene.go':{const sc=this.show.scenes.find(x=>x.id===args.id);if(!sc)throw Error('Unknown scene');const fade=args.fade??this.sceneFade(),from=copy(this.raw??this.frames);
     this.scene={id:sc.id,name:sc.name,rev:-1};this.held=null;this.fading=null;this.transition=fade>0?{start:this.clock(),duration:fade,from:{frames:from}}:null;break}
    case 'scene.release':this.dropScene(args.fade??this.sceneFade());break;
+   case 'masters.step':this.stepMaster(args.slot);break;
    case 'masters.trigger':this.masterTrigger(args.slot,args.down);break;
    case 'masters.assign':{if(args.cue&&!this.show.cues.some(c=>c.id===args.cue))throw Error('Unknown cue '+args.cue);
     this.update(s=>{const m=masterSlot(s,args.slot);if(args.clear){delete m.cue;delete m.label}if(args.cue)m.cue=args.cue;if(args.action)m.action=args.action;if(args.fade!==undefined)m.fade=args.fade;if(args.label!==undefined){if(args.label)m.label=args.label;else delete m.label}
-     if(args.color)m.color=args.color;if(args.sound)m.sound=args.sound;if(args.clearSound)delete m.sound;if(args.midi)m.midi=args.midi;if(args.clearMidi)delete m.midi});
+     if(args.color)m.color=args.color;if(args.clearColor)delete m.color;if(args.priority!==undefined){if(args.priority)m.priority=true;else delete m.priority}if(args.sound)m.sound=args.sound;if(args.clearSound)delete m.sound;if(args.midi)m.midi=args.midi;if(args.clearMidi)delete m.midi});
     if(args.clear||args.cue)this.flashes.delete(args.slot);if(args.sound||args.clearSound||args.clear)await this.mods?.sound?.configure();break}
    case 'masters.level':this.masterLevel(args.slot,args.level,args.go??true);break;
    case 'masters.sound':{const m=this.show.masters.slots.find(x=>x.id===args.slot);if(!m)throw Error('Unknown master '+args.slot);if(!m.sound)throw Error(`Master ${this.show.masters.slots.indexOf(m)+1} has no sound trigger: give it one in its editor first`);
@@ -489,9 +537,10 @@ export class Engine{
     const pg=r.stack&&this.show.pages.find(p=>p.id===r.stack.page),i=pg?pg.cues.findIndex(e=>e.id===r.stack.entry):-1;if(i>=0)this.goEntry(pg,i,0);
     this.log('Resumed after an unexpected restart'+(sc?' · scene '+sc.name:'')+(i>=0?` · ${pg.name} cue ${i+1}`:''));break}
    case 'resume.dismiss':this.resume=null;this.live.write(this.liveSnapshot());break;
+   case 'sound.inputs.set':this.update(s=>{const m=new Map(args.replace?[]:(s.audioInputs??[]).map(a=>[a.channel,a.name]));for(const a of args.inputs){const n=a.name.trim();if(n)m.set(a.channel,n);else m.delete(a.channel)}s.audioInputs=[...m].sort((a,b)=>a[0]-b[0]).map(([channel,name])=>({channel,name}))});break;
    case 'modules.set':this.update(s=>{const m=s.settings.modules??={};if(args.sound)m.sound={...m.sound,...args.sound};if(args.midi)m.midi={...m.midi,...args.midi}});await this.syncModules();break;
    case 'sound.meter':case 'sound.test':case 'midi.test':case 'controller.test':{const which=name.startsWith('sound')?'sound':'midi',mod=this.mods?.[which];if(!mod)throw Error(this.moduleOff(which));created=await mod.command(name,args);break}
-   case 'controller.save':this.update(s=>{const list=s.controllers??=[],c=list.find(x=>x.id===args.id);if(c){Object.assign(c.map,args.map);if(args.name)c.name=args.name}else list.push({id:args.id,model:args.model??'apc40mk2',...(args.name?{name:args.name}:{}),map:args.map})});this.mods?.changed(true);break;
+   case 'controller.save':this.update(s=>{const list=s.controllers??=[];let c=list.find(x=>x.id===args.id);if(!c)list.push(c={id:args.id,model:args.model??'apc40mk2',map:{}});Object.assign(c.map,args.map??{});for(const k of ['name','deskNumbers','deskColors'])if(args[k])c[k]=args[k]});this.mods?.changed(true);break;
    case 'controller.reset':this.update(s=>{s.controllers=(s.controllers??[]).filter(c=>c.id!==args.id)});this.mods?.changed(true);break;
    case 'masters.key':{if(!args.clear&&!args.key)throw Error('Give a key, or clear:true');this.update(s=>setMasterKey(s,args.slot,args.clear?null:args.key,args.conflict));break}
    case 'masters.save':this.update(s=>{if(args.slots)s.masters.slots=args.slots;if(args.desk)s.masters.desk=args.desk});for(const id of [...this.flashes.keys()])if(!this.show.masters.slots.some(m=>m.id===id&&m.cue===this.flashes.get(id)))this.flashes.delete(id);break;
@@ -542,17 +591,41 @@ export class Engine{
     this.selection={ids:[],group:'all',revision:this.selection.revision+1};this.preview=null;this.blind=false;this.blindOverrides={};this.playback=null;this.layers=[];this.overrides={};this.fx=[];this.held=null;this.fading=null;this.transition=null;this.release=null;this.stack=null;this.blackout=false;this.update(s=>{for(const k of Object.keys(s))delete s[k];Object.assign(s,next)});break;
    }
    case 'fixture.patch':this.update(s=>this.upsert(s.fixtures,args.fixture));break;
-   case 'group.save':this.ensureIds(args.fixtures);this.update(s=>this.upsert(s.groups,args));break;
+   case 'group.save':{if(!args.fixtures&&!args.children)throw Error('Give fixtures, or children for a parent group');if(args.fixtures)this.ensureIds(args.fixtures);if(args.children)for(const c of args.children)if(!this.show.groups.some(g=>g.id===c))throw Error('Unknown group '+c);if(args.children&&!args.fixtures)args={...args,fixtures:[]};const old=this.show.groups.find(g=>g.id===args.id)?.color;this.update(s=>this.upsert(s.groups,{...args,...(args.color??old?{color:args.color??old}:{})}));break}
    case 'palette.save':this.update(s=>this.upsert(s.palettes,args));break;
    case 'point.save':this.ensureIds(args.fixtures);this.update(s=>this.upsert(s.points,{id:args.id,name:args.name,positions:Object.fromEntries(args.fixtures.map(id=>{const f=(this.blind?this.previewFrames:this.frames).find(f=>f.id===id);return [id,{pan:f.pan,tilt:f.tilt}]}))}));break;
    case 'point.recall':{const p=this.show.points.find(p=>p.id===args.id);if(!p)throw Error('Unknown position');if(args.ids)this.ensureIds(args.ids);const ids=Object.keys(p.positions).filter(id=>!args.ids||args.ids.includes(id));if(!ids.length)throw Error('No selected fixture has a pose in this position');const buffer=this.blind?this.blindOverrides:this.overrides;for(const id of ids){buffer[id]={...(buffer[id]??{}),...p.positions[id]};if(!this.blind&&this.release)delete this.release.frames[id]}if(this.blind)break;this.fading=null;break;}
    case 'point.delete':if(this.show.cues.some(c=>c.tracks.some(t=>t.params.pointA===args.id||t.params.pointB===args.id)))throw Error('A cue uses this position');this.update(s=>{s.points=s.points.filter(p=>p.id!==args.id)});break;
    case 'group.edit':{
     const g=this.show.groups.find(g=>g.id===args.id);if(!g)throw Error('Unknown group');if(args.add)this.ensureIds(args.add);
+    if((args.add||args.remove)&&(args.children??g.children)?.length)throw Error(`${g.name} is a parent group: add or remove fixtures in its child groups`);
+    for(const c of args.children??[])if(!this.show.groups.some(x=>x.id===c))throw Error('Unknown group '+c);
     const drop=new Set(args.remove??[]),fixtures=[...g.fixtures,...(args.add??[]).filter(id=>!g.fixtures.includes(id))].filter((id,i,all)=>!drop.has(id)&&all.indexOf(id)===i);
     if(!fixtures.length)throw Error('A group needs at least one fixture; delete it instead');
-    this.update(s=>this.upsert(s.groups,{id:g.id,name:args.name??g.name,fixtures}));break;}
-   case 'group.delete':if(this.show.effects.some(e=>e.group===args.id))throw Error('A saved effect uses this group');this.update(s=>{s.groups=s.groups.filter(g=>g.id!==args.id);if(s.visualizer)s.visualizer.hiddenGroups=s.visualizer.hiddenGroups.filter(g=>g!==args.id)});break;
+    const color=args.color===undefined?g.color:args.color||undefined;const children=args.children===undefined?g.children:args.children.length?args.children:undefined;this.update(s=>this.upsert(s.groups,{id:g.id,name:args.name??g.name,fixtures,...(children?{children}:{}),...(color?{color}:{})}));break;}
+   case 'fixture.delete':{
+    if(this.output.armed)throw Error('Turn output off before removing fixtures');this.ensureIds(args.ids);const gone=new Set(args.ids);
+    const emptied=new Set(this.show.groups.filter(g=>!g.children?.length&&g.fixtures.every(id=>gone.has(id))).map(g=>g.id));
+    const users=[...this.show.cues.filter(c=>c.tracks.some(t=>emptied.has(t.group))).map(c=>'cue '+c.name),...this.show.effects.filter(e=>emptied.has(e.group)).map(e=>'effect '+e.name),...(this.show.zones??[]).filter(z=>z.groups?.some(g=>emptied.has(g))).map(z=>'zone '+z.name)];
+    if(users.length)throw Error(`That would empty a group used by ${users.slice(0,4).join(', ')}${users.length>4?'…':''}`);
+    this.versions.snapshot(this.show,'before-delete');
+    this.update(s=>{
+     s.fixtures=s.fixtures.filter(f=>!gone.has(f.id));
+     s.groups=s.groups.filter(g=>!emptied.has(g.id));for(const g of s.groups){g.fixtures=g.fixtures.filter(id=>!gone.has(id));if(g.children){g.children=g.children.filter(c=>!emptied.has(c));if(!g.children.length)delete g.children}}
+     s.groups=s.groups.filter(g=>g.fixtures.length||g.children?.length);
+     for(const c of [...s.cues,...(s.scenes??[])]){if(c.look)c.look=c.look.filter(e=>!gone.has(e.id));if(c.tracks)c.tracks=c.tracks.map(t=>t.fixtures?{...t,fixtures:t.fixtures.filter(id=>!gone.has(id))}:t).filter(t=>!t.fixtures||t.fixtures.length)}
+     for(const p of s.points??[])for(const id of gone)delete p.positions?.[id];
+     if(s.parked)s.parked=s.parked.filter(p=>!gone.has(p.id));
+     if(s.visualizer){s.visualizer.hiddenFixtures=(s.visualizer.hiddenFixtures??[]).filter(id=>!gone.has(id));s.visualizer.hiddenGroups=(s.visualizer.hiddenGroups??[]).filter(g=>!emptied.has(g))}
+    });
+    this.selection={ids:this.selection.ids.filter(id=>!gone.has(id)),group:emptied.has(this.selection.group)?null:this.selection.group,revision:this.selection.revision+1};for(const id of gone)delete this.overrides[id];
+    this.log(`Removed ${gone.size} fixture${gone.size===1?'':'s'}${emptied.size?' and group'+(emptied.size===1?' ':'s ')+[...emptied].join(', '):''}`);break}
+   case 'group.nest':{const g=this.show.groups.find(x=>x.id===args.id),p=args.parent&&this.show.groups.find(x=>x.id===args.parent);if(!g)throw Error('Unknown group');if(args.parent&&!p)throw Error('Unknown group '+args.parent);
+    if(p&&!p.children?.length)throw Error(`${p.name} holds fixtures, not groups: make a parent group first (group.save with children)`);
+    if(p&&(p.id===g.id||groupDescendants(this.show,g.id).has(p.id)))throw Error(`${p.name} is inside ${g.name}: a group cannot go inside itself`);
+    this.update(s=>{for(const x of s.groups)if(x.children?.includes(g.id)&&x.id!==p?.id){x.children=x.children.filter(c=>c!==g.id);if(!x.children.length)delete x.children}
+     if(p){const t=s.groups.find(x=>x.id===p.id);t.children=t.children?.includes(g.id)?t.children:[...(t.children??[]),g.id]}});break}
+   case 'group.delete':if(this.show.effects.some(e=>e.group===args.id))throw Error('A saved effect uses this group');this.update(s=>{s.groups=s.groups.filter(g=>g.id!==args.id);for(const x of s.groups)if(x.children?.includes(args.id)){x.children=x.children.filter(c=>c!==args.id);if(!x.children.length)delete x.children}if(s.visualizer)s.visualizer.hiddenGroups=s.visualizer.hiddenGroups.filter(g=>g!==args.id)});break;
    case 'palette.delete':this.update(s=>{s.palettes=s.palettes.filter(p=>p.id!==args.id)});break;
    case 'page.save':this.update(s=>this.upsert(s.pages,args.page));break;
    case 'page.delete':this.update(s=>{s.pages=s.pages.filter(p=>p.id!==args.id)});if(this.stack?.page===args.id)this.stack=null;break;
@@ -606,7 +679,7 @@ export class Engine{
     if(args.from&&!this.show.cues.some(c=>c.id===args.from))throw Error('Unknown cue '+args.from);
     const base=existing??(args.from?this.show.cues.find(c=>c.id===args.from):this.playback?.cue&&this.show.cues.find(c=>c.id===this.playback.cue.id));
     let cue;
-    if(mode==='replace'||!base){cue={...(existing?copy(existing):{id:args.id,name:args.name??'Recorded look',duration:30,loop:true}),tracks:[],look:this.snapshotLook()}}
+    if(mode==='replace'||!base){const own=existing?[...(existing.look??[]).map(e=>e.id),...existing.tracks.flatMap(t=>trackFixtures(this.show,t))]:[],look=args.all?this.snapshotLook():this.activeLook(this.snapshotLook(),own);if(!look.length)throw Error('Nothing is lit or changed to record');cue={...(existing?copy(existing):{id:args.id,name:args.name??'Recorded look',duration:30,loop:true}),tracks:[],look}}
     else{
      if(!ids.length&&!fx.length)throw Error('No changes to record — adjust fixtures or add an effect first');
      cue=copy(base);if(!existing){cue.id=args.id;cue.name=args.name??base.name+' · copy'}cue.look??=[];
@@ -670,7 +743,7 @@ export class Engine{
   if(this.mods){if(on)await this.mods.apply(m);else{await this.mods.close();this.mods=null;this.log('Modules off')}}
  }
  moduleOff(name){return `The ${name==='sound'?'sound':'MIDI'} module is off: turn it on with modules.set {${name}:{enabled:true}}.`}
- modulesStatus(){const m=this.show.settings.modules??{};return {sound:{enabled:!!m.sound?.enabled,device:m.sound?.device??null,...(this.mods?.sound?.summary()??{})},midi:{enabled:!!m.midi?.enabled,virtualPort:m.midi?.virtualPort!==false,...(this.mods?.midi?.summary()??{})},helper:this.mods?.io?.summary()??{running:false}}}
+ modulesStatus(){const m=this.show.settings.modules??{};return {sound:{enabled:!!m.sound?.enabled,device:m.sound?.device??null,inputs:this.show.audioInputs??[],...(this.mods?.sound?.summary()??{})},midi:{enabled:!!m.midi?.enabled,virtualPort:m.midi?.virtualPort!==false,...(this.mods?.midi?.summary()??{})},helper:this.mods?.io?.summary()??{running:false}}}
  liveSnapshot(){const st=this.stack;return {clean:false,at:new Date().toISOString(),armed:!!this.output.armed,scene:this.scene?.id??null,stack:st?{page:st.page,entry:st.entry}:null,master:this.master,tempo:this.tempo.bpm,locked:this.locked}}
  resumeStatus(){const r=this.resume;if(!r)return null;const pg=r.stack&&this.show.pages.find(p=>p.id===r.stack.page),i=pg?pg.cues.findIndex(e=>e.id===r.stack.entry):-1,e=i>=0?pg.cues[i]:null;
   return {at:r.at,armed:!!r.armed,scene:this.show.scenes.find(s=>s.id===r.scene)?.name??null,page:pg?.name??null,cue:e?{number:i+1,name:e.label??this.show.cues.find(c=>c.id===e.cue)?.name??e.cue}:null,master:r.master,tempo:r.tempo??null}}
@@ -691,5 +764,6 @@ export class Engine{
   return {ok:!rows.some(r=>r.state==='fail'),rows,at:new Date().toISOString()};
  }
  start(){this.live.write(this.liveSnapshot());this.syncModules().catch(e=>this.log('Modules: '+e.message));this.timer=setInterval(()=>{try{this.tick()}catch(e){this.log('Engine error: '+e.message);this.output.close()}},1000/30)}
- async close(){clearInterval(this.timer);this.live.close(this.liveSnapshot());await this.mods?.close();this.mods=null;await this.disarm();const audit=this.audit;this.audit=null;await new Promise(r=>audit?audit.end(r):r())}
+ // Stopping the engine blacks out the rig first, unless show.playback.holdOnStop is false: by default the last packets stand (docs/SHOW-SAFETY.md).
+ async close(){clearInterval(this.timer);this.live.close(this.liveSnapshot());await this.mods?.close();this.mods=null;if(this.show.playback.holdOnStop!==false&&this.output.armed){this.log('Engine stopped · output left at the last look (keep the last look on stop)');this.output.close()}else await this.disarm();const audit=this.audit;this.audit=null;await new Promise(r=>audit?audit.end(r):r())}
 }

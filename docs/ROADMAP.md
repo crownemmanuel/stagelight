@@ -6,7 +6,7 @@ What StageLight does not do yet, roughly in the order the operator's venue is li
 - **Beat-phase lock.** Today tap tempo sets the speed, not where the "one" is. Add a downbeat tap, or phase-align to the next tap, so beat-locked cues land on the band's bar.
 - **BPM from audio.** Follow the band's tempo from the kick (the sound module already detects it), or from MIDI clock.
 - **Group and inhibitive masters.** A level per group ("face lights 80%") that caps every cue on those fixtures; on screen first, then on controller faders.
-- **Park.** Hold a broken or misbehaving fixture at a value, or out, over every cue.
+- **Park.** Done 2026-10-30 (docs/PARK.md): park a group or selection at its current output. Still to come: park at a typed value.
 - **Setlist mode.** Order pages as songs, a "next song" standby, and song notes in the GO bar.
 - **GO with a time.** A one-off fade time at GO, and a Back time.
 

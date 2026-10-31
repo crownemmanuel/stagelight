@@ -26,6 +26,7 @@ export function outputRGB(profile,requested,white=0,fixture={},state={}){
   return slot?hexRGB(slot.color):[1,1,1]; // Unsaved wheel positions have no verified preview color.
  }
  const wheel=nearestWheel(profile,requested);if(wheel)return wheel.rgb;
+ if(profile==='reveE3'&&(state.amber!==undefined||state.mint!==undefined)){const a=state.amber??white,m=state.mint??white;return requested.map((c,i)=>Math.max(0,Math.min(1,c+a*[.55,.33,0][i]+m*[.33,.55,.38][i])))}
  const tint=profile==='q120'?[1,.78,.5]:profile==='colorado'?[1,1,1]:profile==='reveE3'?[1,.88,.6]:profile==='pendant4'?[1,.95,.85]:[0,0,0];
  return requested.map((c,i)=>Math.max(0,Math.min(1,c+white*tint[i])));
 }

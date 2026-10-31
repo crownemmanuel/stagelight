@@ -5,7 +5,7 @@ test('Lamp pulse affects only selected MH7 control slot, expires to neutral and 
  await e.command('fixture.lamp',{ids:['705'],action:'strike'});assert.equal(output.last.get(5)[20],50);
  for(const [u,p] of output.last)for(let i=0;i<512;i++)if(u!==5||i!==20)assert.equal(p[i],before.get(u)[i]);
  await assert.rejects(e.command('fixture.lamp',{ids:['705'],action:'douse'}),/progress/);
- await e.command('look.capture',{id:'lamp-look',name:'Lamp look'});assert.ok(e.show.cues.find(c=>c.id==='lamp-look').look.every(x=>!('lamp' in x.values)));
+ await e.command('look.capture',{id:'lamp-look',name:'Lamp look',all:true});assert.ok(e.show.cues.find(c=>c.id==='lamp-look').look.every(x=>!('lamp' in x.values)));
  at(4.9);assert.equal(output.last.get(5)[20],50);at(5);assert.equal(output.last.get(5)[20],0);
  await e.command('fixture.lamp',{ids:['705'],action:'douse'});assert.equal(output.last.get(5)[20],70);at(10);assert.equal(output.last.get(5)[20],0);
 });

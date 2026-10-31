@@ -37,6 +37,14 @@ Added 2026-10-29 so a mistake or a crash during a service never costs the show.
 
 **Run rig check** GOes that page's first cue. **Lock for the show** turns the lock on.
 
+## When the engine stops
+
+- **Closing the window** never stops the engine: it runs on its own, and the next launch attaches to it.
+- **Stopping the engine** (a quit signal, an update, a restart) while armed just stops sending, so the rig keeps its last look, as after a crash. This is the default since 2026-10-30.
+- **Black out on stop instead.** Turn off Settings → *When the engine stops* → *Keep the lights at their last look* (`lights_settings_set {holdOnStop: false}`, saved as `show.playback.holdOnStop`). Stopping the engine then closes shutters, sends zero intensity five times, then stops sending.
+  - Turning output off (`output.disarm`) still blacks out.
+  - What the console does once Art-Net stops (hold or release after a timeout) is its own setting. On 2026-10-30 the operator closed the window with output armed and the lights stayed on.
+
 ## Crash resume
 
 - **Live-state file.** The engine mirrors what is live to `<data>/live-state.json` a second after it changes: armed, scene, page and cue, master, tempo, lock. A normal shutdown marks the file clean.

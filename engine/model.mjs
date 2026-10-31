@@ -7,7 +7,7 @@ export const PROFILE_DEFS = {
   q120:{name:'MEGA-LITE Colorlite Q120 · 5ch',channels:5,moving:false,attributes:['intensity','color','white'],source:'https://goknight.com/content/documentation/Colorlite%20Q120%20Manual%20V4.pdf'},
   colorado:{name:'COLORado 2 Quad Zoom · AR2.Z',channels:7,moving:false,attributes:['intensity','color','white','zoom'],source:'https://chauvetprofessional.com/wp-content/uploads/2018/01/COLORado_2_Quad_Zoom_UM-Rev5.pdf'},
   // Hog "Ovation Reve E-3 12ch" = Chauvet 12Ch: dimmer, dimmer fine, R, G, B, amber, mint, strobe, virtual color wheel, color temperature, hue, gobo rotator. Ch8–12 at 0 = off/no function/index 0.
-  reveE3:{name:'Ovation Rêve E-3 · 12ch',channels:12,moving:false,attributes:['intensity','color','white'],source:'https://chauvetprofessional.com/wp-content/uploads/2021/03/Ovation-Reve-E-3_UM_Rev14.pdf'},
+  reveE3:{name:'Ovation Rêve E-3 · 12ch',channels:12,moving:false,attributes:['intensity','color','white','amber','mint'],source:'https://chauvetprofessional.com/wp-content/uploads/2021/03/Ovation-Reve-E-3_UM_Rev14.pdf'},
   // Hog "RGBW Pendant Light 4ch" house lights. Layout from the Hog Fixture Builder (operator photo 2026-10-28): ch1 Intensity, ch2 Red, ch3 Green, ch4 Blue, each 0-255. No white channel despite the name.
   pendant4:{name:'RGBW Pendant Light · Hog 4ch (dimmer, R, G, B)',channels:4,moving:false,attributes:['intensity','color']},
   rogue:{colorWheel:COLOR_WHEELS.rogue,name:'Rogue R3 Beam · 16ch',channels:16,moving:true,attributes:['intensity','color','pan','tilt','movementSpeed','gobo','prism','prismRotation','frost','focus'],source:'https://chauvetprofessional.com/wp-content/uploads/2021/04/Rogue_R3_Beam_UM_Rev6-1.pdf'},
@@ -26,6 +26,7 @@ export const EFFECTS = {
   orbit:{layer:'position',name:'Ellipse',description:'A continuous pan/tilt ellipse inside each calibrated range.'},
   sparkle:{layer:'intensity',name:'Constellation',description:'Deterministic soft glints; no high-frequency strobe.'},
   fade:{layer:'intensity',name:'Fade',description:'Ramps intensity in or out (params.direction) across the whole track. Combine with cue.hold to keep the end state.'},
+  step:{layer:'intensity',name:'Note step',description:'One light at a time across the group, advanced by each hit of a master\'s step-mode sound trigger (or masters.step), not by time. Dark until the first hit; the light holds until the next. Crossfades scale with how fast the hits come.'},
   breathe:{layer:'intensity',name:'Breathe',description:'All fixtures swell and relax together with a slow two-color drift.'},
   figure8:{layer:'position',name:'Figure eight',description:'Pan/tilt figure-eight inside each calibrated range. Moving heads only.'},
   ballyhoo:{layer:'position',name:'Ballyhoo',description:'Wide, uneven pan and tilt swings across the group. Moving heads only.'}
@@ -67,6 +68,15 @@ export const zoneFixtures=(show,zone)=>[...new Set([...(zone.groups??[]).flatMap
 export const MASTER_KEYS=['a','s','d','f','g','h','j','k','l'];
 export const defaultMasters=()=>({slots:Array.from({length:18},(_,i)=>({id:'m'+(i+1),...(MASTER_KEYS[i]?{key:MASTER_KEYS[i]}:{}),action:'flash',fade:0})),desk:{highlight:'shift+h',clear:'c',blackout:'b',tap:'t'}});
 // Shows saved before pages existed get one page holding every cue, in order.
+// Parent groups (docs/GROUPS.md): a group with children always holds its children's fixtures, in child order, so every
+// consumer (cue tracks, selection, find, park) keeps reading group.fixtures. Run after any group change and on load.
+export function syncGroups(show){
+ const byId=new Map(show.groups.map(g=>[g.id,g])),done=new Map();
+ const resolve=(g,stack)=>{if(done.has(g.id))return done.get(g.id);if(!g.children?.length||stack.has(g.id)){done.set(g.id,g.fixtures??[]);return g.fixtures??[]}
+  stack.add(g.id);const out=[...new Set(g.children.flatMap(c=>byId.has(c)?resolve(byId.get(c),stack):[]))];stack.delete(g.id);if(out.length)g.fixtures=out;done.set(g.id,g.fixtures??[]);return g.fixtures??[]};
+ for(const g of show.groups){if(g.children)g.children=g.children.filter(c=>byId.has(c)&&c!==g.id);if(g.children&&!g.children.length)delete g.children;resolve(g,new Set())}
+ return show;
+}
 export function migrate(show){
  if(!show.pages)show.pages=[{id:'scene-1',name:'Scene 1',color:'#8bc9d0',cues:show.cues.map((c,i)=>({id:'entry-'+(i+1),cue:c.id,fade:2,follow:'manual'}))}];
  if(!show.groups.some(g=>g.id==='movers'))show.groups.push({id:'movers',name:'All moving heads',fixtures:show.fixtures.filter(f=>f.enabled&&['rogue','mh7','beam200','beam7r'].includes(f.profile)).map(f=>f.id)});
@@ -78,6 +88,7 @@ export function migrate(show){
  // Cues written with "… at 102.975 BPM" in their notes follow tap tempo at that tempo (docs/MIDI-AND-SOUND.md).
  for(const c of show.cues){if(c.bpm!==undefined)continue;const m=/\bat\s+(\d+(?:\.\d+)?)\s*BPM\b/i.exec(c.description??'');if(m&&+m[1]>=20&&+m[1]<=400)c.bpm=+m[1]}
  show.settings.modules??={sound:{enabled:false},midi:{enabled:false,virtualPort:true}};
+ syncGroups(show);
  return show;
 }
 const track=(group,effect,start,duration,params={})=>({group,effect,start,duration,params,fadeIn:1,fadeOut:1});

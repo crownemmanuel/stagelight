@@ -30,6 +30,7 @@ Masters are square slots under the stage. Each holds one library cue and an acti
 - **More masters.** "Add master" appends a slot, up to 60. ← and → (or the chevrons) page the bank by as many slots as fit, and the counter shows which are visible.
 - **Live state.** Held (amber), Running (green), Paused (dimmed), with the cue's progress.
 - **Playback semantics.** Masters start cues on top of what is running ([CUE-PLAYBACK.md](CUE-PLAYBACK.md)) and keep manual changes and the page cue list. Auto-follow keeps timing the page's own cue even while a master cue is on top.
+- **Highest precedence (2026-10-30).** A checkbox in the master's ⚙ (`masters.assign {priority: true}`, `lights_masters_assign`). Normally the newest running cue wins each fixture, so a cue fired after a master covers it. With highest precedence, while that master's cue runs it wins every fixture it uses over the scene and every other cue, newer ones included, like a high-priority cuelist on a Hog. Use it for things such as the house lights: engage the master and they follow it whatever the scene or the cue list sets. Among several such masters the newest wins. Its fader still sets its level. The programmer (manual changes), Highlight, Park, the grand master and Blackout still apply on top. Released, its fixtures go back to whatever is underneath. The card shows an amber ↑, and `runtime.running` marks its cue `priority: true`. This is cue precedence, not HTP intensity mixing: the master's level replaces what is underneath rather than taking the higher of the two.
 
 Saved in the portable show as `show.masters = {slots:[{id, key?, cue?, action, fade, label?}], desk:{highlight, clear, blackout}}`. Held flashes are transient (`runtime.masters.held`).
 
@@ -94,3 +95,11 @@ Engine: the scene's states are composed once per show revision (`floor()` in `en
 ## Resizable panels
 
 Drag the inner edge of the left (pages/scenes) or right panel: left 150–360 px, right 300–640 px. Double-click an edge to reset it. The button on the edge hides or shows the panel. Widths are per-viewer conveniences in browser storage, not in the show. They are off in the narrow single-column layout.
+
+## Updating a scene from Save (2026-10-30)
+
+The **Save** button's dialog has **Update a scene**: pick a scene (the active one is preselected) and press **Update scene**. It saves the whole current look into that scene, the blind look while blind, with the same `scene.capture {id, name}` as the scene's right-click **Update from the current look**. The scene keeps its colour. An active scene changes at once. MCP: `lights_scene_capture {id, name}` with an existing scene id.
+
+## What a recorded cue holds (2026-10-30)
+
+Recording a new cue (Save → Save as new cue, Record look, `cue.record`, `look.capture`) or replacing one keeps only fixtures that are **lit** or that you **changed** (programmer values, including ones set to zero on purpose, and programmer effects). Replacing a cue also keeps that cue's own fixtures. Untouched dark fixtures stay out, so playing the cue, or flashing it on a master, never blacks out the rest of the rig. `all: true` records every fixture. Scenes still record the whole rig, because a scene is a base look. Until then, cues held every fixture: on 2026-10-30, *House Lights* (master A) and *Back Light up* (F, G) were trimmed to their own lights.

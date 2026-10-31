@@ -25,6 +25,8 @@ function effectPose(f,i,n,type,p,time,show,length=1,center=null){
   const pulse=(time*(p.frequency??3)+offset)%1,band=Math.exp(-2*(((position-head)/(p.width??.3))**2));
   intensity=pulse<(p.duty??.4)?(.12+.88*band):0;color=mix(a,b,head);break;
  }
+ // Note step: params.step/stepAt/stepFade are written into the running copy of the cue by Engine.stepMaster, never saved.
+ case 'step':{const s=p.step??-1,k=s<0?0:(p.stepFade>0&&time>=(p.stepAt??0)?clamp((time-p.stepAt)/p.stepFade):1),cur=((s%n)+n)%n,prev=(((s-1)%n)+n)%n;intensity=s<0?0:i===cur?smooth(k):(s>0&&i===prev&&cur!==prev)?1-smooth(k):0;break}
  case 'chase':{const head=(q*.23)%1,dist=(head-i/n+1)%1;intensity=Math.exp(-dist/(p.width??.2)*4);color=mix(a,b,clamp(dist*4));break}
  case 'wave':intensity=.12+.88*(.5+.5*Math.sin(q*2-ph));color=mix(a,b,.5+.5*Math.sin(q*.7-ph));break;
  case 'mirror':intensity=.06+.94*(.5+.5*Math.cos(Math.abs(phase-.5)*9-q*2.5))**3;color=mix(a,b,Math.abs(phase-.5)*2);break;
@@ -83,7 +85,7 @@ export function finish(show,states,master=1,blackout=false){
  return states.map(s=>{const f=byId.get(s.id),st={...s};if(!f)return st;st.pan=clamp(st.pan,...f.calibration.panRange);st.tilt=clamp(st.tilt,...f.calibration.tiltRange);st.intensity=blackout||!f.enabled?0:clamp(st.intensity*master);return st});
 }
 export function render(show,cue,seconds,overrides={},master=1,blackout=false){return finish(show,applyOverrides(show,compose(show,cue,seconds),overrides),master,blackout)}
-const CONTINUOUS=['intensity','white','pan','tilt','zoom','frost','focus','prismRotation','movementSpeed','goboShake'];
+const CONTINUOUS=['intensity','white','amber','mint','pan','tilt','zoom','frost','focus','prismRotation','movementSpeed','goboShake'];
 // Linear crossfade; discrete wheel attributes switch at the midpoint.
 export function blendState(a,b,k){
  if(!a)return b;const st={...(k<.5?a:b)};
@@ -100,10 +102,10 @@ export function encode(show,states,{physical=false}={}){
   if(!universes.has(u))universes.set(u,Buffer.alloc(512));const d=universes.get(u),base=f.address-1;
   if(f.profile==='q120')d.set([byte(st.intensity),...st.color.map(byte),byte(st.white)],base);
   if(f.profile==='colorado')d.set([byte(st.intensity),...st.color.map(byte),byte(st.white),byte(st.zoom),0],base);
-  // Rêve E-3 12ch: 16-bit dimmer, RGB from color, white drives amber + mint together; strobe, VCW, CCT, hue and gobo rotator held at 0.
+  // Rêve E-3 12ch: 16-bit dimmer, RGB from color, amber (ch6) and mint (ch7) from their own attributes, else white drives both; strobe, VCW, CCT, hue and gobo rotator held at 0.
   // Pendant 4ch per the Hog Fixture Builder: dimmer, red, green, blue.
   if(f.profile==='pendant4')d.set([byte(st.intensity),...st.color.map(byte)],base);
-  if(f.profile==='reveE3'){const dim=Math.round(clamp(st.intensity)*65535),w=byte(st.white);d.set([dim>>8,dim&255,...st.color.map(byte),w,w,0,0,0,0,0],base)}
+  if(f.profile==='reveE3'){const dim=Math.round(clamp(st.intensity)*65535);d.set([dim>>8,dim&255,...st.color.map(byte),byte(st.amber??st.white),byte(st.mint??st.white),0,0,0,0,0],base)}
   if(f.profile==='mh7'){
    const fine=v=>Math.round(clamp(v)*65535),dim=fine(st.intensity),pan=fine(f.calibration.invertPan?1-st.pan:st.pan),tilt=fine(f.calibration.invertTilt?1-st.tilt:st.tilt),zoom=fine(st.zoom),focus=fine(st.focus);
    const color=nearestWheel('mh7',st.color).value;

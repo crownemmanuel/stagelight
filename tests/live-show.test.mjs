@@ -182,6 +182,18 @@ test('APC40 mkII: connects in Ableton Live mode, pads and faders drive masters, 
  await e.command('controller.save',{id:'apc40mk2',map:{'pad-1':{do:'blackout'}}});await e.command('controller.test',{id:'apc40mk2',control:'pad-1'});assert.equal(e.blackout,true);
  await e.command('controller.reset',{id:'apc40mk2'});assert.deepEqual(e.mods.midi.profile().map['pad-1'],{do:'master.press',n:1});
  const status=await e.command('midi.status');assert.equal(status.controller.model,'apc40mk2');assert.ok(status.controls.length>100);assert.equal(status.last.control,'bank-left');
+
+ // Desk display: auto by default; saved without touching the map, and validated with the show.
+ assert.equal(status.profile.deskNumbers,'auto');assert.equal(status.profile.deskColors,'auto');
+ await e.command('controller.save',{id:'apc40mk2',deskNumbers:'on',deskColors:'off'});let p=e.mods.midi.profile();assert.equal(p.deskNumbers,'on');assert.equal(p.deskColors,'off');assert.deepEqual(p.map['pad-1'],{do:'master.press',n:1});validateShow(e.show);
+ await assert.rejects(e.command('controller.save',{id:'apc40mk2',deskNumbers:'maybe'}));
+ // A master's colour drives its pad LED and is read back with what the pad shows; clearColor goes back to its automatic colour.
+ const slot=e.show.masters.slots[0].id;await e.command('masters.assign',{slot,color:'#00ff00'});const mc=(await e.command('midi.status')).masterColors[0];
+ assert.deepEqual([mc.master,mc.color,mc.own],[1,'#00ff00',true]);assert.equal(mc.pad,APC.PALETTE[APC.nearestColor('#00ff00')]);
+ assert.equal(e.mods.midi.wanted().get('pad-1')[0][2],22,'idle green is Akai\'s dark green');assert.equal(APC.PALETTE[APC.dimColor('#7fd3dc')],'#004152','idle cyan stays cyan, not grey');
+ await e.command('masters.assign',{slot,clearColor:true});assert.equal(e.show.masters.slots[0].color,undefined);const auto=(await e.command('midi.status')).masterColors;assert.equal(auto[0].own,false);
+ // Unset masters differ by position, repeat every eight, and are exact pad colours.
+ assert.deepEqual(auto.slice(0,8).map(m=>m.color),['#ff0000','#ff5400','#ffff00','#00ff00','#00a9ff','#0000ff','#5400ff','#ff00ff']);if(auto.length>8)assert.equal(auto[8].color,'#ff0000');for(const m of auto.slice(0,8))assert.equal(m.pad.toLowerCase(),m.color);
  await e.mods.close();e.mods=null;
 });
 
@@ -190,4 +202,102 @@ test('MCP lists the live-show tools',async()=>{
  child.stdin.write(JSON.stringify({jsonrpc:'2.0',id:1,method:'tools/list'})+'\n');while(!out.includes('\n'))await wait(20);child.kill();
  const names=JSON.parse(out.split('\n')[0]).result.tools.map(t=>t.name);
  for(const n of ['tempo_tap','tempo_set','masters_level','performance_lock','show_versions','show_restore','show_check','resume_apply','modules_set','modules_status','sound_status','sound_test','midi_test','controller_save','controller_test'])assert.ok(names.includes('lights_'+n),n);
+});
+
+test('audio inputs are named and mapped in the show, with the sound module off, and exposed over MCP',async()=>{
+ const {e}=rig();assert.deepEqual((await e.command('sound.inputs')).inputs,[]);
+ await e.command('sound.inputs.set',{inputs:[{channel:3,name:'KIK IN'},{channel:1,name:' SUB KIK '}]});
+ assert.deepEqual((await e.command('sound.inputs')).inputs,[{channel:1,name:'SUB KIK'},{channel:3,name:'KIK IN'}]);
+ await e.command('sound.inputs.set',{inputs:[{channel:3,name:''},{channel:2,name:'KIKOUT'}]});
+ assert.deepEqual(e.show.audioInputs.map(a=>a.channel),[1,2]);assert.equal(e.modulesStatus().sound.inputs.length,2);
+ await e.command('sound.inputs.set',{inputs:[{channel:5,name:'SN1BT'}],replace:true});assert.deepEqual(e.show.audioInputs,[{channel:5,name:'SN1BT'}]);
+ validateShow(e.show);assert.throws(()=>validateShow({...e.show,audioInputs:[{channel:5,name:'a'},{channel:5,name:'b'}]}),/Duplicate/);
+ await assert.rejects(e.command('sound.inputs.set',{inputs:[{channel:0,name:'x'}]}));
+ const {COMMANDS}=await import('../engine/spec.mjs');for(const c of ['sound.inputs','sound.inputs.set'])assert.ok(COMMANDS[c]&&!COMMANDS[c].internal,'exposed as lights_'+c.replaceAll('.','_'));
+});
+
+test('a step-mode sound trigger moves a Note step chase on one light per hit, holding between hits',async()=>{
+ const {e,at,frame}=rig();await e.command('master.set',{value:1});
+ const ids=['401','402','403'];
+ await e.command('cue.save',{cue:{id:'keys',name:'Keys',duration:3600,loop:true,tracks:[{fixtures:ids,layer:'intensity',effect:'step',start:0,duration:3600,params:{color:'#0030ff',brightness:1},fadeIn:0,fadeOut:0}],look:ids.map(id=>({id,values:{intensity:1,color:'#0030ff'}}))}});
+ await e.command('masters.assign',{slot:'m6',cue:'keys',action:'toggle',sound:{channel:23,band:'full',mode:'step'}});
+ const lit=()=>ids.map(id=>Math.round(frame(id).intensity*100)/100);
+ at(0);await e.command('masters.trigger',{slot:'m6',down:true});await e.command('masters.trigger',{slot:'m6',down:false});at(.5);assert.deepEqual(lit(),[0,0,0],'dark until the first note');
+ e.soundHit('m6');at(1);assert.deepEqual(lit(),[1,0,0]);at(5);assert.deepEqual(lit(),[1,0,0],'a held note keeps its light');
+ e.soundHit('m6');at(5.01);assert.ok(frame('401').intensity>.5&&frame('402').intensity<.5,'slow playing crossfades');at(5.4);assert.deepEqual(lit(),[0,1,0]);
+ e.soundHit('m6');at(5.45);e.soundHit('m6');at(5.5);assert.deepEqual(lit(),[1,0,0],'wraps round; fast notes snap');
+ assert.ok(e.running().some(l=>l.cue.id==='keys'),'hits never release the cue');assert.equal(e.show.cues.find(c=>c.id==='keys').tracks[0].params.step,undefined,'the saved cue is untouched');
+ await e.command('masters.step',{slot:'m6'});at(6);assert.deepEqual(lit(),[0,1,0]);
+});
+
+test('find mode highlights one fixture at a time, Hog Next/Back style, and leaves the list selected',async()=>{
+ const {e}=rig();const ids=e.show.groups[0].fixtures,g=e.show.groups[0].id;
+ await e.command('find.start',{group:g});let f=e.runtime().find;
+ assert.deepEqual([f.active,f.index,f.total,f.id],[true,0,ids.length,ids[0]]);assert.equal(e.runtime().highlight,true);assert.deepEqual(e.selection.ids,[ids[0]]);
+ await e.command('find.step',{});assert.equal(e.runtime().find.id,ids[1]);
+ await e.command('find.step',{direction:'back'});await e.command('find.step',{direction:'back'});assert.equal(e.runtime().find.id,ids.at(-1),'wraps round');
+ await e.command('find.stop');assert.equal(e.runtime().find.active,false);assert.equal(e.runtime().highlight,false);assert.deepEqual(e.selection.ids,ids);assert.equal(e.selection.group,g);
+ await e.command('selection.set',{ids:[ids[2],ids[0]]});await e.command('find.start',{});assert.equal(e.runtime().find.total,2,'uses a multi-fixture selection');assert.equal(e.runtime().find.id,ids[2]);
+ await e.command('selection.set',{ids:[]});assert.equal(e.runtime().find.active,false,'selecting something else ends it');
+ await e.command('find.step',{});const all=e.show.fixtures.filter(x=>x.enabled).length;assert.equal(e.runtime().find.total,all,'no selection: the whole rig by ID');
+ await e.command('highlight.set',{enabled:false});assert.equal(e.runtime().find.active,false);
+ const {COMMANDS}=await import('../engine/spec.mjs');for(const c of ['find.start','find.step','find.stop'])assert.ok(COMMANDS[c]&&!COMMANDS[c].internal);
+});
+
+test('park holds a fixture at exactly what it showed over cues and master; blackout still wins; unpark releases',async()=>{
+ const {e,at,frame}=rig();await e.command('master.set',{value:1});
+ await e.command('cue.save',{cue:look('a',['301','302'])});await e.command('cue.play',{id:'a'});at(1);assert.equal(frame('301').intensity,1);
+ await e.command('master.set',{value:.5});at(1.1);await e.command('park.set',{ids:['301']});assert.deepEqual(e.runtime().parked,['301']);
+ await e.command('cue.stop',{fade:0});await e.command('master.set',{value:1});at(3);assert.equal(frame('301').intensity,.5,'held after the cue stopped and master moved');assert.equal(frame('302').intensity,0);
+ await e.command('highlight.set',{enabled:true});await e.command('selection.set',{ids:['301']});at(3.1);assert.equal(frame('301').intensity,.5,'Highlight does not move it');
+ await e.command('blackout.set',{enabled:true});at(3.2);assert.equal(frame('301').intensity,0,'blackout wins');await e.command('blackout.set',{enabled:false});await e.command('highlight.set',{enabled:false});await e.command('highlight.set',{enabled:false});
+ validateShow(e.show);assert.equal(e.show.parked[0].id,'301');
+ await e.command('park.set',{ids:['301'],parked:false});at(4);assert.equal(frame('301').intensity,0);assert.deepEqual(e.runtime().parked,[]);
+});
+
+test('a group keeps its colour across edits and saves; an empty colour removes it',async()=>{
+ const {e}=rig();const g=e.show.groups[0];
+ await e.command('group.edit',{id:g.id,color:'#ff5d5d'});assert.equal(e.show.groups[0].color,'#ff5d5d');
+ await e.command('group.edit',{id:g.id,name:'Renamed'});assert.equal(e.show.groups[0].color,'#ff5d5d','rename keeps it');
+ await e.command('group.save',{id:g.id,name:'Renamed',fixtures:g.fixtures.slice(0,1)});assert.equal(e.show.groups[0].color,'#ff5d5d','replace keeps it');
+ await e.command('group.edit',{id:g.id,color:''});assert.equal(e.show.groups[0].color,undefined);validateShow(e.show);
+ await assert.rejects(e.command('group.edit',{id:g.id,color:'red'}));
+});
+
+test('stopping the engine keeps the last look by default; holdOnStop false blacks out first',async()=>{
+ const sent=[];const out={...output(),send(u){sent.push(u)},async arm(){this.armed=true}};
+ const make=async hold=>{let time=0;const e=new Engine({output:{...out,armed:true,send(u){sent.push([...u.values()].map(d=>Math.max(...d)))},close(){this.armed=false}},clock:()=>time});if(hold!==undefined)await e.command('settings.set',{holdOnStop:hold});return e};
+ let e=await make(false);sent.length=0;await e.close();assert.ok(sent.length>0,'blackout packets sent on stop');
+ e=await make(undefined);sent.length=0;await e.close();assert.equal(sent.length,0,'default: nothing more sent, the last look stands');
+ e=await make(true);sent.length=0;await e.close();assert.equal(sent.length,0);
+});
+
+test('parent groups hold their children\'s fixtures, follow child edits, nest and un-nest, and refuse cycles',async()=>{
+ const {e}=rig();const g=id=>e.show.groups.find(x=>x.id===id);
+ await e.command('group.save',{id:'a',name:'A',fixtures:['301','302']});await e.command('group.save',{id:'b',name:'B',fixtures:['303']});
+ await e.command('group.save',{id:'heads',name:'Heads',children:['a','b']});assert.deepEqual(g('heads').fixtures,['301','302','303']);
+ await e.command('group.edit',{id:'b',add:['304']});assert.deepEqual(g('heads').fixtures,['301','302','303','304'],'follows a child edit');
+ await assert.rejects(e.command('group.edit',{id:'heads',add:['305']}),/parent group/);
+ await e.command('group.save',{id:'c',name:'C',fixtures:['305']});await e.command('group.nest',{id:'c',parent:'heads'});assert.deepEqual(g('heads').children,['a','b','c']);assert.ok(g('heads').fixtures.includes('305'));
+ await e.command('group.save',{id:'all-heads',name:'All',children:['heads']});assert.equal(g('all-heads').fixtures.length,5,'nests two deep');
+ await assert.rejects(e.command('group.nest',{id:'all-heads',parent:'heads'}),/inside itself/);
+ await assert.rejects(e.command('group.nest',{id:'c',parent:'a'}),/holds fixtures/,'a plain group never loses its fixtures');
+ await e.command('group.nest',{id:'c',parent:'all-heads'});assert.deepEqual(g('heads').children,['a','b'],'moving leaves the old parent');assert.deepEqual(g('all-heads').children,['heads','c']);
+ await e.command('group.nest',{id:'c'});assert.deepEqual(g('all-heads').children,['heads'],'back at top level');
+ await e.command('group.delete',{id:'b'});assert.deepEqual(g('heads').children,['a']);assert.deepEqual(g('heads').fixtures,['301','302']);
+ await e.command('selection.group',{group:'all-heads'});assert.deepEqual(e.selection.ids,['301','302']);
+ await e.command('group.edit',{id:'heads',children:[]});assert.equal(g('heads').children,undefined);validateShow(e.show);
+});
+
+test('fixture.delete removes fixtures and every reference, drops emptied groups, and refuses while armed',async()=>{
+ const {e}=rig();const ids=['301','302'];
+ await e.command('group.save',{id:'two',name:'Two',fixtures:ids});await e.command('group.save',{id:'mix',name:'Mix',fixtures:['301','303']});await e.command('group.save',{id:'top',name:'Top',children:['two','mix']});
+ await e.command('cue.save',{cue:{...look('lk',['301','303']),tracks:[{fixtures:['301'],effect:'static',start:0,duration:1,params:{}}]}});await e.command('park.set',{ids:['302']});
+ await e.command('fixture.delete',{ids});
+ assert.ok(!e.show.fixtures.some(f=>ids.includes(f.id)));assert.ok(!e.show.groups.some(g=>g.id==='two'),'emptied group deleted');
+ assert.deepEqual(e.show.groups.find(g=>g.id==='mix').fixtures,['303']);assert.deepEqual(e.show.groups.find(g=>g.id==='top').children,['mix']);
+ const c=e.show.cues.find(x=>x.id==='lk');assert.deepEqual(c.look.map(x=>x.id),['303']);assert.equal(c.tracks.length,0,'empty track dropped');assert.deepEqual(e.show.parked,[]);validateShow(e.show);
+ await e.command('cue.save',{cue:{...look('uses',['303']),tracks:[{group:'mix',effect:'static',start:0,duration:1,params:{}}]}});
+ await assert.rejects(e.command('fixture.delete',{ids:['303']}),/used by cue/);
+ e.output.armed=true;await assert.rejects(e.command('fixture.delete',{ids:['304']}),/output off/);
 });

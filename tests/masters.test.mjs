@@ -31,6 +31,21 @@ test('a flash over a cue that uses the same fixtures hands them back on let go i
  await e.command('masters.trigger',{slot:'m1',down:false});at(.3);assert.equal(frame('301').intensity,.4,'the cue underneath shows again');assert.deepEqual(running(e),['blue']);
 });
 
+test('a highest-precedence master wins its fixtures over the scene and newer cues; a normal one is covered',async()=>{
+ const {e,at,frame}=rig();await setup(e);const dim=id=>({id,name:id,duration:30,loop:true,tracks:[],look:[{id:'301',values:{intensity:.2}}]});
+ await e.command('cue.save',{cue:dim('newer')});await e.command('scene.save',{scene:{id:'house',name:'House',look:[{id:'301',values:{intensity:.6}}]}});
+ await e.command('masters.assign',{slot:'m1',cue:'c301',action:'toggle'});await e.command('scene.go',{id:'house',fade:0});at(.1);assert.equal(frame('301').intensity,.6);
+ await press(e,'m1');at(.2);assert.equal(frame('301').intensity,1,'a master beats the scene');
+ await e.command('cue.play',{id:'newer',fade:0});at(.3);assert.equal(frame('301').intensity,.2,'normal: a newer cue covers the master');
+ await e.command('masters.assign',{slot:'m1',priority:true});at(.4);assert.equal(frame('301').intensity,1,'highest precedence: the master wins again');
+ const r=e.runtime().running;assert.deepEqual(r.find(x=>x.id==='c301').priority,true);assert.equal(r.find(x=>x.id==='newer').priority,undefined);
+ await e.command('masters.level',{slot:'m1',level:.3,go:false});at(.5);assert.ok(Math.abs(frame('301').intensity-.3)<1e-9,'its fader still sets the level, even under the scene and newer cue');
+ await e.command('masters.level',{slot:'m1',level:1,go:false});
+ await e.command('cue.play',{id:'c401',fade:0});at(.6);assert.equal(frame('301').intensity,1,'unrelated newer cues leave it alone');assert.equal(frame('401').intensity,1);
+ await press(e,'m1');at(.7);assert.equal(frame('301').intensity,.2,'released: the newer cue shows again');
+ validateShow(e.show);await e.command('masters.assign',{slot:'m1',priority:false});assert.equal(e.show.masters.slots[0].priority,undefined);
+});
+
 test('toggle, go, pause and release actions; masters keep manual changes and the page cue list',async()=>{
  const {e,at}=rig();await setup(e);
  await e.command('masters.assign',{slot:'m2',cue:'c401',action:'toggle'});await press(e,'m2');assert.deepEqual(running(e),['c401'],'toggle on stays on after let go');await press(e,'m2');assert.deepEqual(running(e),[],'second press releases');

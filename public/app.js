@@ -4,6 +4,7 @@ import {aimAngles} from './aim.js?v=ui-2';
 import {Stage} from './stage.js?v=ui-2';
 import {mountJoystick} from './joystick.js';
 import {createLiveControl} from './live-controls.js';
+import {masterColor,padColor} from './pad-colors.js';
 import {uid} from './ids.js';
 import {visibleFixtures,hiddenFixtureIds} from './visibility.js';
 import {icon,ICONS} from './icons.js?v=ui-2';
@@ -80,6 +81,11 @@ function openSceneMenu(id,x,y){
 // ── Groups & selection ──
 const GROUP_ORDER=['movers','backlights','rogues','mh7s','audience','grid','rear-heads'];
 function sortedGroups(){return [...show.groups].sort((a,b)=>{const ia=GROUP_ORDER.indexOf(a.id),ib=GROUP_ORDER.indexOf(b.id);return (ia<0?99:ia)-(ib<0?99:ib)})}
+// Parent groups (docs/GROUPS.md): pills and cards show top-level groups; a parent opens to show its child groups.
+// Which parents are open is a per-viewer convenience in browser storage.
+const parentOf=id=>show.groups.find(g=>g.children?.includes(id)),childGroups=g=>(g.children??[]).map(c=>show.groups.find(x=>x.id===c)).filter(Boolean);
+let openGroups=new Set((store.get('openGroups','')||'').split(',').filter(Boolean)),gridParent=store.get('gridParent','')||null;
+const toggleOpen=id=>{openGroups.has(id)?openGroups.delete(id):openGroups.add(id);store.set('openGroups',[...openGroups].join(','));drawGroups()};
 function idsForGroup(id=group){return id==='all'?show.fixtures.filter(f=>f.enabled).map(f=>f.id):show.groups.find(g=>g.id===id)?.fixtures??[]}
 // Show mode can swap the 3D stage for big group tiles; the visualizer is fully paused while hidden. Library mode puts
 // the cue library in the stage's place until a cue is previewed (libPeek), which shows the stage again.
@@ -107,9 +113,15 @@ window.addEventListener('message',e=>{
  else if(type==='visualizer-closed'&&e.source===visWin)dockVisualizer();
 });
 setInterval(()=>{if(visWin&&!visOut())dockVisualizer()},1000);
+// Park (docs/PARK.md): which of a group's fixtures are held.
+const parkedSet=()=>new Set((show?.parked??[]).map(p=>p.id)),parkedAll=g=>{const p=parkedSet();return g.fixtures.length>0&&g.fixtures.every(id=>p.has(id))},parkedSome=g=>{const p=parkedSet();return g.fixtures.some(id=>p.has(id))};
 function drawGroupGrid(){
- if(!show||$('#groupGrid').hidden)return;const tiles=[{id:'all',name:'Every patched fixture',fixtures:show.fixtures.filter(f=>f.enabled).map(f=>f.id)},...sortedGroups()];
- $('#groupGrid').innerHTML=`<div class="tile-grid">${tiles.map(g=>`<button class="group-tile ${g.id===group?'active':''}" data-tile="${esc(g.id)}" title="Click to select · Shift-click to add"><div class="tile-head"><strong>${esc(g.id==='all'?'All':shortGroup(g))}</strong><span>${g.fixtures.length}</span></div><small>${esc(g.name)}</small><div class="tile-dots">${g.fixtures.slice(0,32).map(id=>`<i data-tile-dot="${esc(id)}"></i>`).join('')}${g.fixtures.length>32?`<em>+${g.fixtures.length-32}</em>`:''}</div><div class="tile-foot"><div class="tile-level"><i data-tile-level="${esc(g.id)}"></i></div><b data-tile-pct="${esc(g.id)}">0%</b></div></button>`).join('')}<button class="group-tile new-tile" id="newGroupTile"><span>${icon('plus')}</span><strong>New group</strong><small>${selected.length?`From the ${selected.length} selected, or pick fixtures`:'Pick fixtures'}</small></button></div>`;
+ if(!show||$('#groupGrid').hidden)return;const parked=parkedSet();if(gridParent&&!show.groups.some(g=>g.id===gridParent&&g.children))gridParent=null;const inside=gridParent&&show.groups.find(g=>g.id===gridParent);
+ const tiles=inside?[inside,...childGroups(inside)]:[{id:'all',name:'Every patched fixture',fixtures:show.fixtures.filter(f=>f.enabled).map(f=>f.id)},...sortedGroups().filter(g=>!parentOf(g.id))];
+ const crumbs=[];for(let p=inside;p;p=parentOf(p.id))crumbs.unshift(p);
+ $('#groupGrid').innerHTML=`${inside?`<nav class="grid-crumbs"><button data-grid-up="">${icon('chevron-left')}All groups</button>${crumbs.map(p=>`<span>›</span><button data-grid-up="${esc(p.id)}" ${p===inside?'class="here"':''}>${esc(p.name)}</button>`).join('')}</nav>`:''}<div class="tile-grid">${tiles.map(g=>`<button class="group-tile ${g.id===group?'active':''} ${g.color?'tinted':''}" data-tile="${esc(g.id)}" ${g.color?`style="--g:${esc(g.color)}"`:''} title="Click to select · Shift-click to add"><div class="tile-head"><strong>${esc(g.id==='all'?'All':g===inside?'All '+shortGroup(g).toLowerCase():inside?childLabel(g,inside):shortGroup(g))}</strong><span>${g.fixtures.length}</span></div>${g.children&&g!==inside?`<span role="button" tabindex="0" class="tile-open" data-tile-open="${esc(g.id)}" title="Open: its ${g.children.length} groups">${icon('group')}${g.children.length} groups ${icon('chevron-right')}</span>`:''}<small>${esc(g.name)}</small><div class="tile-dots">${g.fixtures.slice(0,32).map(id=>`<i data-tile-dot="${esc(id)}" ${parked.has(id)?'class="parked"':''}></i>`).join('')}${g.fixtures.length>32?`<em>+${g.fixtures.length-32}</em>`:''}</div><div class="tile-foot"><div class="tile-level"><i data-tile-level="${esc(g.id)}"></i></div><b data-tile-pct="${esc(g.id)}">0%</b></div></button>`).join('')}<button class="group-tile new-tile" id="newGroupTile"><span>${icon('plus')}</span><strong>New group</strong><small>${selected.length?`From the ${selected.length} selected, or pick fixtures`:'Pick fixtures'}</small></button></div>`;
+ $$('[data-tile-open]').forEach(b=>b.onclick=e=>{e.stopPropagation();gridParent=b.dataset.tileOpen;store.set('gridParent',gridParent);drawGroupGrid()});
+ $$('[data-grid-up]').forEach(b=>b.onclick=e=>{e.stopPropagation();gridParent=b.dataset.gridUp||null;store.set('gridParent',gridParent??'');drawGroupGrid()});
  $('#newGroupTile').onclick=()=>groupEditor(null);$$('[data-tile]').forEach(b=>bindGroupMenu(b,b.dataset.tile));
  $$('[data-tile]').forEach(b=>b.onclick=e=>{if(b.dataset.longPress){delete b.dataset.longPress;return}const id=b.dataset.tile;if(!e.shiftKey)return selectGroup(id);const ids=[...new Set([...selected,...idsForGroup(id)])];applySelection(ids);quiet(command('selection.set',{ids}))});
  liveKey='';paint(runtime);
@@ -120,9 +132,12 @@ function paintGroupGrid(frames){
  for(const el of $$('[data-tile-level]')){const id=el.dataset.tileLevel,ids=idsForGroup(id).filter(x=>fixture(x)?.enabled),avg=ids.length?ids.reduce((n,x)=>n+(byId.get(x)?.intensity??0),0)/ids.length:0,pct=Math.round(avg*100)+'%';if(el.dataset.pct===pct)continue;el.dataset.pct=pct;el.style.width=pct;setText($(`[data-tile-pct="${CSS.escape(id)}"]`),pct)}
 }
 function drawGroups(){
- const groups=sortedGroups(),pills=groups.map(g=>`<button class="pill ${g.id===group?'active':''}" data-group="${esc(g.id)}" title="${esc(g.name)}">${esc(shortGroup(g))}<span>${g.fixtures.length}</span></button>`).join('');
+ // A selected child keeps its parents open, so the active pill is always visible.
+ for(let p=group&&parentOf(group);p;p=parentOf(p.id))openGroups.add(p.id);
+ const pill=(g,depth,up)=>{const kids=childGroups(g),open=kids.length&&openGroups.has(g.id);return `<button class="pill ${g.id===group?'active':''} ${g.color?'tinted':''} ${depth?'child':''} ${kids.length?'parent':''}" data-group="${esc(g.id)}" title="${esc(g.name)}${kids.length?` · ${kids.length} groups inside`:''}" ${g.color?`style="--g:${esc(g.color)}"`:''}>${esc(up?childLabel(g,up):shortGroup(g))}<span>${g.fixtures.length}</span>${kids.length?`<i class="pill-open ${open?'open':''}" data-open-group="${esc(g.id)}" role="button" aria-label="${open?'Close':'Open'} ${esc(g.name)}" title="${open?'Close':'Open'}: its groups">${icon('chevron-right')}</i>`:''}</button>${open?`<span class="pill-children">${kids.map(k=>pill(k,depth+1,g)).join('')}</span>`:''}`};
+ const pills=sortedGroups().filter(g=>!parentOf(g.id)).map(g=>pill(g,0)).join('');
  $('#groupPills').innerHTML=`<button class="pill ${group==='all'?'active':''}" data-group="all"><span class="pill-icon" data-icon="group"></span>All</button>${pills}<button class="pill ghost build-only" id="groupsManage" title="New group" data-icon="plus"></button>`;
- fillIcons($('#groupPills'));applyDrawer();drawGroupGrid();$$('[data-group]').forEach(b=>{b.onclick=()=>{if(b.dataset.longPress){delete b.dataset.longPress;return}selectGroup(b.dataset.group)};bindGroupMenu(b,b.dataset.group)});$('#groupsManage').onclick=()=>groupEditor(null);
+ fillIcons($('#groupPills'));applyDrawer();drawGroupGrid();$$('[data-open-group]').forEach(i=>i.onclick=e=>{e.stopPropagation();toggleOpen(i.dataset.openGroup)});$$('[data-group]').forEach(b=>{b.onclick=()=>{if(b.dataset.longPress){delete b.dataset.longPress;return}selectGroup(b.dataset.group)};bindGroupMenu(b,b.dataset.group)});$('#groupsManage').onclick=()=>groupEditor(null);
 }
 // The group pills and the LED wall sit in a drawer over the stage, closed by default to keep the view clean. Closed, its
 // button names the selected group. Open or closed is a per-viewer convenience in browser storage.
@@ -132,6 +147,9 @@ function applyDrawer(){
  b.setAttribute('aria-expanded',String(drawerOpen));b.title=drawerOpen?'Hide the groups and LED wall':'Show the groups and LED wall';
  b.classList.toggle('active',!drawerOpen&&!!g);setText(b.querySelector('.drawer-label'),drawerOpen?'Groups':g?(g.id?shortGroup(g):g.name):'Groups');
 }
+// Inside an open parent, a child is named by what tells it apart: "House lights · row 2 (provisional)" under
+// House lights reads "Row 2".
+const childLabel=(g,p)=>{const parts=g.name.split('·').map(x=>x.trim()).filter(Boolean),rest=parts.length>1&&parts[0].toLowerCase()===shortGroup(p).toLowerCase()?parts.slice(1).join(' · '):g.name;const t=rest.replace(/\s*\((provisional|location unknown)\)/i,'');return t.charAt(0).toUpperCase()+t.slice(1)};
 const shortGroup=g=>({movers:'Movers',rogues:'Beams',mh7s:'MH7s',backlights:'Backlights',audience:'Audience',grid:'Grid','rear-heads':'Rear heads'}[g.id]??g.name.split('·')[0].trim());
 // Selection lives in the engine so agents (selection.set/group) and the UI stay in step.
 function applySelection(ids,context){cancelAlignment();group=context??null;const next=ids.filter(id=>fixture(id)),changed=next.length!==selected.length||next.some(id=>!selected.includes(id));selected=next;afterSelection(changed)}
@@ -166,14 +184,18 @@ function drawSelectionBar(){
 // Everything goes through group.save / group.edit / group.delete, the same commands agents use.
 function openGroupMenu(id,x,y){
  const g=show.groups.find(g=>g.id===id),sel=selected.length,item=(act,ic,label,dis=false,danger=false)=>`<button role="menuitem" data-ctx="${act}" ${dis?'disabled':''} class="${danger?'danger':''}"><span data-icon="${ic}"></span>${label}</button>`;
- const inGroup=g?selected.filter(x=>g.fixtures.includes(x)).length:0;
- $('#ctxMenu').innerHTML=`<div class="ctx-title">${esc(g?g.name:'All fixtures')}</div>`+item('select','target','Select')+item('add-select','plus','Add to selection')+'<hr>'+
-  (g?item('add','plus',`Add ${sel} selected to group`,!sel||inGroup===sel)+item('remove','close',`Remove ${inGroup} selected from group`,!inGroup||inGroup===g.fixtures.length)+item('replace','group',`Set group to the ${sel} selected`,!sel)+'<hr>'+item('rename','edit','Rename…')+item('edit','sliders','Edit fixtures…')+'<hr>'+item('delete','trash','Delete group',false,true)
+ const inGroup=g?selected.filter(x=>g.fixtures.includes(x)).length:0,finding=!!runtime?.find?.active&&selected.length>0,members={fixtures:finding?selected:idsForGroup(id)},pAll=parkedAll(members),pSome=parkedSome(members),findOn=runtime?.find?.active&&(runtime.find.group??'all')===id;
+ $('#ctxMenu').innerHTML=`<div class="ctx-title">${esc(g?g.name:'All fixtures')}</div>`+item('select','target','Select')+item('add-select','plus','Add to selection')+'<hr>'+item('find','search',findOn?'Stop finding':'Find · one at a time (← →)')+(finding?item('park','lock',`${pAll?'Unpark':'Park'} selected · ${selected.length===1?esc(selected[0]):selected.length+' fixtures'}`):item('park','lock',pAll?'Unpark':pSome?'Park all (some parked)':'Park · hold this look'))+(g?item('color','palette','Change color…'):'')+'<hr>'+
+  (g?(g.children?item('open','chevron-right',openGroups.has(id)?'Close · hide its groups':`Open · its ${g.children.length} groups`):'')+item('nest','group',parentOf(id)?`Move to another group… (in ${esc(parentOf(id).name)})`:'Move into a group…')+(parentOf(id)?item('unnest','close',`Take out of ${esc(parentOf(id).name)}`):'')+item('parent','plus','New parent group with this…')+'<hr>'+
+   (g.children?'':item('add','plus',`Add ${sel} selected to group`,!sel||inGroup===sel)+item('remove','close',`Remove ${inGroup} selected from group`,!inGroup||inGroup===g.fixtures.length))+item('replace','group',`Set group to the ${sel} selected`,!sel)+'<hr>'+item('rename','edit','Rename…')+item('edit','sliders','Edit fixtures…')+'<hr>'+item('delete','trash','Delete group',false,true)+item('purge','trash',`Remove its ${g.fixtures.length} fixtures from the show…`,false,true)
    :item('new','plus',`New group from ${sel} selected`,!sel));
  showCtxMenu(x,y);
- const run={select:()=>selectGroup(id),'add-select':()=>{const ids=[...new Set([...selected,...idsForGroup(id)])];applySelection(ids);quiet(command('selection.set',{ids}))},
+ const run={open:()=>toggleOpen(id),nest:()=>nestDialog(g),unnest:()=>quiet(command('group.nest',{id})),parent:()=>newParentDialog(g),
+  find:()=>quiet(command(findOn?'find.stop':'find.start',findOn?{}:{group:id})),park:()=>{const who=finding?(selected.length===1?'fixture '+selected[0]:selected.length+' fixtures'):g?g.name:'all fixtures';quiet(command('park.set',finding?{ids:selected,parked:!pAll}:{group:id,parked:!pAll}).then(()=>toast(pAll?`Unparked ${who}.`:`Parked ${who}: it holds this look over every cue.`)))},color:()=>groupColor(g),
+  select:()=>selectGroup(id),'add-select':()=>{const ids=[...new Set([...selected,...idsForGroup(id)])];applySelection(ids);quiet(command('selection.set',{ids}))},
   add:()=>quiet(command('group.edit',{id,add:selected}).then(()=>toast(`Added to ${g.name}.`))),remove:()=>quiet(command('group.edit',{id,remove:selected.filter(x=>g.fixtures.includes(x))})),
   replace:()=>quiet(command('group.save',{id,name:g.name,fixtures:selected})),rename:()=>renameGroup(g),edit:()=>groupEditor(id),new:()=>groupEditor(null),
+  purge:()=>confirmDialog(`Remove ${g.fixtures.length} fixtures from the show?`,`${esc(g.name)}: fixtures ${esc(g.fixtures[0])}–${esc(g.fixtures.at(-1))} are deleted from the patch, every group, cue, scene, position and park. Use this for lights that do not exist. Output must be off. The show is saved as a version first (Settings → Show versions), so it can be undone.`,'Remove fixtures',async()=>{await command('fixture.delete',{ids:g.fixtures});if(group===id)group=null;drawGroups();toast(`Removed ${g.fixtures.length} fixtures.`)}),
   delete:()=>confirmDialog(`Delete “${g.name}”?`,'The group is removed. Fixtures, cues and positions are unchanged. A group used by a cue or saved effect cannot be deleted.','Delete group',async()=>{await command('group.delete',{id});if(group===id)group=null;drawGroups()})};
  $$('[data-ctx]').forEach(b=>b.onclick=()=>{closeMenu();run[b.dataset.ctx]()});
 }
@@ -182,6 +204,27 @@ function closeMenu(){$('#ctxMenu').hidden=true}
 function bindGroupMenu(el,id){
  el.oncontextmenu=e=>{e.preventDefault();openGroupMenu(id,e.clientX,e.clientY)};
  let timer;el.onpointerdown=e=>{if(e.pointerType!=='touch')return;timer=setTimeout(()=>{el.dataset.longPress='1';openGroupMenu(id,e.clientX,e.clientY)},550)};el.onpointerup=el.onpointerleave=()=>clearTimeout(timer);
+}
+// Group colour (group.edit color): tints the group's pill and card so it is easy to spot.
+const GROUP_COLORS=['#ff5d5d','#ff9f43','#ffd166','#7bd88f','#2ec4b6','#4cc9f0','#4361ee','#9b5de5','#f15bb5','#e9ecef'];
+function groupColor(g){
+ dialog(`Color · ${esc(g.name)}`,`<div class="group-swatches">${GROUP_COLORS.map(c=>`<button class="group-swatch ${g.color===c?'active':''}" data-gcolor="${c}" style="--g:${c}" title="${c}" aria-label="${c}"></button>`).join('')}<label class="group-swatch custom" title="Any colour"><input type="color" id="gcolorPick" value="${esc(g.color??'#4cc9f0')}"></label></div><button class="ghost-button small" data-gcolor="">No color</button>`);
+ const set=async c=>{await command('group.edit',{id:g.id,color:c});$('#dialog').close()};
+ $$('[data-gcolor]').forEach(b=>b.onclick=()=>set(b.dataset.gcolor));$('#gcolorPick').onchange=e=>set(e.target.value);
+}
+// Parent groups: move a group into a parent, or wrap it in a new one (group.nest, group.save children).
+function nestDialog(g){
+ const below=new Set([g.id]);const walk=id=>{for(const c of show.groups.find(x=>x.id===id)?.children??[])if(!below.has(c)){below.add(c);walk(c)}};walk(g.id);
+ const parents=sortedGroups().filter(p=>p.children&&!below.has(p.id)),cur=parentOf(g.id)?.id;
+ dialog(`Move · ${esc(g.name)}`,`<p class="hint">Put it inside a parent group. Selecting the parent selects everything in it; open the parent to pick this group on its own.</p><div class="pool-list">${parents.map(p=>`<button class="pool-row ${p.id===cur?'active':''}" data-nest="${esc(p.id)}"><span class="pill-icon" data-icon="group"></span><strong>${esc(p.name)}</strong><small>${p.children.length} groups · ${p.fixtures.length} fixtures</small></button>`).join('')||'<p class="hint">No parent groups yet: right-click a group → New parent group with this…</p>'}<button class="pool-row" data-nest=""><span class="pill-icon" data-icon="close"></span><strong>Top level</strong><small>Not inside any group</small></button></div>`);
+ $$('[data-nest]').forEach(b=>b.onclick=async()=>{await command('group.nest',b.dataset.nest?{id:g.id,parent:b.dataset.nest}:{id:g.id});$('#dialog').close()});
+}
+function newParentDialog(g){
+ dialog('New parent group',`<p class="hint">A parent group holds groups. It starts with “${esc(g.name)}”; move more groups into it from their right-click menu.</p><div class="inline-form"><input id="parentName" type="text" maxlength="100" placeholder="e.g. All house lights" aria-label="Parent group name"><button id="parentSave" class="primary">Create</button></div>`);
+ $('#parentName').focus();
+ const save=async()=>{const name=$('#parentName').value.trim();if(!name)return toast('Name the group first.');let id=name.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'')||'group';while(show.groups.some(x=>x.id===id))id+='-2';
+  const up=parentOf(g.id)?.id;await command('group.save',{id,name,children:[g.id]});await command('group.nest',{id:g.id,parent:id});if(up)await command('group.nest',{id,parent:up});$('#dialog').close();toast(`${name} holds ${g.name}.`)};
+ $('#parentSave').onclick=save;$('#parentName').onkeydown=e=>{if(e.key==='Enter')save()};
 }
 function renameGroup(g){
  dialog('Rename group',`<div class="inline-form"><input id="groupRename" type="text" maxlength="100" value="${esc(g.name)}" aria-label="Group name"><button id="groupRenameSave" class="primary">Save</button></div>`);
@@ -375,9 +418,11 @@ const section=(title,ic,inner,extra='')=>`<section class="prop"><h3><span data-i
 function secIntensity({st}){const v=progOverrides(runtime)[selected[0]]?.intensity??(runtime.master?st.intensity/runtime.master:0);return section('Intensity','sun',slider('intensity','Level','sun',v,{big:true})+`<div class="quick-levels">${[0,25,50,75,100].map(n=>`<button class="pill" data-level="${n/100}">${n?n+'%':'Off'}</button>`).join('')}</div>`)}
 function secColor(info,compact=false){
  const {st,hasMover,moverProfile,washes}=info,wheel=hasMover&&!washes.length&&moverProfile?COLOR_WHEELS[moverProfile]:null;
- const swatch=(hex,title,attr='data-color')=>`<button class="swatch" ${attr}="${esc(hex)}" style="--c:${esc(hex)}" title="${esc(title)}" aria-label="${esc(title)}"></button>`;
+ // A palette with emitter values (Hog CTB/CTO) shows its tint and a short label, so CTB is not mistaken for white.
+const palTint=p=>{const c=[1,3,5].map(i=>parseInt(p.color.slice(i,i+2),16)/255),a=p.amber??0,m=p.mint??0,t=c.map((v,i)=>Math.min(1,v*(1-.35*m)+m*[.55,.95,.7][i]*.35+a*[1,.55,0][i]*.35));return '#'+t.map(v=>Math.round(v*255).toString(16).padStart(2,'0')).join('')};
+const swatch=(hex,title,attr='data-color',pal='')=>{const p=pal&&show.palettes.find(x=>x.id===pal),em=p&&(p.amber!==undefined||p.mint!==undefined);return `<button class="swatch ${em?'labelled':''}" ${attr}="${esc(hex)}" ${pal?`data-pal="${esc(pal)}"`:''} style="--c:${esc(em?palTint(p):hex)}" title="${esc(title)}" aria-label="${esc(title)}">${em?`<b>${esc(p.name.split(/[\s·]/)[0].slice(0,3))}</b>`:''}</button>`};
  let html=wheel?`<div class="swatches">${wheel.map(([hex])=>swatch(hex,'Wheel color')).join('')}</div><p class="hint">Wheel colors this fixture can actually make.</p>`:'';
- if(!info.fixtures.every(f=>['beam200','beam7r'].includes(f.profile)))html+=`<div class="swatches">${[{id:'white',name:'White',color:'#ffffff'},...show.palettes.filter(p=>p.id!=='white'&&p.color.toLowerCase()!=='#ffffff')].map(p=>`<span class="palette-chip">${swatch(p.color,p.name)}${mode==='build'&&p.id!=='white'&&show.palettes.some(x=>x.id===p.id)?`<button class="x" data-delete-palette="${esc(p.id)}" aria-label="Delete ${esc(p.name)}">×</button>`:''}</span>`).join('')}<label class="swatch custom" title="Custom color"><input id="color" type="color" value="${hexOf(st.color)}" aria-label="Custom color"></label>${mode==='build'?`<button class="swatch add" id="savePalette" title="Save this color" aria-label="Save this color">${icon('plus')}</button>`:''}</div>`;
+ if(!info.fixtures.every(f=>['beam200','beam7r'].includes(f.profile)))html+=`<div class="swatches">${[{id:'white',name:'White',color:'#ffffff'},...show.palettes.filter(p=>p.id!=='white'&&p.color.toLowerCase()!=='#ffffff')].map(p=>`<span class="palette-chip">${swatch(p.color,p.name,'data-color',p.id)}${mode==='build'&&p.id!=='white'&&show.palettes.some(x=>x.id===p.id)?`<button class="x" data-delete-palette="${esc(p.id)}" aria-label="Delete ${esc(p.name)}">×</button>`:''}</span>`).join('')}<label class="swatch custom" title="Custom color"><input id="color" type="color" value="${hexOf(st.color)}" aria-label="Custom color"></label>${mode==='build'?`<button class="swatch add" id="savePalette" title="Save this color" aria-label="Save this color">${icon('plus')}</button>`:''}</div>`;
  if(info.wheelFixtures.length){const target=info.wheelFixtures.find(f=>f.id===selected[0])??info.wheelFixtures[0],wheel=fixtureWheel(target,runtime.frames.find(f=>f.id===target.id)),shared=sharedWheelColors(info.fixtures);
   html+=`<div class="swatches wheel-swatches">${shared.some(c=>c.entries.every(e=>e.value===0&&(e.secondary??0)===0))?'':'<button class="swatch" data-wheel-neutral style="--c:#ffffff" title="White / open · wheel 0" aria-label="White / open wheel"></button>'}${shared.map((c,i)=>`<button class="swatch" data-wheel-slot="${i}" style="--c:${esc(bandSwatch(c.bands))}" title="${esc(c.name)} · ${c.entries.map(e=>esc(e.id)+': '+e.value).join(', ')}" aria-label="${esc(c.name)}"></button>`).join('')}${mode==='build'?`<button class="swatch add" id="saveWheelColor" title="Save the wheel color you see" aria-label="Save wheel color">${icon('save')}</button>`:''}</div><p class="hint">${shared.length?'Calibrated wheel colors for these heads.':'No wheel colors saved yet — move the wheel, then save what you see.'}</p>`;
   if(!compact)html+=slider('colorWheel',`Wheel · ch ${info.has200&&info.has7R?'9 / 1':info.has200?'9':'1'}`,'palette',wheel.value,{min:0,max:info.has7R?119:127,step:1})+(info.has200?slider('colorWheel2','Colour 2 · ch 10','palette',wheel.secondary,{min:0,max:255,step:1}):'');}
@@ -441,7 +486,9 @@ function bindProgrammer(){
  $$('[data-attr]').forEach(el=>{const update=()=>{el.dataset.editedAt=String(performance.now());const key=el.dataset.attr,value=+el.value/(['pan','tilt'].includes(key)?255:1);setText($(`[data-read="${key}"]`),attrRead(key,value));const ids=key==='colorWheel2'?info.fixtures.filter(f=>f.profile==='beam200').map(f=>f.id):key==='colorWheel'?info.wheelFixtures.map(f=>f.id):selected;liveFixture(ids,{[key]:value})};el.oninput=update;el.onchange=update});
  $$('[data-level]').forEach(b=>b.onclick=()=>quiet(command('fixture.set',{ids:selected,values:{intensity:+b.dataset.level}}).then(drawSide)));
  if($('#color'))$('#color').oninput=e=>liveFixture(selected,{color:e.target.value});
- $$('[data-color]').forEach(b=>b.onclick=()=>quiet(command('fixture.set',{ids:selected,values:{color:b.dataset.color,...(b.dataset.color.toLowerCase()==='#ffffff'?{white:0}:{})}})));
+ // A palette with emitter values (e.g. Hog CTB = white RGB + mint) sets them; any other color puts amber and mint back
+ // under the white level, only where a palette had set them, so a plain color after CTB does not keep the mint.
+ $$('[data-color]').forEach(b=>b.onclick=()=>{const p=show.palettes.find(x=>x.id===b.dataset.pal),ov=selected.map(id=>runtime?.overrides?.[id]).find(o=>o&&(o.amber!==undefined||o.mint!==undefined)),extra=p&&(p.white!==undefined||p.amber!==undefined||p.mint!==undefined)?{...(p.white!==undefined?{white:p.white}:{}),amber:p.amber??0,mint:p.mint??0}:ov?{amber:ov.white??0,mint:ov.white??0}:{};quiet(command('fixture.set',{ids:selected,values:{color:b.dataset.color,...(b.dataset.color.toLowerCase()==='#ffffff'?{white:0}:{}),...extra}}))});
  $$('[data-delete-palette]').forEach(b=>b.onclick=()=>quiet(command('palette.delete',{id:b.dataset.deletePalette})));
  if($('#savePalette'))$('#savePalette').onclick=()=>{dialog('Save color',`<div class="inline-form"><span class="swatch" style="--c:${esc($('#color').value)}"></span><input id="paletteName" type="text" placeholder="e.g. Dawn gold"><button id="paletteSave" class="primary">Save</button></div>`);$('#paletteSave').onclick=async()=>{const name=$('#paletteName').value.trim();if(!name)return toast('Name the color first.');await command('palette.save',{id:uid('palette'),name,color:hexOf(current().color)});$('#dialog').close()}};
  $$('[data-wheel-neutral]').forEach(b=>b.onclick=async()=>{try{await command('fixture.set',{ids:info.wheelFixtures.map(f=>f.id),values:{color:'#ffffff',colorWheel:0}});const extra=info.fixtures.filter(f=>f.profile==='beam200').map(f=>f.id);if(extra.length)await command('fixture.set',{ids:extra,values:{colorWheel2:0}});drawSide()}catch{}});
@@ -523,11 +570,13 @@ function saveDialog(){
  const usedOn=cue?show.pages.filter(p=>p.cues.some(e=>e.cue===cue.id)).length:0,liveName=stack?entryName(pg?.cues.find(e=>e.id===stack.entry)):cue?.name;
  dialog('Save changes',`<p class="hint">${changed} fixture${changed===1?'':'s'} changed${effects?` · ${effects} effect${effects===1?'':'s'}`:''}${b?' in blind':''}.</p><div class="save-options">
   ${cue?`<button class="save-option" data-save="update">${icon('save')}<div><strong>Update “${esc(liveName)}”</strong><small>Adds your changes to this cue — its own effects keep running.${usedOn>1?` Used on ${usedOn} pages, all get the update.`:''}</small></div></button>`:''}
-  <div class="save-option as-new">${icon('plus')}<div><strong>Save as new cue</strong><small>${cue?`A copy of “${esc(liveName)}” plus your changes`:'The current look'}${pg?`, placed ${stack?'right after it':'at the end of'} “${esc(pg.name)}”${stack?' and run':''}`:''}.</small><div class="inline-form"><input id="saveName" type="text" maxlength="100" value="${esc(cue?liveName+' · alt':'New look')}" aria-label="New cue name"><button class="primary" data-save="new">Save new</button></div></div></div></div>
+  <div class="save-option as-new">${icon('plus')}<div><strong>Save as new cue</strong><small>${cue?`A copy of “${esc(liveName)}” plus your changes`:'The current look'}${pg?`, placed ${stack?'right after it':'at the end of'} “${esc(pg.name)}”${stack?' and run':''}`:''}.</small><div class="inline-form"><input id="saveName" type="text" maxlength="100" value="${esc(cue?liveName+' · alt':'New look')}" aria-label="New cue name"><button class="primary" data-save="new">Save new</button></div></div></div>
+  ${show.scenes.length?`<div class="save-option as-new">${icon('scene')}<div><strong>Update a scene</strong><small>Saves the whole look as it is now into the scene${b?' (the blind look)':''}. ${runtime.scene?'The active scene changes at once.':'Make it active from Scenes.'}</small><div class="inline-form"><select id="saveScene" aria-label="Scene to update">${show.scenes.map(s=>`<option value="${esc(s.id)}" ${runtime.scene?.id===s.id?'selected':''}>${esc(s.name)}${runtime.scene?.id===s.id?' · active':''}</option>`).join('')}</select><button class="primary" data-save="scene">Update scene</button></div></div></div>`:''}</div>
   ${cue?`<details class="more"><summary>${icon('sliders')}More</summary><button class="ghost-button" data-save="replace">${icon('record')}Replace “${esc(liveName)}” with the whole current look</button><p class="hint">Freezes everything you see — including running effects — into a still look.</p></details>`:''}`);
  const after=()=>{$('#dialog').close();viewSource=runtime.preview?'preview':'live';drawSide()};
  $$('[data-save]').forEach(btn=>btn.onclick=async()=>{const kind=btn.dataset.save;try{
-  if(kind==='update'){await command('cue.record',{id:cue.id});toast(`“${liveName}” updated.`)}
+  if(kind==='scene'){const sc=show.scenes.find(s=>s.id===$('#saveScene').value);await command('scene.capture',{id:sc.id,name:sc.name});toast(`Scene “${sc.name}” updated from the current look.`)}
+  else if(kind==='update'){await command('cue.record',{id:cue.id});toast(`“${liveName}” updated.`)}
   else if(kind==='replace'){await command('cue.record',{id:cue.id,mode:'replace'});toast(`“${liveName}” replaced with the current look.`)}
   else{const name=$('#saveName').value.trim()||'New look';const r=await command('cue.record',{id:uid('cue'),name,...(pg?{page:pg.id}:{}),...(stack?{after:stack.entry,go:true}:{})});if(pg){pageId=pg.id;store.set('page',pageId)}toast(`Saved “${name}”${pg?' to '+pg.name:''}.`)}
   after()}catch{}});
@@ -645,10 +694,13 @@ function applyPane(){
  $$('[data-pane]').forEach(b=>{const on=b.dataset.pane===p;b.classList.toggle('active',on);b.setAttribute('aria-pressed',String(on));b.title=(on?'Hide the ':'Show the ')+(b.dataset.pane==='masters'?'masters':'fixture buttons')+' under the stage'});
  if(p==='masters')paintBank();
 }
+// The APC40 profile's desk settings (controller.save deskNumbers/deskColors): auto shows them only while it is connected.
+function deskShows(k){const v=show.controllers?.find(c=>c.id==='apc40mk2')?.[k]??'auto';return v==='on'||(v==='auto'&&!!runtime?.controller)}
 function drawMasters(){
- const el=$('#masterBank');if(!el||!show)return;
- el.innerHTML=slots().map((m,i)=>{const cue=slotCue(m),[ic,label,hint]=ACTIONS[m.action],learn=learning===m.id,c=conflict?.slot===m.id?conflict:null;
-  return `<div class="master-slot ${cue?'':'empty'} ${learn?'learning':''}" data-master="${esc(m.id)}" title="Master ${i+1}${cue?` · ${label}: ${hint}`:' · click to choose a cue'}"><button class="m-key ${m.key?'':'none'}" data-master-key="${esc(m.id)}" title="${m.key?'Click, then press a new key':'Click, then press a key for this master'}">${learn?'Press a key…':m.key?esc(keyLabel(m.key)):'+ key'}</button>${cue?`<span class="m-action" title="${label}">${m.sound?`<button class="m-badge ${m.sound.enabled===false?'off':''}" data-master-sound="${esc(m.id)}" title="Sound trigger ${m.sound.enabled===false?'off':'on'} · input ${m.sound.channel} · click${m.key?` or Shift+${esc(keyLabel(m.key))}`:''} to switch">${icon('wave')}</button>`:''}${icon(ic)}</span><div class="m-strip">${m.sound?`<span class="m-meter ${m.sound.enabled===false?'off':''}" data-master-meter="${esc(m.id)}" title="Input ${m.sound.channel} level · ${m.sound.mode==='follow'?'the line is where the lights start':'hits above the line flash it'}"><i></i><b style="bottom:${dbPct(-6-54*(m.sound.sensitivity??.5))}%"></b></span>`:''}<span class="m-level" data-master-level="${esc(m.id)}" title="Level: drag the fader"><i></i><b></b></span></div>`:''}<button class="m-edit" data-master-edit="${esc(m.id)}" title="Cue, action, fade and key" aria-label="Edit master ${i+1}" data-icon="sliders"></button>${cue?`<strong class="m-name">${esc(slotName(m))}</strong><span class="m-state"><em></em><i><b></b></i></span>`:`<span class="m-empty">${icon('plus')}Assign cue</span>`}${c?`<div class="m-conflict" role="alert"><p><strong>${esc(keyLabel(c.key))}</strong> ${c.owner}</p><div>${c.swap?`<button class="chip-button" data-conflict="swap" title="${esc(c.swap)}">Swap</button>`:''}<button class="chip-button accent" data-conflict="take">Take it</button><button class="chip-button" data-conflict="cancel">Cancel</button></div></div>`:''}</div>`}).join('')
+ const el=$('#masterBank');if(!el||!show)return;const nums=deskShows('deskNumbers'),cols=deskShows('deskColors');el.dataset.mode=`${nums}${cols}`;
+ el.innerHTML=slots().map((m,i)=>{const cue=slotCue(m),[ic,label,hint]=ACTIONS[m.action],learn=learning===m.id,c=conflict?.slot===m.id?conflict:null,col=cols&&cue?padColor(masterColor(show,m)):null;
+  const keyTitle=nums?`APC40 track ${i%8+1} · fader bank ${Math.floor(i/8)+1}${m.key?` · key ${keyLabel(m.key)}`:''} · click, then press a key`:m.key?'Click, then press a new key':'Click, then press a key for this master';
+  return `<div class="master-slot ${cue?'':'empty'} ${learn?'learning':''} ${col?'colored':''}" data-master="${esc(m.id)}" ${col?`style="--mc:${col}"`:''} title="Master ${i+1}${cue?` · ${label}: ${hint}`:' · click to choose a cue'}"><button class="m-key ${m.key||nums?'':'none'}" data-master-key="${esc(m.id)}" title="${esc(keyTitle)}">${learn?'Press a key…':nums?i%8+1:m.key?esc(keyLabel(m.key)):'+ key'}</button>${cue?`<span class="m-action" title="${label}">${m.priority?`<span class="m-badge prio" title="Highest precedence: wins over the scene and every other cue">${icon('up')}</span>`:''}${m.sound?`<button class="m-badge ${m.sound.enabled===false?'off':''}" data-master-sound="${esc(m.id)}" title="Sound trigger ${m.sound.enabled===false?'off':'on'} · input ${m.sound.channel} · click${m.key?` or Shift+${esc(keyLabel(m.key))}`:''} to switch">${icon('wave')}</button>`:''}${icon(ic)}</span><div class="m-strip">${m.sound?`<span class="m-meter ${m.sound.enabled===false?'off':''}" data-master-meter="${esc(m.id)}" title="Input ${m.sound.channel} level · ${m.sound.mode==='follow'?'the line is where the lights start':'hits above the line flash it'}"><i></i><b style="bottom:${dbPct(-6-54*(m.sound.sensitivity??.5))}%"></b></span>`:''}<span class="m-level" data-master-level="${esc(m.id)}" title="Level: drag the fader"><i></i><b></b></span></div>`:''}<button class="m-edit" data-master-edit="${esc(m.id)}" title="Cue, action, fade and key" aria-label="Edit master ${i+1}" data-icon="sliders"></button>${cue?`<strong class="m-name">${esc(slotName(m))}</strong><span class="m-state"><em></em><i><b></b></i></span>`:`<span class="m-empty">${icon('plus')}Assign cue</span>`}${c?`<div class="m-conflict" role="alert"><p><strong>${esc(keyLabel(c.key))}</strong> ${c.owner}</p><div>${c.swap?`<button class="chip-button" data-conflict="swap" title="${esc(c.swap)}">Swap</button>`:''}<button class="chip-button accent" data-conflict="take">Take it</button><button class="chip-button" data-conflict="cancel">Cancel</button></div></div>`:''}</div>`}).join('')
   +(slots().length<60?`<button class="master-slot add-slot" id="addMaster" title="Add a master">${icon('plus')}Add master</button>`:'');
  fillIcons(el);bindMasters();paintBank();if(runtime)paintMasters(runtime,true);
 }
@@ -705,7 +757,8 @@ function openMasterPop(id,anchor){
   <label class="field-label">Cue</label><button class="chip-button wide mp-cue" id="mpCue"><span data-icon="${cue?.tracks?.length?'spark':'palette'}"></span><span>${cue?esc(cue.name):'Choose a cue…'}</span>${cue?'<small>Change</small>':''}</button>
   <label class="field-label">When the key is pressed</label><div class="segmented mp-actions">${Object.entries(ACTIONS).map(([a,[ic,label,hint]])=>`<button data-mp-action="${a}" class="${m.action===a?'active':''}" title="${esc(hint)}"><span data-icon="${ic}"></span>${label}</button>`).join('')}</div><p class="hint" id="mpHint">${ACTIONS[m.action][2]}</p>
   <div class="mp-row"><label class="mini"><span>Fade · s</span><input id="mpFade" type="number" min="0" max="60" step=".5" value="${m.fade??0}"></label><label class="mini"><span>Label</span><input id="mpLabel" type="text" maxlength="40" value="${esc(m.label??'')}" placeholder="${esc(cue?.name??'Cue name')}"></label></div>
-  <div class="mp-row"><label class="mini"><span>Pad colour</span><input id="mpColor" type="color" value="${esc(m.color??'#7fd3dc')}"></label><label class="mini"><span>MIDI note out (ProPresenter)</span><input id="mpNote" type="number" min="0" max="127" placeholder="none" value="${m.midi?.note??''}"></label></div>
+  <div class="mp-row"><label class="mini"><span>Pad colour</span><input id="mpColor" type="color" value="${esc(masterColor(show,m))}"></label><label class="mini"><span>MIDI note out (ProPresenter)</span><input id="mpNote" type="number" min="0" max="127" placeholder="none" value="${m.midi?.note??''}"></label></div>
+  <label class="check-row mp-priority" title="While this master's cue runs, its lights ignore the scene and every other cue, even newer ones. Manual changes, Highlight, Park, the grand master and Blackout still apply."><input type="checkbox" id="mpPriority" ${m.priority?'checked':''}><span><strong>Highest precedence</strong><small>Wins over the scene and every other cue, like a high-priority Hog cuelist.</small></span></label>
   <section class="mp-sound" id="mpSound"></section>
   ${cue?`<button class="ghost-button small danger" id="mpClear"><span data-icon="trash"></span>Clear this master</button>`:''}`;
  pop.hidden=false;fillIcons(pop);
@@ -716,6 +769,7 @@ function openMasterPop(id,anchor){
  $('#mpFade').onchange=e=>quiet(command('masters.assign',{slot:id,fade:Math.max(0,Math.min(60,+e.target.value||0))}));
  $('#mpLabel').onchange=e=>quiet(command('masters.assign',{slot:id,label:e.target.value.trim()}));
  if($('#mpClear'))$('#mpClear').onclick=()=>{closeMasterPop();quiet(command('masters.assign',{slot:id,clear:true}))};
+ $('#mpPriority').onchange=e=>quiet(command('masters.assign',{slot:id,priority:e.target.checked}));
  $('#mpColor').onchange=e=>quiet(command('masters.assign',{slot:id,color:e.target.value}));
  $('#mpNote').onchange=e=>{const v=e.target.value.trim();quiet(command('masters.assign',v===''?{slot:id,clearMidi:true}:{slot:id,midi:{note:Math.max(0,Math.min(127,Math.round(+v))),channel:1}}))};
  // Sound trigger: the panel is loaded only when the sound module is on.
@@ -746,7 +800,9 @@ function paintBank(){
 function pageBank(dir){const el=$('#masterBank');el.scrollBy({left:dir*el.clientWidth,behavior:'smooth'})}
 // Live state per slot: Held (a flash is down), Running, Paused, with the cue's progress. Only changed slots are touched.
 function paintMasters(r,force=false){
- if(!show||$('#mastersPane').hidden)return;const running=new Map((r.running??[]).map(c=>[c.id,c])),held=new Set(r.masters?.held??[]);
+ if(!show||$('#mastersPane').hidden)return;
+ // Connecting or unplugging the APC40 switches the numbers and colours (auto) on or off.
+ if($('#masterBank').dataset.mode!==`${deskShows('deskNumbers')}${deskShows('deskColors')}`)return drawMasters();const running=new Map((r.running??[]).map(c=>[c.id,c])),held=new Set(r.masters?.held??[]);
  for(const el of $$('[data-master]')){const m=slotOf(el.dataset.master);if(!m?.cue)continue;const c=running.get(m.cue),st=held.has(m.id)?'held':c?(c.paused?'paused':'running'):'idle';
   if(force||el.dataset.st!==st){el.dataset.st=st;el.classList.toggle('held',st==='held');el.classList.toggle('running',st!=='idle'&&st!=='paused');el.classList.toggle('paused',st==='paused');setText(el.querySelector('.m-state em'),{held:'Held',running:'Running',paused:'Paused',idle:''}[st])}
   const bar=el.querySelector('.m-state b'),w=c?Math.min(100,c.elapsed/c.duration*100).toFixed(1)+'%':'0%';if(bar&&bar.style.width!==w)bar.style.width=w;
@@ -844,6 +900,8 @@ function wireOutputSection(){
 // running set or a paused state changes.
 let entryControlsKey=null;
 function paintRunning(r){
+ const fd=r.find,hud=$('#findHud');if(hud){hud.hidden=!fd?.active;if(fd?.active){$('#findId').textContent=fd.id;$('#findName').textContent=fd.name!==fd.id?fd.name:(fd.profile??'');$('#findCount').textContent=`Find · ${fd.index+1} / ${fd.total}${fd.patch?' · '+fd.patch:''}`}}
+ const fb=$('#findButton');if(fb){fb.classList.toggle('active',!!fd?.active);fb.setAttribute('aria-pressed',fd?.active?'true':'false')}
  const btn=$('#highlightButton');if(btn){btn.classList.toggle('active',!!r.highlight);btn.setAttribute('aria-pressed',r.highlight?'true':'false')}
  const running=new Map((r.running??[]).map(c=>[c.id,c])),key=[...running.values()].map(c=>c.id+(c.paused?'p':'')).join('|')+'#'+rev;
  if(key===entryControlsKey)return;entryControlsKey=key;
@@ -900,22 +958,33 @@ function preshowDialog(){
 }
 // Show versions (show.versions / show.restore) and modules (modules.set) in Settings.
 async function drawVersions(){
- const el=$('#versionList');if(!el)return;try{const {versions}=await command('show.versions');const label={edits:'Edits','performance-lock':'Locked for a show','before-import':'Before an import','before-restore':'Before a restore'};
+ const el=$('#versionList');if(!el)return;try{const {versions}=await command('show.versions');const label={edits:'Edits','performance-lock':'Locked for a show','before-import':'Before an import','before-delete':'Before removing fixtures','before-restore':'Before a restore'};
   el.innerHTML=versions.length?versions.slice(0,30).map(v=>`<div class="pool-row"><span class="pill-icon" data-icon="restore"></span><strong>${esc(new Date(v.at).toLocaleString([],{dateStyle:'medium',timeStyle:'short'}))}</strong><small>${esc(label[v.reason]??v.reason)} · ${Math.round(v.bytes/1024)} KB</small><button class="chip-button" data-restore="${esc(v.id)}">Restore</button></div>`).join(''):'<p class="hint">No versions yet: they appear after the first edits.</p>';fillIcons(el);
   $$('[data-restore]').forEach(b=>b.onclick=()=>confirmDialog('Restore this version?','The current show is saved as a version first, so this can be undone. Network settings stay. Output must be off and the show unlocked.','Restore',async()=>{await command('show.restore',{id:b.dataset.restore});toast('Show restored.')}))}catch{el.innerHTML=''}
+}
+// Audio input names (sound.inputs.set): what the mixer sends on each sound card channel, shown in every trigger picker.
+// Editable with the module off. Rows run to the device's channel count, or past the last named input.
+let inputRows=0;
+function inputNames(list,sound){
+ const names=new Map(list.map(a=>[a.channel,a.name])),dev=sound?.devices?.find(d=>d.name===sound.device),n=Math.max(inputRows,Math.min(dev?.inputs??0,64),...names.keys(),8);inputRows=n;
+ return `<details class="input-names" ${list.length?'':'open'}><summary>${icon('wave')}Input names · ${list.length} named</summary><small>Name each sound card channel after what the mixer sends on it (e.g. Dante 3 = KIK IN). Saved in the show.</small><div class="input-grid">${Array.from({length:n},(_,i)=>`<label class="mini"><span>${i+1}</span><input data-input="${i+1}" maxlength="40" value="${esc(names.get(i+1)??'')}" placeholder="Input ${i+1}"></label>`).join('')}</div><button class="chip-button" id="moreInputs">Add 8 channels</button></details>`;
 }
 async function drawModules(){
  const el=$('#modulesBody');if(!el)return;let m;try{m=await command('modules.status')}catch{return}
  const sound=m.sound.enabled?await command('sound.status').catch(()=>null):null,midi=m.midi.enabled?await command('midi.status').catch(()=>null):null,helper=m.helper.error?`<p class="warning">${icon('warning')}${esc(m.helper.error)}</p>`:'';
  el.innerHTML=`<div class="module-row"><label class="switch"><input type="checkbox" data-module="sound" ${m.sound.enabled?'checked':''}><span></span></label><div><strong>${icon('wave')}Sound triggers</strong><small>Flash a master from a drum on an audio input (Dante Virtual Soundcard or any interface). Give a master its channel in the master's ⚙.</small>
    ${sound?`<div class="device-row"><label class="mini"><span>Input device</span><select id="soundDevice"><option value="">Choose…</option>${sound.devices.map(d=>`<option value="${esc(d.name)}" ${d.name===sound.device?'selected':''}>${esc(d.name)}${d.device?` (now ${esc(d.device)})`:''} · ${d.inputs} in</option>`).join('')}${sound.device&&!sound.devices.some(d=>d.name===sound.device)?`<option selected value="${esc(sound.device)}">${esc(sound.device)} · not connected</option>`:''}</select></label><button class="round-button small" id="soundRefresh" title="Look for audio devices again" aria-label="Refresh devices" data-icon="restore"></button></div><small>Any input works: Dante, an interface, a virtual device (BlackHole, Loopback) or the laptop mic. For the whole band, use the mixer's main mix with the Full band.</small><small>${sound.open?.ok?`Listening on ${esc(sound.open.device)} · ${sound.triggers.length} trigger${sound.triggers.length===1?'':'s'}`:sound.device?'Not listening yet':''}</small>`:''}</div></div>
+  ${inputNames(m.sound.inputs,sound)}
   <div class="module-row"><label class="switch"><input type="checkbox" data-module="midi" ${m.midi.enabled?'checked':''}><span></span></label><div><strong>${icon('midi')}MIDI</strong><small>A virtual “StageLight” MIDI port for ProPresenter, and the APC40 mkII.</small>
-   ${midi?`<label class="check-row"><input type="checkbox" id="midiVirtual" ${midi.virtualPort?'checked':''}> Virtual port “StageLight”</label><small>APC40 mkII: ${midi.controller?'connected':'not connected'}</small><button class="chip-button" id="editApc"><span data-icon="sliders"></span>Edit APC40 profile…</button>`:''}</div></div>${helper}`;
+   ${midi?`<label class="check-row"><input type="checkbox" id="midiVirtual" ${midi.virtualPort?'checked':''}> Virtual port “StageLight”</label><small>APC40 mkII: ${midi.controller?'connected':'not connected'}</small>${['deskNumbers','deskColors'].map(k=>`<label class="mini"><span>${k==='deskNumbers'?'Masters show track numbers 1–8 instead of keys':'Masters show their pad colours'}</span><select data-desk-set="${k}">${[['auto','Auto: while the APC40 is connected'],['on','On'],['off','Off']].map(([v,l])=>`<option value="${v}" ${midi.profile[k]===v?'selected':''}>${l}</option>`).join('')}</select></label>`).join('')}<button class="chip-button" id="editApc"><span data-icon="sliders"></span>Edit APC40 profile…</button>`:''}</div></div>${helper}`;
  fillIcons(el);
  $$('[data-module]').forEach(c=>c.onchange=async()=>{await quiet(command('modules.set',{[c.dataset.module]:{enabled:c.checked}}));setTimeout(drawModules,400)});
  if($('#soundRefresh'))$('#soundRefresh').onclick=()=>drawModules();
+ $$('[data-input]').forEach(x=>x.onchange=()=>quiet(command('sound.inputs.set',{inputs:[{channel:+x.dataset.input,name:x.value}]})));
+ if($('#moreInputs'))$('#moreInputs').onclick=()=>{inputRows=Math.min(128,inputRows+8);drawModules().then(()=>{const d=$('.input-names');if(d)d.open=true})};
  if($('#soundDevice'))$('#soundDevice').onchange=async e=>{await quiet(command('modules.set',{sound:{enabled:true,device:e.target.value}}));setTimeout(drawModules,400)};
  if($('#midiVirtual'))$('#midiVirtual').onchange=e=>quiet(command('modules.set',{midi:{enabled:true,virtualPort:e.target.checked}}));
+ $$('[data-desk-set]').forEach(x=>x.onchange=()=>quiet(command('controller.save',{id:'apc40mk2',[x.dataset.deskSet]:x.value})));
  if($('#editApc'))$('#editApc').onclick=()=>import('./controller-editor.js').then(({openControllerEditor})=>openControllerEditor({dialog,command,quiet,toast,esc,icon,fillIcons,getShow:()=>show,getRuntime:()=>runtime,back:settingsDialog}));
 }
 // Shown over the stage while lights are being driven but output is off, so "the rig does nothing" is never a mystery.
@@ -928,9 +997,10 @@ function paintOutputHint(r){
 // Playback preferences live in the show (settings.set), so agents and every desk share them.
 function settingsDialog(){
  const row=(key,title,hint)=>`<section class="prop"><h3><span data-icon="${key==='clearFade'?'release':'blind'}"></span>${title}</h3><p class="hint">${hint}</p><div class="seg-row"><div class="segmented">${[[0,'Instant'],[1,'1 s'],[2,'2 s'],[3,'3 s'],[5,'5 s']].map(([v,l])=>`<button data-setting="${key}" data-value="${v}" class="${show.playback[key]===v?'active':''}">${l}</button>`).join('')}</div><label class="num"><input data-setting-number="${key}" type="number" min="0" max="30" step=".5" value="${show.playback[key]}">s</label></div></section>`;
- dialog('Settings',outputSection()+row('clearFade','Clear','How long Clear (C) takes to fade manual changes back to the running cue. Instant is a hard cut.')+row('blindFade','Blind','How long clearing blind changes, and Apply live, take to fade. Instant is a hard cut.')+'<p class="hint">Saved in the show, so it travels with exports and agents see it (lights_settings_set).</p>'+`<section class="prop" id="modulesSection"><h3><span data-icon="midi"></span>Modules</h3><p class="hint">A module that is off is not loaded at all: no background process, no ports, no audio.</p><div id="modulesBody"><p class="hint">Loading…</p></div></section><section class="prop"><h3><span data-icon="restore"></span>Show versions</h3><p class="hint">Saved by themselves: at most every five minutes of edits, before an import or restore, and when the show is locked.</p><div class="pool-list versions" id="versionList"><p class="hint">Loading…</p></div></section>`);
+ const hold=`<section class="prop"><h3><span data-icon="lock"></span>When the engine stops</h3><label class="check-row"><label class="switch small"><input type="checkbox" id="holdOnStop" ${show.playback.holdOnStop!==false?'checked':''}><span></span></label> Keep the lights at their last look</label><p class="hint">${show.playback.holdOnStop!==false?'On: quitting, updating or restarting the engine stops sending without blacking out, like a crash. Turning output off still blacks out.':'Off: stopping the engine closes shutters and sends zero intensity first, so the rig goes dark.'} Closing the window never stops the engine.</p></section>`;
+ dialog('Settings',outputSection()+hold+row('clearFade','Clear','How long Clear (C) takes to fade manual changes back to the running cue. Instant is a hard cut.')+row('blindFade','Blind','How long clearing blind changes, and Apply live, take to fade. Instant is a hard cut.')+'<p class="hint">Saved in the show, so it travels with exports and agents see it (lights_settings_set).</p>'+`<section class="prop" id="modulesSection"><h3><span data-icon="midi"></span>Modules</h3><p class="hint">A module that is off is not loaded at all: no background process, no ports, no audio.</p><div id="modulesBody"><p class="hint">Loading…</p></div></section><section class="prop"><h3><span data-icon="restore"></span>Show versions</h3><p class="hint">Saved by themselves: at most every five minutes of edits, before an import or restore, and when the show is locked.</p><div class="pool-list versions" id="versionList"><p class="hint">Loading…</p></div></section>`);
  const save=async(key,value)=>{if(!Number.isFinite(value)||value<0||value>30)return toast('Use 0 to 30 seconds.');try{await command('settings.set',{[key]:value});settingsDialog()}catch{}};
- wireOutputSection();drawModules();drawVersions();
+ wireOutputSection();drawModules();drawVersions();$('#holdOnStop').onchange=async e=>{try{await command('settings.set',{holdOnStop:e.target.checked});settingsDialog()}catch{}};
  $$('[data-setting]').forEach(b=>b.onclick=()=>save(b.dataset.setting,+b.dataset.value));
  $$('[data-setting-number]').forEach(el=>el.onchange=()=>save(el.dataset.settingNumber,Math.round(+el.value*10)/10));
 }
@@ -1144,6 +1214,11 @@ $$('[data-collapse]').forEach(b=>b.onclick=()=>{const k=b.dataset.collapse;store
 applyPanels();
 const clearIfEmpty=e=>{if(e.target===e.currentTarget&&(selected.length||group)){applySelection([]);quiet(command('selection.set',{ids:[]}))}};
 for(const el of [$('.fixture-strip'),$('#fixtureChips'),$('#groupGrid'),$('#viewport')])if(el)el.addEventListener('click',clearIfEmpty);
+// Find (docs/FIND-MODE.md): Highlight one fixture at a time from the selection (2+), else the chosen group, else the rig.
+const findStart=()=>quiet(command('find.start',selected.length<2&&runtime?.selection?.group&&runtime.selection.group!=='all'?{group:runtime.selection.group}:{}));
+const findStep=direction=>quiet(command('find.step',{direction}));
+$('#findButton').onclick=()=>runtime?.find?.active?quiet(command('find.stop')):findStart();
+$('#findNext').onclick=()=>findStep('next');$('#findBack').onclick=()=>findStep('back');$('#findClose').onclick=()=>quiet(command('find.stop'));
 $('#highlightButton').onclick=()=>quiet(command('highlight.set',{enabled:!runtime?.highlight}));
 $('#releaseButton').onclick=()=>quiet(command('override.release',{}).then(()=>drawSide()));
 $('#blackout').onclick=()=>quiet(command('blackout.set',{enabled:!runtime.blackout}));
@@ -1171,6 +1246,8 @@ $('#closeDialog').onclick=()=>$('#dialog').close();$('#dialog').onclick=e=>{if(e
 document.addEventListener('keydown',e=>{
  if(learning){e.preventDefault();learnKey(e);return}
  if(['INPUT','TEXTAREA','SELECT'].includes(document.activeElement.tagName)||$('#dialog').open||document.activeElement.id==='joystick')return;
+ if(runtime?.find?.active&&(e.key==='ArrowLeft'||e.key==='ArrowRight')){e.preventDefault();findStep(e.key==='ArrowLeft'?'back':'next');return}
+ if(e.key==='Escape'&&runtime?.find?.active&&$('#masterPop').hidden){quiet(command('find.stop'));return}
  if(e.key==='Escape'){if(!$('#masterPop').hidden)closeMasterPop();else if(!$('#ctxMenu').hidden){closeMenu()}else if(runtime?.preview){stopPreview()}else if(aligning){cancelAlignment();drawSide()}else if(!$('#menu').hidden)$('#menu').hidden=true;else if(ledOpen){ledOpen=false;drawLedTray()}else if(selected.length){applySelection([]);quiet(command('selection.set',{ids:[]}))}return}
  if(e.code==='Space'){e.preventDefault();$('#goButton').click()}
  else if(e.key==='Backspace'){e.preventDefault();$('#backButton').click()}

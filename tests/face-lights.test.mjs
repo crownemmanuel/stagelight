@@ -20,3 +20,11 @@ test('Rêve E-3 12ch encodes Chauvet 12Ch: 16-bit dimmer, RGB, white on amber + 
  const u=show.settings.mappings[2],p=encode(show,states).get(u);
  assert.deepEqual([...p.subarray(0,12)],[128,0,255,0,128,128,128,0,0,0,0,0]);
 });
+
+test('Rêve E-3 amber and mint can be set on their own (Hog CTB = RGB white + mint 101), else white drives both',async()=>{
+ const {encode,baseState}=await import('../engine/render.mjs');const f=face[0],st={...baseState(f),intensity:1,color:[1,1,254/255],white:.5};
+ const d=s=>[...encode(show,[s],{physical:true}).values()][0].slice(f.address-1,f.address+6);
+ assert.deepEqual([...d(st)].slice(5,7),[128,128],'white drives amber and mint');
+ assert.deepEqual([...d({...st,white:0,amber:0,mint:101/255})],[255,255,255,255,254,0,101],'matches the Hog CTB bytes');
+ const {COMMANDS,validate}=await import('../engine/spec.mjs');validate(COMMANDS['palette.save'].schema,{id:'ctb',name:'CTB',color:'#fffffe',amber:0,mint:.396});
+});

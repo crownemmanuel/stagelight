@@ -37,7 +37,8 @@ From Chauvet's [Ovation Rêve E-3 User Manual Rev. 14](https://chauvetprofession
 | 11 | Hue (000 = 0) | 0 |
 | 12 | Gobo rotator (000–127 index) | 0 |
 
-* The `white` attribute drives amber and mint equally. That is StageLight's mapping, not Chauvet's. The preview tints it warm.
+* `amber` (ch6) and `mint` (ch7) are their own attributes (2026-10-30). When they are not set, `white` drives both equally (StageLight's mapping, not Chauvet's).
+* **Hog colors, read from its DMX Output window on 2026-10-30:** CTB on face light 27 at full = dimmer 255/255, R 255, G 255, B 254, amber 0, **mint 101**, ch8–10 0, hue 128, ch12 63. CTO on face light 27 at full = dimmer 255/255, R 255, G 205, B 180, **amber 255, mint 103**, ch8–10 0, hue 128, ch12 63; saved as palette `hog-cto` (#ffcdb4, amber 1, mint 103/255). (An earlier guess of R 218/G 199/B 141 from the dim running look was wrong.) StageLight still holds hue (ch11) and ch12 at 0. A palette can carry `amber`/`mint`, so palette `hog-ctb` = #fffffe + mint 101/255, and `hog-cto` = #ffcdb4 + amber 255 + mint 103/255.
 * Chauvet recommends setting the fixture's Dimmer Mode to Off for the best 16-bit dimming in 12Ch.
 * **Not used yet:** the fixture's own colour temperature channel (ch10). It gives calibrated whites from 2800 to 8000 K, which suits broadcast. It could become a `cct` attribute later.
 * **Status.** Enabled and verified against the manual. The Hog mode label matches 12Ch. **Not tested physically yet.**
@@ -54,3 +55,11 @@ From Chauvet's [Ovation Rêve E-3 User Manual Rev. 14](https://chauvetprofession
 * Model: a yoke, a reflector housing and a lens tube along the beam axis. The preview assumes a 19° lens, because the actual lens tubes are unknown. To keep the GPU light, they draw beams and floor pools but no scene spotlights.
 * Group `face-lights` holds all 49, ordered by ID.
 * Backup of the show before this patch: `data/before-face-lights-2026-10-27.json`, local only and ignored by git.
+
+## Update 2026-10-30
+
+The operator gave the rigs: **1–19 hang on the upfront rig, 20–41 on the back rig.** Physically patched faces end at 41; 42–49 do not exist. Groups: `face-lights` (parent, 41) → `face-upfront` (1–19) and `face-back` (20–41); the provisional `face-row-1/2` are gone. 42–49 sit in `face-unpatched`, hidden in the 3D view and out of the face zone, until they are removed with output off. 3D: upfront arc R=12 m at 6 m, back arc R=15 m at 7 m, each spanning ±55°; the order along each arc is still provisional.
+
+**Correction, same day:** 45 (right), 46 (left) and 47 (right) are on the upfront rig; 48 and 49 are on the back rig. Upfront is now 22 heads, back 24, Face lights 46. 42–44 were not mentioned: they sit in `face-unpatched` (hidden, out of the face zone) until the operator confirms. Right = the operator's right facing the stage (−X); 48 and 49 are at either end of the back arc until their side is known.
+
+**42–44, same day:** the operator confirmed they are real and stay patched, but they did not respond today. They are kept in `face-unpatched` (renamed “42–44 not responding”) until the fault is found. Do not delete them.

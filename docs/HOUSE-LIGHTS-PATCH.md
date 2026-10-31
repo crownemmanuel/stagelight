@@ -66,3 +66,7 @@ There is no white channel, so the earlier assumed R, G, B, W layout was wrong. `
 | — | 3301–3362 | 27 / 29 m | Location unknown, group `house-3300s` |
 
 Each row is an arc of ±50° at a height of 5 m, lowest number at stage right (+X). Groups `house-row-1` to `house-row-5` follow the table. Patch, addresses and verification were not changed.
+
+## Update 2026-10-30
+
+Fixtures 3301–3362 and group `house-3300s` were removed from the show: the operator confirmed they do not exist in the house. House lights is now a parent group of rows 1–5 (62 pendants). The patch notes above for 3301–3362 are historical.

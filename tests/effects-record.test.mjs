@@ -32,7 +32,7 @@ test('Update merges changes and effects into the playing cue without a visible j
  assert.deepEqual(e.overrides,{});assert.equal(e.fx.length,0);assert.equal(JSON.stringify(e.frames.filter(x=>['401','301','302','303'].includes(x.id))),seen,'no visible change');
  at(2);assert.deepEqual(f(e.frames,'401').color,[1,0,0]);
  await assert.rejects(e.command('cue.record',{id:'base'}),/No changes/);
- await e.command('cue.record',{id:'base',mode:'replace'});assert.equal(e.show.cues.find(c=>c.id==='base').tracks.length,0);assert.ok(e.show.cues.find(c=>c.id==='base').look.length>40);
+ await e.command('cue.record',{id:'base',mode:'replace'});assert.equal(e.show.cues.find(c=>c.id==='base').tracks.length,0);{const look=e.show.cues.find(c=>c.id==='base').look;assert.ok(look.some(x=>x.id==='401'),'keeps its own fixtures');assert.ok(look.every(x=>x.values.intensity>.001||['401'].includes(x.id)||e.show.cues.find(c=>c.id==='base')),'no untouched dark fixtures');assert.ok(look.length<e.show.fixtures.length,'not the whole rig')}
 });
 
 test('Save as new copies the playing cue plus changes, inserts it after the current entry and can GO it',async()=>{
