@@ -308,3 +308,14 @@ test('show versions keep the newest 50 and one a day for 90 days, then stop grow
   v.snapshot({version:1},'edits');const left=v.list();assert.ok(left.length<=50+91,`${left.length} kept`);assert.ok(left.every(x=>Date.now()-Date.parse(x.at)<91*864e5),'nothing older than 90 days');assert.ok(left.length>=50);
  }finally{fs.rmSync(dir,{recursive:true,force:true})}
 });
+
+test('an input that opens but never delivers audio is treated as lost once the helper has metered; recording under Highlight respects limits',async()=>{
+ const {e,say,sent,restore}=await soundRig({stale:60,reopen:30},{mute:true});try{
+  say({ev:'audio',ok:true,device:'Dante Virtual Soundcard',channels:64});await wait(120);assert.deepEqual(e.runtime().health,[],'a helper that never meters is never second-guessed');
+  say({ev:'meter',input:-20,levels:{}});sent.length=0;say({ev:'audio',ok:true,device:'Dante Virtual Soundcard',channels:64});await wait(120);
+  assert.ok(sent.some(m=>m.op==='audio.close'),'opened, no audio within the stale time: closed and reopened');assert.ok(e.logs.some(l=>/no audio callbacks/.test(l.message)));
+ }finally{await restore()}
+ const {e:r}=rig();await r.command('master.set',{value:1});await r.command('group.save',{id:'face',name:'Face',fixtures:['301']});await r.command('limit.set',{group:'face',max:.12});
+ await r.command('fixture.set',{ids:['301'],values:{intensity:.8}});await r.command('selection.set',{ids:['301']});await r.command('highlight.set',{enabled:true});
+ await r.command('cue.record',{id:'rec',name:'rec'});assert.equal(r.show.cues.find(c=>c.id==='rec').look.find(x=>x.id==='301').values.intensity,.12,'a recorded cue never holds a face light above its limit');
+});
