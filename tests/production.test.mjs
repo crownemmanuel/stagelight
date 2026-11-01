@@ -291,3 +291,13 @@ test('a desk code change on disk is noticed without a restart and offered to ope
   const app=fs.readFileSync('public/app.js','utf8');assert.match(app,/r\.desk\.build!==deskBuild/,'the desk compares and offers a reload');assert.doesNotMatch(app,/r\.desk[^;]*location\.reload\(\)\s*[;}]/,'never reloads by itself on a desk change');
  }finally{fs.rmSync(dir,{recursive:true,force:true})}
 });
+
+test('MCP lists the production-readiness tools with their schemas and read-only hints',async()=>{
+ const {spawn}=await import('node:child_process');const child=spawn(process.execPath,[path.resolve('mcp/server.mjs')],{stdio:['pipe','pipe','inherit']});let out='';child.stdout.on('data',d=>out+=d);
+ child.stdin.write(JSON.stringify({jsonrpc:'2.0',id:1,method:'tools/list'})+'\n');while(!out.includes('\n'))await wait(20);child.kill();
+ const tools=Object.fromEntries(JSON.parse(out.split('\n')[0]).result.tools.map(t=>[t.name,t]));
+ for(const n of ['masters_status','masters_own','limit_set','modules_reload','show_autosave','output_arm','resume_apply'])assert.ok(tools['lights_'+n],n);
+ assert.ok(tools.lights_output_arm.inputSchema.properties.keepLook,'output.arm takes keepLook');assert.equal(tools.lights_masters_status.annotations.readOnlyHint,true);assert.equal(tools.lights_limit_set.annotations.readOnlyHint,false);
+ assert.deepEqual(tools.lights_limit_set.inputSchema.required,['group']);
+ const {SHOW_EDITS}=await import('../engine/spec.mjs');for(const n of ['masters.own','limit.set'])assert.ok(SHOW_EDITS.has(n),n+' is refused under the performance lock');for(const n of ['show.autosave','modules.reload','masters.status'])assert.ok(!SHOW_EDITS.has(n),n);
+});
