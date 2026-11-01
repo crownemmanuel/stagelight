@@ -56,9 +56,10 @@ test('engine: a failing send shows in output.status, runtime.health and the pre-
 const soundRig=async(timing={},{mute=false}={})=>{const {TIMING}=await import('../engine/modules/sound.mjs');const saved={...TIMING};Object.assign(TIMING,timing);
  const r=rig();const {e}=r;await e.command('master.set',{value:1});await e.command('cue.save',{cue:look('pad',['401'])});await e.command('cue.save',{cue:look('kick',['402'])});
  await e.command('masters.assign',{slot:'m2',cue:'pad',sound:{channel:2,band:'full',mode:'follow',sensitivity:.5,rangeDb:24}});await e.command('masters.assign',{slot:'m1',cue:'kick',sound:{channel:1}});
- await e.command('modules.set',{sound:{enabled:true,device:'Dante Virtual Soundcard'}});const io=e.mods.io,sent=[];const send=io.send.bind(io);await until(()=>io.devices&&e.mods.sound.opened);io.send=m=>{sent.push(m);if(!(mute&&m.op==='audio.open'))send(m)};
- // mute: the fake helper never answers audio.open, so the test plays the helper's replies itself.
- const say=m=>io.receive(JSON.stringify(m));return {...r,io,sent,say,restore:async()=>{Object.assign(TIMING,saved);if(e.mods){await e.mods.close();e.mods=null}}}};
+ await e.command('modules.set',{sound:{enabled:true,device:'Dante Virtual Soundcard'}});const io=e.mods.io,sent=[];const send=io.send.bind(io);await until(()=>io.devices&&e.mods.sound.opened);io.send=m=>{sent.push(m);send(m)};
+ // mute: the fake helper's own audio replies are dropped, so the test plays the helper's answers itself.
+ const receive=io.receive.bind(io);if(mute)io.receive=line=>{if(!/"ev":"audio"/.test(line))receive(line)};
+ const say=m=>receive(JSON.stringify(m));return {...r,io,sent,say,restore:async()=>{Object.assign(TIMING,saved);if(e.mods){await e.mods.close();e.mods=null}}}};
 
 test('a lost sound input is closed and reopened until it works, instead of the helper reusing the dead stream',async()=>{
  const {e,say,sent,restore}=await soundRig({reopen:60},{mute:true});try{
@@ -130,4 +131,59 @@ test('masters.status lists shared cues with a warning, the pre-show check warns,
  const r=await e.command('masters.own',{slot:'m3'});assert.equal(r.created.cue,'back-m3');assert.equal(e.show.masters.slots[2].cue,'back-m3');assert.equal(e.show.cues.find(c=>c.id==='back-m3').name,'back · M3');
  assert.deepEqual((await e.command('masters.status')).shared[0].numbers,[2,5]);await assert.rejects(e.command('masters.own',{slot:'m5',id:'back-m3'}),/already exists/);
  await e.command('performance.lock',{enabled:true});await assert.rejects(e.command('masters.own',{slot:'m5'}),/performance lock/);
+});
+
+// ── Getting the look back after a restart or a network fault (operator, 2026-11-01) ──
+test('arming with keepLook sends the running look as it is; without it, arming over running cues is refused with the way out',async()=>{
+ const {e,at,frame}=rig();await e.command('master.set',{value:1});await e.command('cue.save',{cue:look('c',['401'])});await e.command('cue.play',{id:'c'});await e.command('fixture.set',{ids:['402'],values:{intensity:.5}});
+ await assert.rejects(e.command('output.arm',{confirmation:'ENABLE_PHYSICAL_OUTPUT'}),/keepLook:true/);assert.equal(e.output.armed,false);
+ await e.command('output.arm',{confirmation:'ENABLE_PHYSICAL_OUTPUT',keepLook:true});at(.1);assert.equal(e.output.armed,true);assert.equal(frame('401').intensity,1,'the cue keeps running');assert.equal(frame('402').intensity,.5,'and the manual change');
+ assert.ok(e.logs.some(l=>/Armed with the current look · c/.test(l.message)));
+});
+
+test('a restart while armed (look held) offers Resume, which brings back every running cue, levels, the programmer and kills, arming last and firing no sends',async()=>{
+ const dir=tmp();try{
+  const {e,at}=rig({dataDir:dir});await e.command('master.set',{value:1});
+  await e.command('cue.save',{cue:look('base',['401','402','403'],{intensity:.6})});await e.command('cue.save',{cue:look('hit',['402'])});await e.command('cue.save',{cue:{id:'beat',name:'beat',duration:8,loop:true,tracks:[{fixtures:['301'],effect:'static',start:4,duration:4,params:{color:'#ffffff',brightness:1},fadeIn:0,fadeOut:0}]}});
+  await e.command('page.save',{page:{id:'song',name:'Song',cues:[{id:'e1',cue:'base',fade:0,follow:'manual',send:[{message:'midi',note:60}]}]}});
+  await e.command('output.arm',{confirmation:'ENABLE_PHYSICAL_OUTPUT'});await e.command('cue.play',{id:'beat'});await e.command('page.go',{id:'song'});await e.command('masters.assign',{slot:'m4',cue:'hit',action:'toggle'});await e.command('masters.trigger',{slot:'m4',down:true});await e.command('masters.level',{slot:'m4',level:.4});
+  await e.command('fixture.set',{ids:['404'],values:{intensity:.25}});await e.command('group.save',{id:'g403',name:'g403',fixtures:['403']});await e.command('kill.set',{group:'g403'});
+  at(5);const before=e.frames.map(f=>[f.id,f.intensity]).filter(([,i])=>i>0);
+  await e.close();
+  const b=new Engine({dataDir:dir,output:output(),clock:()=>5});const r=b.runtime().resume;assert.ok(r,'offered after a deliberate restart while armed');assert.equal(r.reason,'restart');
+  assert.deepEqual(r.running,['beat','base','hit']);assert.equal(r.overrides,1);assert.equal(r.kills,1);
+  const notes=[];b.mods={midi:{note:n=>notes.push(n)},changed(){},live(){return {}},health(){return []}};
+  await b.command('resume.apply',{confirmation:'ENABLE_PHYSICAL_OUTPUT'});b.mods=null;
+  assert.equal(b.output.armed,true);assert.deepEqual(notes,[],'no MIDI note to ProPresenter on resume');assert.equal(b.runtime().stack.entry,'e1');
+  assert.deepEqual(b.running().map(x=>[x.cue.id,x.master??null]),[['beat',null],['base',null],['hit','m4']]);assert.ok(Math.abs(b.sourceTime(b.running()[0],true)-5)<.01,'the beat cue carries on from where it was');
+  assert.deepEqual(b.runtime().masters.levels,{m4:.4});b.tick();assert.deepEqual(b.frames.map(f=>[f.id,f.intensity]).filter(([,i])=>i>0),before,'the same look as before the restart');
+  await b.close();assert.ok(new Engine({dataDir:dir,output:output()}).runtime().resume,'stopped while armed again: offered again');
+  const st=JSON.parse(fs.readFileSync(path.join(dir,'live-state.json'),'utf8'));st.at=new Date(Date.now()-31*60e3).toISOString();fs.writeFileSync(path.join(dir,'live-state.json'),JSON.stringify(st));
+  assert.equal(new Engine({dataDir:dir,output:output()}).runtime().resume,null,'a held restart more than 30 minutes old is not offered');
+ }finally{fs.rmSync(dir,{recursive:true,force:true})}
+});
+
+// ── Intensity limits: the face lights never above 12% (operator rule, enforced in the engine since 2026-11-01) ──
+test('a group limit caps output after the master over cues, Highlight, programmer and preview; blackout and kills still win',async()=>{
+ const {e,at,frame}=rig();await e.command('master.set',{value:1});await e.command('group.save',{id:'face',name:'Face',fixtures:['301','302','303']});await e.command('group.save',{id:'wide',name:'Wide',fixtures:['303','401']});
+ await e.command('limit.set',{group:'face',max:.12});await e.command('limit.set',{group:'wide',max:.5});
+ await e.command('cue.save',{cue:look('bright',['301','302','303','401'],{intensity:.9})});await e.command('cue.play',{id:'bright'});at(.1);
+ assert.deepEqual(['301','302','303','401'].map(id=>frame(id).intensity),[.12,.12,.12,.5],'each fixture takes its lowest limit');
+ await e.command('fixture.set',{ids:['301'],values:{intensity:1}});await e.command('selection.set',{ids:['302']});await e.command('highlight.set',{enabled:true});at(.2);assert.equal(frame('301').intensity,.12);assert.equal(frame('302').intensity,.12,'Highlight is capped too');
+ await e.command('highlight.set',{enabled:false});await e.command('preview.cue',{id:'bright'});at(.3);assert.equal(e.previewFrames.find(f=>f.id==='301').intensity,.12,'the preview shows what will go out');await e.command('preview.stop');
+ await e.command('master.set',{value:.5});at(.4);assert.equal(frame('303').intensity,.12,'under the limit after the master: unchanged (.9 × .5 = .45 → .12)');assert.equal(frame('401').intensity,.45);
+ await e.command('blackout.set',{enabled:true});at(.5);assert.equal(frame('301').intensity,0);await e.command('blackout.set',{enabled:false});
+ await e.command('limit.set',{group:'wide'});assert.deepEqual(e.show.limits,[{group:'face',max:.12}],'no max removes it');at(.6);assert.equal(frame('401').intensity,.45);
+ assert.match((await e.command('show.check',{network:false})).rows.find(r=>r.id==='limits').detail,/Face at most 12% \(3 fixtures\)/);
+ await e.command('group.delete',{id:'face'});assert.deepEqual(e.show.limits,[],'deleting a group drops its limit');
+ await assert.rejects(e.command('limit.set',{group:'nope',max:.1}),/Unknown group/);
+ await e.command('performance.lock',{enabled:true});await assert.rejects(e.command('limit.set',{group:'wide',max:.2}),/performance lock/);
+});
+
+test('the face lights are capped at 12% in any show that has the group and never had limits, including the live show\'s Special · light up at 18%',async()=>{
+ const {migrate}=await import('../engine/model.mjs');const show=JSON.parse(fs.readFileSync('data/show.json','utf8'));delete show.limits;
+ const m=migrate(show);if(!m.groups.some(g=>g.id==='face-lights'))return;assert.deepEqual(m.limits,[{group:'face-lights',max:.12}]);
+ const kept=migrate({...structuredClone(show),limits:[]});assert.deepEqual(kept.limits,[],'an operator who removed every limit keeps it that way');
+ const {e,at,frame}=rig();e.show=m;e.revision++;const face=e.show.groups.find(g=>g.id==='face-lights').fixtures;await e.command('master.set',{value:1});
+ await e.command('cue.save',{cue:look('special',face.slice(0,10),{intensity:.18})});await e.command('cue.play',{id:'special'});at(.1);assert.ok(face.slice(0,10).every(id=>frame(id).intensity===.12));
 });

@@ -92,6 +92,10 @@ export function migrate(show){
  for(const c of show.cues){if(c.bpm!==undefined)continue;const m=/\bat\s+(\d+(?:\.\d+)?)\s*BPM\b/i.exec(c.description??'');if(m&&+m[1]>=20&&+m[1]<=400)c.bpm=+m[1]}
  show.settings.modules??={sound:{enabled:false},midi:{enabled:false,virtualPort:true}};
  syncGroups(show);
+ // Intensity limits (docs/PRODUCTION-READINESS.md): the operator's standing rule is that the face lights never go above
+ // 12% (2026-11-01). A show that has never had limits gets that one, once, if it has the face-lights group; after that
+ // show.limits is the operator's to change (limit.set).
+ if(show.limits===undefined&&show.groups.some(g=>g.id==='face-lights'))show.limits=[{group:'face-lights',max:.12}];
  return show;
 }
 const track=(group,effect,start,duration,params={})=>({group,effect,start,duration,params,fadeIn:1,fadeOut:1});
