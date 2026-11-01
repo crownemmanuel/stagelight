@@ -1,14 +1,15 @@
 // Optional modules (docs/MIDI-AND-SOUND.md). The engine imports this file only while sound or MIDI is on. It starts the
 // native helper and the modules that are on, and closes all of them when they are turned off, so a show that uses
 // neither pays nothing: no process, no ports, no audio and no work in the engine tick.
-import {Helper} from './io.mjs';
+// v is '' on the first load and '?v=N' after modules.reload, so Node imports the module files on disk again and a fix
+// to sound, MIDI or the helper link takes effect without restarting the engine (docs/PRODUCTION-READINESS.md).
 export class Modules{
- constructor(engine){this.engine=engine;this.io=null;this.sound=null;this.midi=null}
+ constructor(engine,v=''){this.engine=engine;this.v=v;this.io=null;this.sound=null;this.midi=null}
  async apply(cfg){
-  const e=this.engine;if(!this.io){this.io=new Helper(e);this.io.start()}
-  if(cfg.sound?.enabled&&!this.sound){const {Sound}=await import('./sound.mjs');this.sound=new Sound(e,this.io);e.log('Sound module on')}
+  const e=this.engine;if(!this.io){const {Helper}=await import('./io.mjs'+this.v);this.io=new Helper(e);this.io.start()}
+  if(cfg.sound?.enabled&&!this.sound){const {Sound}=await import('./sound.mjs'+this.v);this.sound=new Sound(e,this.io);e.log('Sound module on')}
   else if(!cfg.sound?.enabled&&this.sound){this.sound.close();this.sound=null;e.log('Sound module off')}
-  if(cfg.midi?.enabled&&!this.midi){const {Midi}=await import('./midi.mjs');this.midi=new Midi(e,this.io);e.log('MIDI module on')}
+  if(cfg.midi?.enabled&&!this.midi){const {Midi}=await import('./midi.mjs'+this.v);this.midi=new Midi(e,this.io);e.log('MIDI module on')}
   else if(!cfg.midi?.enabled&&this.midi){this.midi.close();this.midi=null;e.log('MIDI module off')}
   this.sound?.configure();this.midi?.configure();
  }

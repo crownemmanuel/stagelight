@@ -853,3 +853,9 @@ button.show-name:hover{color:var(--text);background:var(--card2)}
 /* Sound panel: the whole input's level, and every channel's while the helper sends them (sound.meter). */
 .sd-input{display:flex;align-items:center;gap:8px;font-size:11px;color:var(--muted);margin-top:4px}.sd-input i{flex:1;height:4px;border-radius:2px;background:var(--card2);overflow:hidden}.sd-input u{display:block;height:100%;background:var(--go);text-decoration:none}.sd-input em{font-style:normal;min-width:52px;text-align:right}.sd-input.dead em{color:var(--live)}
 .sd-channels{display:grid;grid-template-columns:repeat(auto-fill,minmax(14px,1fr));gap:2px;margin-top:6px}.sd-channels[hidden]{display:none}.sd-channels b{position:relative;height:26px;background:var(--card2);border-radius:2px;overflow:hidden}.sd-channels b i{position:absolute;left:0;right:0;bottom:0;background:var(--faint)}.sd-channels b.on i{background:var(--go)}.sd-channels b.mine{outline:1px solid var(--warm)}.sd-channels small{position:absolute;left:0;right:0;bottom:0;font-size:8px;text-align:center;color:var(--text);font-weight:600}
+
+/* A live tempo far from the cue's own (tempo.far): amber, with the rate the cues play at. */
+.tempo.far .tap-button{background:#3a2e17;outline:1px solid var(--warm)}.tempo.far #bpmSource{color:var(--warm);font-weight:800}
+
+/* Blind: GO previews instead of going live (go() in app.js). */
+.go-button.blind-go{background:#4b3a78;color:#efe8ff;box-shadow:none}

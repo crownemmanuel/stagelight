@@ -12,9 +12,9 @@ export class ShowFiles{
  constructor(dataDir,folder){
   this.file=dataDir?path.join(dataDir,'show-files.json'):null;this.meta=new Map();let saved={};
   try{if(this.file&&fs.existsSync(this.file))saved=JSON.parse(fs.readFileSync(this.file,'utf8'))}catch{}
-  this.folder=saved.folder??folder??(dataDir?defaultShowsFolder():null);this.current=saved.current??null;
+  this.folder=saved.folder??folder??(dataDir?defaultShowsFolder():null);this.current=saved.current??null;this.autosave=saved.autosave!==false;
  }
- persist(){if(!this.file)return;fs.writeFileSync(this.file+'.tmp',JSON.stringify({folder:this.folder,current:this.current},null,2));fs.renameSync(this.file+'.tmp',this.file)}
+ persist(){if(!this.file)return;fs.writeFileSync(this.file+'.tmp',JSON.stringify({folder:this.folder,current:this.current,...(this.autosave?{}:{autosave:false})},null,2));fs.renameSync(this.file+'.tmp',this.file)}
  dir(){if(!this.folder)throw Error('No shows folder: set one with show.folder.set {path}.');return this.folder}
  name(raw){const n=String(raw??'').trim().replace(/\.json$/i,'');if(!SHOW_NAME.test(n))throw Error('Show names are 1–80 characters, without / \\ : * ? " < > | and not starting with a dot.');return n}
  pathOf(name){return path.join(this.dir(),this.name(name)+'.json')}

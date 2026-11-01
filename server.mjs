@@ -9,6 +9,8 @@ import {Engine,MEDIA_TYPES} from './engine/engine.mjs';
 import {decodePacket,encodeOSC} from './engine/osc.mjs';
 import {routeOSC} from './engine/osc-routes.mjs';
 import {performance} from 'node:perf_hooks';
+import {RuntimeStream} from './engine/stream.mjs';
+import {watchDesk} from './engine/desk-build.mjs';
 const root=path.dirname(fileURLToPath(import.meta.url));
 const port=Number(process.env.LIGHTS_PORT??1460);
 const dataDir=process.env.LIGHTS_DATA_DIR??path.join(root,'data');
@@ -16,7 +18,9 @@ const token=crypto.randomBytes(24).toString('hex'),version=JSON.parse(fs.readFil
 // Fingerprint of the desk and engine code this server loaded: an open desk reloads when it reconnects to different code.
 const build=(()=>{const h=crypto.createHash('sha1');for(const dir of ['public','engine'])for(const f of fs.readdirSync(path.join(root,dir)).filter(f=>/\.(m?js|html|css)$/.test(f)).sort())h.update(f).update(fs.readFileSync(path.join(root,dir,f)));return h.digest('hex').slice(0,12)})();
 const engine=new Engine({dataDir});
-const clients=new Set();let queue=Promise.resolve();
+// Desk-only code changes are picked up without a restart: open desks see runtime.desk change and offer Reload.
+const desk=watchDesk(path.join(root,'public'),d=>{engine.desk=d;engine.log('Desk code changed on disk: open desks can reload to take it')});
+const clients=new Set(),deltaClients=new Set(),stream=new RuntimeStream();let queue=Promise.resolve();
 const execute=(command,args,opts)=>{const run=queue.then(()=>engine.command(command,args,opts));queue=run.catch(()=>{});return run};
 const json=(res,status,body)=>{res.writeHead(status,{'content-type':'application/json','cache-control':'no-store','x-content-type-options':'nosniff'});res.end(JSON.stringify(body))};
 const origins=new Set([`http://127.0.0.1:${port}`,`http://localhost:${port}`]);
@@ -26,14 +30,17 @@ const server=http.createServer(async(req,res)=>{
   if(![`localhost:${port}`,`127.0.0.1:${port}`].includes(req.headers.host))return json(res,403,{error:'Local host only'});
   if(req.headers.origin&&!origins.has(req.headers.origin))return json(res,403,{error:'Cross-origin request refused'});
   const url=new URL(req.url,`http://127.0.0.1:${port}`);
-  if(req.method==='GET'&&url.pathname==='/api/session')return json(res,200,{token,version,build});
+  if(req.method==='GET'&&url.pathname==='/api/session')return json(res,200,{token,version,build,desk:desk.build()});
   // Exact values for the Connect an agent dialog: this Mac's Node, this folder's MCP server, this engine's URL.
   if(req.method==='GET'&&url.pathname==='/api/connect')return json(res,200,{node:['/opt/homebrew/bin/node','/usr/local/bin/node'].find(p=>fs.existsSync(p))??process.execPath,server:path.join(root,'mcp','server.mjs'),url:`http://127.0.0.1:${port}`,name:'stagelight'});
   if(req.method==='GET'&&url.pathname==='/api/state')return json(res,200,engine.snapshot());
   if(req.method==='GET'&&url.pathname==='/api/schema')return json(res,200,await engine.command('schema'));
   if(req.method==='GET'&&url.pathname==='/api/show'){res.setHeader('content-disposition','attachment; filename="stagelight-show.json"');return json(res,200,engine.show)}
   if(req.method==='GET'&&url.pathname==='/api/events'){
-   res.writeHead(200,{'content-type':'text/event-stream','cache-control':'no-cache','connection':'keep-alive'});res.write('data: '+JSON.stringify(engine.runtime())+'\n\n');clients.add(res);req.on('close',()=>clients.delete(res));return;
+   // ?delta=1 (the desk): compact frame deltas (engine/stream.mjs). Without it: the whole runtime, as before.
+   res.writeHead(200,{'content-type':'text/event-stream','cache-control':'no-cache','connection':'keep-alive'});
+   if(url.searchParams.get('delta')==='1'){if(!deltaClients.size)stream.last=null;res.write('data: '+JSON.stringify(stream.full(engine.runtime()))+'\n\n');deltaClients.add(res);req.on('close',()=>deltaClients.delete(res));return}
+   res.write('data: '+JSON.stringify(engine.runtime())+'\n\n');clients.add(res);req.on('close',()=>clients.delete(res));return;
   }
   if(req.method==='POST'&&url.pathname==='/api/command'){
    if(req.headers['x-lights-token']!==token)return json(res,403,{error:'Missing session token'});
@@ -128,7 +135,10 @@ server.listen(port,'127.0.0.1',()=>{engine.start();console.log(`LIGHTS_READY htt
 listenOSC(engine.show.settings.osc);
 // 10 Hz runtime stream. A settled look repeats the same payload, so unchanged frames are not re-sent: idle desks then parse and paint nothing.
 // The tick counter alone does not count as a change; it is read from the diagnostics dialog when something else moves.
-let lastStream='';const streamTimer=setInterval(()=>{if(!clients.size)return;const runtime=engine.runtime(),key=JSON.stringify(runtime,(k,v)=>k==='tickCount'?undefined:v);if(key===lastStream)return;lastStream=key;const data='data: '+JSON.stringify(runtime)+'\n\n';for(const client of clients){if(client.writableLength>500000){client.end();clients.delete(client)}else client.write(data)}},100);
+const write=(set,data)=>{for(const client of set){if(client.writableLength>500000){client.end();set.delete(client)}else client.write(data)}};
+let lastStream='';const streamTimer=setInterval(()=>{if(!clients.size&&!deltaClients.size)return;const runtime=engine.runtime();
+ if(deltaClients.size){const m=stream.next(runtime);if(m)write(deltaClients,'data: '+JSON.stringify(m)+'\n\n')}
+ if(clients.size){const key=JSON.stringify(runtime,(k,v)=>k==='tickCount'?undefined:v);if(key!==lastStream){lastStream=key;write(clients,'data: '+JSON.stringify(runtime)+'\n\n')}}},100);
 let quitting=false;
-async function shutdown(){if(quitting)return;quitting=true;clearInterval(streamTimer);await engine.close();for(const c of clients)c.end();osc?.close();server.close(()=>process.exit(0));setTimeout(()=>process.exit(0),2000).unref()}
+async function shutdown(){if(quitting)return;quitting=true;clearInterval(streamTimer);desk.stop();await engine.close();for(const c of [...clients,...deltaClients])c.end();osc?.close();server.close(()=>process.exit(0));setTimeout(()=>process.exit(0),2000).unref()}
 process.on('SIGINT',shutdown);process.on('SIGTERM',shutdown);

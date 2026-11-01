@@ -1,6 +1,7 @@
 import {Stage} from './stage.js?v=ui-2';
 import {icon} from './icons.js?v=ui-3';
 import {visibleFixtures} from './visibility.js';
+import {mergeRuntime} from './stream.js';
 // Pop-out visualizer: a second window (e.g. on another screen) with its own 3D stage, fed by the same
 // engine stream. It is a view only; selection goes through selection.set like the main window.
 const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
@@ -47,9 +48,9 @@ async function start(){
   stage=new Stage($('#viewport'),show.fixtures,select);stage.setLedWall(show.ledWall,mediaList().find(m=>m.id===show.ledWall?.media));paint(v.runtime);tell('visualizer-hello');
   $$('[data-view]').forEach(b=>b.onclick=()=>{stage.setView(b.dataset.view);$$('[data-view]').forEach(x=>x.classList.toggle('active',x===b))});
   $('#haze').oninput=e=>{stage.haze=+e.target.value/100};
-  const events=new EventSource('/api/events');
+  let streamed=null;const events=new EventSource('/api/events?delta=1');
   events.onopen=async()=>{try{token=(await fetch('/api/session').then(r=>r.json())).token;await refresh()}catch{}};
-  events.onmessage=e=>paint(JSON.parse(e.data));
+  events.onmessage=e=>{streamed=mergeRuntime(streamed,JSON.parse(e.data));paint(streamed)};
   events.onerror=()=>{$('#engineStatus').innerHTML='<i class="off"></i>Engine offline'};
  }catch(e){$('#engineStatus').innerHTML='<i class="off"></i>Engine offline'}
 }

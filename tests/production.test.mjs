@@ -187,3 +187,107 @@ test('the face lights are capped at 12% in any show that has the group and never
  const {e,at,frame}=rig();e.show=m;e.revision++;const face=e.show.groups.find(g=>g.id==='face-lights').fixtures;await e.command('master.set',{value:1});
  await e.command('cue.save',{cue:look('special',face.slice(0,10),{intensity:.18})});await e.command('cue.play',{id:'special'});at(.1);assert.ok(face.slice(0,10).every(id=>frame(id).intensity===.12));
 });
+
+// ── Audit log growth (docs/PRODUCTION-READINESS.md) ──
+test('master presses, fader moves, knob turns and sound hits are tallied once a minute; show events still log one by one',async()=>{
+ const {e,at}=rig();await e.command('cue.save',{cue:look('back',['401'])});await e.command('masters.assign',{slot:'m2',cue:'back'});const n=e.logs.length;
+ for(let i=0;i<50;i++){await e.command('masters.trigger',{slot:'m2',down:true});await e.command('masters.trigger',{slot:'m2',down:false})}
+ for(let i=0;i<30;i++)await e.command('fixture.set',{ids:['402'],values:{intensity:i/30}});for(let i=0;i<20;i++)e.soundHit('m2');
+ assert.equal(e.logs.length,n,'nothing logged per press, per knob step or per hit');
+ await e.command('page.go',{id:'scene-1'});assert.equal(e.logs.length,n+1,'a GO is still logged');
+ e.flushTally();const line=e.logs.at(-1).message;assert.match(line,/^Live controls in the last minute: /);assert.match(line,/masters\.trigger ×100 \(m2 ×100\)/);assert.match(line,/fixture\.set ×30 \(402 ×30\)/);assert.match(line,/flash let go ×50 \(back ×50\)/);assert.match(line,/sound hit ×20/);
+ e.flushTally();assert.equal(e.logs.at(-1).message,line,'nothing new: no line');
+});
+
+test('the audit log rotates at 2 MB into .previous and new lines land in the fresh file',async()=>{
+ const dir=tmp();try{const {e}=rig({dataDir:dir});const f=path.join(dir,'audit.jsonl');
+  e.log('first');await wait(30);e.auditBytes=2e6+1;e.log('after rotation');await new Promise(r=>e.audit.write('',r));await wait(30);
+  assert.match(fs.readFileSync(f+'.previous','utf8'),/first/);const now=fs.readFileSync(f,'utf8');assert.match(now,/after rotation/);assert.doesNotMatch(now,/first/);
+  assert.doesNotMatch(fs.readFileSync(f+'.previous','utf8'),/after rotation/,'the new line did not follow the renamed file');await e.close();
+ }finally{fs.rmSync(dir,{recursive:true,force:true})}
+});
+
+// ── Runtime stream deltas (/api/events?delta=1) ──
+test('the delta stream rebuilds exactly the runtime a full message would, sends nothing for packet counters, and keeps unchanged frame objects',async()=>{
+ const {RuntimeStream}=await import('../engine/stream.mjs');const {mergeRuntime}=await import('../public/stream.js');
+ const {e,at}=rig();await e.command('master.set',{value:1});await e.command('cue.save',{cue:{id:'chase',name:'chase',duration:4,loop:true,tracks:[{group:'backlights',effect:'chase',start:0,duration:4,params:{color:'#ff8800',speed:1,brightness:1},fadeIn:0,fadeOut:0}]}});
+ const s=new RuntimeStream(),r6=x=>JSON.parse(JSON.stringify(x,(k,v)=>typeof v==='number'?Math.round(v*1e6)/1e6:v));let desk=null,late=null,bytes=0,fullBytes=0;
+ const step=t=>{at(t);const rt=e.runtime(),m=s.next(rt);if(m){bytes+=JSON.stringify(m).length;desk=mergeRuntime(desk,m);if(late)late=mergeRuntime(late,m)}fullBytes+=JSON.stringify(rt).length;return {rt,m}};
+ step(0);await e.command('cue.play',{id:'chase'});for(let i=1;i<=20;i++){const {rt}=step(i/10);assert.deepEqual(desk.frames,r6(rt.frames),'frames match at '+i/10)}
+ late=mergeRuntime(null,s.full(e.runtime()));assert.deepEqual(late.frames,desk.frames,'a desk that connects late starts from the same state');
+ await e.command('cue.stop',{fade:0});step(3);step(3.1);const {m}=step(3.1);assert.equal(m,null,'settled: nothing sent');
+ e.runtime=(orig=>()=>({...orig(),tickCount:999,output:{...orig().output,packets:12345,lastSent:new Date().toISOString()}}))(e.runtime.bind(e));assert.equal(step(3.15).m,null,'packet counters alone send nothing');
+ await e.command('preview.cue',{id:'chase'});const p=step(3.3);assert.deepEqual(desk.previewFrames,r6(p.rt.previewFrames));step(3.4);assert.deepEqual(desk.previewFrames,r6(e.runtime().previewFrames));
+ await e.command('preview.stop');step(3.5);assert.equal(desk.previewFrames,null);
+ const before=desk.frames;await e.command('fixture.set',{ids:['401'],values:{intensity:.5}});const one=step(3.6).m;assert.deepEqual(Object.keys(one.fd),['401'],'one fixture changed: one delta');assert.deepEqual(desk.frames.filter((f,i)=>f!==before[i]).map(f=>f.id),['401'],'every other frame object is kept');
+ assert.ok(bytes<fullBytes/5,`deltas are a fraction of full messages (${bytes} vs ${fullBytes})`);
+});
+test('delta messages carry only changed runtime fields and drop the ones that disappear',async()=>{
+ const {RuntimeStream}=await import('../engine/stream.mjs');const {mergeRuntime}=await import('../public/stream.js');const s=new RuntimeStream();
+ const base={tickCount:1,master:1,sound:{input:-20},output:{armed:true,packets:1,lastSent:'a',interfaces:[]},frames:[{id:'1',intensity:0}],previewFrames:null};
+ let desk=mergeRuntime(null,s.next(base));const m=s.next({...base,tickCount:2,master:.5,output:{...base.output,packets:2,lastSent:'b'}});
+ assert.deepEqual(Object.keys(m).sort(),['fd','k','master','tickCount']);desk=mergeRuntime(desk,m);assert.equal(desk.master,.5);assert.deepEqual(desk.sound,{input:-20});
+ const {sound,...nosound}=base;desk=mergeRuntime(desk,s.next({...nosound,master:.5}));assert.equal('sound' in desk,false,'removed field is removed');
+});
+
+// ── Earlier live-run fixes, re-verified (2026-11-01) ──
+test('an edited cue that is running shows the edit at once, without a jump or a re-GO; a Note step chase keeps its place',async()=>{
+ const {e,at,frame}=rig();await e.command('master.set',{value:1});const c={id:'warm',name:'warm',duration:10,loop:true,tracks:[{fixtures:['301'],effect:'static',start:0,duration:10,params:{color:'#ffffff',brightness:1},fadeIn:0,fadeOut:0}],look:[{id:'401',values:{intensity:.4}}]};
+ await e.command('cue.save',{cue:c});await e.command('cue.play',{id:'warm'});at(3);const before=e.sourceTime(e.playback,true);
+ await e.command('cue.save',{cue:{...c,look:[{id:'401',values:{intensity:.9}},{id:'402',values:{intensity:.5}}]}});at(3);
+ assert.equal(frame('401').intensity,.9,'the new level is live');assert.equal(frame('402').intensity,.5,'and the new fixture');assert.ok(Math.abs(e.sourceTime(e.playback,true)-before)<1e-9,'no jump');assert.ok(e.playback.controls.has('402'));
+ const step={id:'keys',name:'keys',duration:30,loop:true,tracks:[{group:'backlights',effect:'step',start:0,duration:30,params:{color:'#ffffff',brightness:1},fadeIn:0,fadeOut:0}]};
+ await e.command('cue.save',{cue:step});await e.command('masters.assign',{slot:'m4',cue:'keys',action:'toggle'});await e.command('masters.trigger',{slot:'m4',down:true});
+ for(let i=0;i<3;i++)await e.command('masters.step',{slot:'m4'});const n=e.running().find(r=>r.cue.id==='keys').cue.tracks[0].params.step;
+ await e.command('cue.save',{cue:{...step,tracks:[{...step.tracks[0],params:{...step.tracks[0].params,color:'#ff0000'}}]}});const r=e.running().find(r=>r.cue.id==='keys').cue.tracks[0].params;
+ assert.equal(r.step,n,'the chase stays on its light');assert.equal(r.color,'#ff0000');
+});
+
+test('tap tempo: a stray tap changes nothing until the next tap confirms a new count; a tempo far from the cue\'s shows as far with its ratio',async()=>{
+ const {e,at}=rig();await e.command('cue.save',{cue:{id:'b',name:'b',duration:4,loop:true,bpm:120,tracks:[{fixtures:['301'],effect:'static',start:0,duration:4,params:{color:'#ffffff',brightness:1},fadeIn:0,fadeOut:0}]}});await e.command('cue.play',{id:'b'});
+ for(const t of [0,.5,1,1.5])(at(t),await e.command('tempo.tap'));assert.equal(e.runtime().tempo.bpm,120);assert.equal(e.runtime().tempo.far,false);
+ at(2.53);await e.command('tempo.tap');assert.equal(e.runtime().tempo.bpm,120,'one late tap changes nothing');
+ at(3.56);await e.command('tempo.tap');assert.ok(Math.abs(e.runtime().tempo.bpm-58.25)<.1,'the next tap confirms the new count');assert.equal(e.runtime().tempo.far,true,'58 BPM against a 120 BPM cue is far');assert.equal(e.runtime().tempo.ratio,.485);
+ const anchor=e.runtime().tempo.anchorAt;at(3.9);assert.equal(e.runtime().tempo.anchorAt,anchor,'steady status: no stream churn');
+ await e.command('tempo.set',{});assert.equal(e.runtime().tempo.bpm,null);assert.equal(e.runtime().tempo.far,false);
+});
+
+test('a strobe faster than two 30 Hz frames per flash is flagged in the pre-show check and, at the live tempo, in runtime.health',async()=>{
+ const {e,at}=rig();const strobe=(id,frequency,duty,bpm)=>({id,name:id,duration:8,loop:true,...(bpm?{bpm}:{}),tracks:[{group:'backlights',effect:'strobe',start:0,duration:8,params:{color:'#ffffff',frequency,duty,brightness:1},fadeIn:0,fadeOut:0}]});
+ await e.command('cue.save',{cue:strobe('ok',5,.5)});assert.equal((await e.command('show.check',{network:false})).rows.find(r=>r.id==='strobe').state,'pass','5 Hz at 50% is the limit');
+ await e.command('cue.save',{cue:strobe('fast',6,.3)});const row=(await e.command('show.check',{network:false})).rows.find(r=>r.id==='strobe');assert.equal(row.state,'warn');assert.match(row.detail,/fast: strobe at 6 Hz and 30% duty flashes for 50 ms/);
+ await e.command('cue.save',{cue:strobe('beat',4,.35,120)});await e.command('cue.play',{id:'beat'});at(.1);assert.equal(e.runtime().health.filter(h=>h.id==='strobe').length,0);
+ await e.command('tempo.set',{bpm:180});at(.2);assert.match(e.runtime().health.find(h=>h.id==='strobe').message,/beat: strobe at 6 Hz/,'the live tempo makes it too fast');
+});
+
+// ── Show file autosave, module reload and desk hot-load: what changes without an engine restart ──
+test('the open show file autosaves once edits are quiet for 10 s, at most every 2 minutes, and when the lock goes on; it can be turned off',async()=>{
+ const root=tmp();try{let time=0;const e=new Engine({dataDir:path.join(root,'data'),showsDir:path.join(root,'shows'),output:output(),clock:()=>time});
+  e.autosaveTick();assert.equal(e.autosaveNow(),false,'no file open: nothing to autosave');
+  await e.command('show.save',{name:'WCIMF'});const file=path.join(root,'shows','WCIMF.json');assert.equal(e.runtime().showFile.dirty,false);
+  await e.command('cue.save',{cue:look('new',['401'])});e.autosaveTick();time=5;e.autosaveTick();assert.equal(e.runtime().showFile.dirty,true,'still being edited');
+  time=11;e.autosaveTick();assert.equal(e.runtime().showFile.dirty,false,'quiet for 10 s: written');assert.ok(JSON.parse(fs.readFileSync(file,'utf8')).cues.some(c=>c.id==='new'));assert.ok(e.logs.some(l=>l.message==='Show autosaved · WCIMF'));
+  await e.command('cue.save',{cue:look('second',['402'])});e.autosaveTick();time=30;e.autosaveTick();assert.equal(e.runtime().showFile.dirty,true,'at most every 2 minutes');time=132;e.autosaveTick();assert.equal(e.runtime().showFile.dirty,false);
+  await e.command('cue.save',{cue:look('third',['403'])});await e.command('performance.lock',{enabled:true});assert.equal(e.runtime().showFile.dirty,false,'locking for the show saves the file');await e.command('performance.lock',{enabled:false});
+  await e.command('show.autosave',{enabled:false});assert.equal(e.runtime().showFile.autosave,false);await e.command('cue.save',{cue:look('fourth',['404'])});time=1000;e.autosaveTick();time=1100;e.autosaveTick();assert.equal(e.runtime().showFile.dirty,true,'off: left for Save');
+  assert.equal(new Engine({dataDir:path.join(root,'data'),showsDir:path.join(root,'shows'),output:output()}).runtime().showFile.autosave,false,'the setting is this Mac\'s and survives a restart');
+ }finally{fs.rmSync(root,{recursive:true,force:true})}
+});
+
+test('modules.reload re-imports the module code and restarts the helper, then sound and MIDI carry on',async()=>{
+ const {e}=rig();await e.command('cue.save',{cue:look('k',['401'])});await e.command('masters.assign',{slot:'m1',cue:'k',sound:{channel:1}});
+ await assert.rejects(e.command('modules.reload'),/No module is on/);
+ await e.command('modules.set',{sound:{enabled:true,device:'Dante Virtual Soundcard'},midi:{enabled:true}});const old=e.mods,child=old.io.child;await until(()=>old.io.devices);
+ const r=await e.command('modules.reload');assert.equal(r.created.version,1);assert.notEqual(e.mods,old);assert.equal(e.mods.v,'?v=1');assert.equal((await e.command('modules.status')).version,1);
+ await until(()=>child.exitCode!==null||child.signalCode!==null);await until(()=>e.mods.io.devices&&e.mods.sound.opened?.ok&&e.mods.midi.apc);
+ assert.deepEqual(e.mods.sound.triggers().map(t=>t.id),['m1']);await e.command('modules.set',{sound:{enabled:false},midi:{enabled:false}});
+});
+
+test('a desk code change on disk is noticed without a restart and offered to open desks as a reload',async()=>{
+ const {watchDesk,deskBuild}=await import('../engine/desk-build.mjs');const dir=tmp();try{
+  fs.writeFileSync(path.join(dir,'app.js'),'one');fs.writeFileSync(path.join(dir,'notes.txt'),'x');const seen=[];const w=watchDesk(dir,d=>seen.push(d),{settle:30});const first=w.build();assert.equal(first,deskBuild(dir));
+  fs.writeFileSync(path.join(dir,'notes.txt'),'y');await wait(150);assert.equal(seen.length,0,'non-code files are ignored');
+  fs.writeFileSync(path.join(dir,'app.js'),'two');await until(()=>seen.length===1);assert.notEqual(seen[0].build,first);assert.equal(w.build(),seen[0].build);w.stop();
+  const app=fs.readFileSync('public/app.js','utf8');assert.match(app,/r\.desk\.build!==deskBuild/,'the desk compares and offers a reload');assert.doesNotMatch(app,/r\.desk[^;]*location\.reload\(\)\s*[;}]/,'never reloads by itself on a desk change');
+ }finally{fs.rmSync(dir,{recursive:true,force:true})}
+});

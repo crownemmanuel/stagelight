@@ -6,7 +6,7 @@ const tmp=()=>fs.mkdtempSync(path.join(os.tmpdir(),'stagelight-files-'));
 const rig=(root=tmp())=>({root,e:new Engine({dataDir:path.join(root,'data'),showsDir:path.join(root,'shows'),output:output()})});
 
 test('Save As writes a named file, Save goes back to it, and only show edits make it unsaved',async()=>{
- const {root,e}=rig();assert.deepEqual(e.runtime().showFile,{name:null,savedAt:null,dirty:true},'a show never saved to a file is unsaved');
+ const {root,e}=rig();assert.deepEqual(e.runtime().showFile,{name:null,savedAt:null,dirty:true,autosave:true},'a show never saved to a file is unsaved');
  await assert.rejects(e.command('show.save',{}),/no file yet/);
  const r=await e.command('show.save',{name:'Sunday Service'});assert.equal(r.created.file.file,path.join(root,'shows','Sunday Service.json'));
  assert.deepEqual(JSON.parse(fs.readFileSync(r.created.file.file,'utf8')),e.show,'the file is the whole show');
@@ -58,7 +58,7 @@ test('the current file and its saved state survive an engine restart; import mak
  const {root,e}=rig();await e.command('show.save',{name:'Tour'});await e.close?.();
  const again=new Engine({dataDir:path.join(root,'data'),output:output()});assert.equal(again.runtime().showFile.name,'Tour');assert.equal(again.runtime().showFile.dirty,false);
  await again.command('settings.set',{sceneFade:4});const third=new Engine({dataDir:path.join(root,'data'),output:output()});assert.equal(third.runtime().showFile.dirty,true,'edits since the save are still unsaved after a restart');
- await third.command('show.import',{show:structuredClone(third.show)});assert.deepEqual(third.runtime().showFile,{name:null,savedAt:null,dirty:true});
+ await third.command('show.import',{show:structuredClone(third.show)});assert.deepEqual(third.runtime().showFile,{name:null,savedAt:null,dirty:true,autosave:true});
 });
 
 test('the shows folder can be changed and is kept on this Mac, not in the show',async()=>{

@@ -6,6 +6,7 @@ import {mountJoystick} from './joystick.js';
 import {createLiveControl} from './live-controls.js';
 import {masterColor,padColor} from './pad-colors.js';
 import {uid} from './ids.js';
+import {mergeRuntime} from './stream.js';
 import {visibleFixtures,hiddenFixtureIds} from './visibility.js';
 import {icon,ICONS} from './icons.js?v=ui-2';
 import {goboIcon,goboName,GOBOS} from './gobos.js?v=ui-2';
@@ -17,7 +18,7 @@ const MOVERS=['rogue','mh7','beam200','beam7r'],WHEEL=['beam200','beam7r'];
 const PAGE_COLORS=['#8bc9d0','#eac28a','#c99ae8','#7fc79a','#ee8f8f','#7da6f0','#f0b46b','#d8d8d8'];
 // UI state. Engine state (show, runtime) is read back; nothing here is authoritative.
 // build: the engine's code fingerprint from /api/session; reconnecting to a different one reloads the desk.
-let show,runtime,schema,token,build,stage,toastTimer,rev=0;
+let show,runtime,schema,token,build,deskBuild,stage,toastTimer,rev=0;
 let mode=store.get('mode','show'),pageId=store.get('page',null),standby=null,selected=[],group=null;
 let railTab=store.get('railTab','pages'),pane=store.get('bottomPane',store.get('fixtureChips','shown')==='hidden'?'none':'fixtures'),sceneKey='';
 let fxMode=store.get('fxMode','preview'),ovTab='props',stageView=store.get('stageView','stage'),viewSource='live',selectionRevision=0,side='cues',progTab='look',editingEntry=null,ledOpen=false,positionMode='joystick',joystickSpeed=.1,destroyJoystick=null,aligning=null,liveKey='';
@@ -354,14 +355,21 @@ function bindCueList(){
  if($('#sendTarget'))$('#sendTarget').onchange=()=>{if($('#sendMessage').value==='preset')askPresets()};
  if($('#sendPresetRefresh'))$('#sendPresetRefresh').onclick=askPresets;
 }
-async function go(entry){
+// Blind means nothing reaches the stage: GO (and Space) previews the next entry (preview.cue) instead of playing it, and
+// the GO button says PREVIEW. Send to live in the banner, or Shift+Space, plays it (operator report 2026-11-01: GO in
+// Blind went live). Masters, sound triggers and OSC/MCP page.go stay live.
+async function go(entry,live=false){
  const p=page();if(!p)return toast('Choose a page first.');
+ if(runtime?.blind?.enabled&&!live){const pv=runtime.preview,from=pv?.page===p.id?p.cues.findIndex(e=>e.id===pv.entry):-1,at=runtime.stack?.page===p.id?runtime.stack.index:-1,id=entry??p.cues[Math.max(from,at)+1]?.id;
+  if(!id)return toast('End of the cue list.');await previewCue({page:p.id,entry:id});standby=p.cues[p.cues.findIndex(e=>e.id===id)+1]?.id??null;paint(runtime);return}
  try{cancelAlignment();ensureStageView();await command('page.go',{id:p.id,...(entry?{entry}:{}),requestId:uid('ui')});standby=null;paint(runtime)}catch{}
 }
 // Preview playback lives in the engine (preview.cue); the stage just chooses which frames to draw.
 async function previewCue(args){try{ensureStageView();await command('preview.cue',args);viewSource='preview';paint(runtime)}catch{}}
 async function stopPreview(){viewSource='live';try{await command('preview.stop')}catch{}paint(runtime)}
 async function sendPreviewLive(){try{await command('preview.go_live',{requestId:uid('ui')});viewSource='live';standby=null;paint(runtime)}catch{}}
+// Shift+Space in Blind: what is previewed goes live, else the next entry plays live.
+function goLive(){if(runtime?.preview?.saved)sendPreviewLive();else go(standby,true)}
 // One banner for both: Preview (amber) shows a cue that is not live; Blind (violet) shows edits that are not live.
 function drawPreviewBanner(r){
  const banner=$('#previewBanner'),p=r.preview,b=r.blind?.enabled,changed=r.blind?.fixtures.length??0,fxp=r.fxPreview;
@@ -375,7 +383,7 @@ function drawPreviewBanner(r){
  document.body.classList.toggle('viewing-preview',!!(p||b)&&viewSource==='preview');document.body.classList.toggle('blind',!!b);banner.hidden=!(p||b);if(!(p||b))return;
  const name=p?(p.page?entryName(show.pages.find(x=>x.id===p.page)?.cues.find(e=>e.id===p.entry))??p.name:p.name):'Over the live look';
  const key=[p?.id,p?.entry,p?.saved,b,changed>0,viewSource].join('|');if(banner.dataset.key!==key){banner.dataset.key=key;
-  banner.innerHTML=`<span class="pv-tag ${b?'blind':''}">${icon(b?'blind':'eye')}${b?'Blind':'Preview'}</span><span class="pv-name"><strong>${esc(name)}</strong><small id="pvMeta"></small></span><div class="segmented small"><button data-source="live" class="${viewSource==='live'?'active':''}">Live</button><button data-source="preview" class="${viewSource==='preview'?'active':''}">${b?'Blind':'Preview'}</button></div>${b&&page()?`<button class="chip-button" id="pvRecord" title="Record the blind look into ${esc(page().name)}">${icon('record')}Record</button>`:''}${b?`<button class="chip-button go" id="pvApply" ${changed?'':'disabled'} title="Fade the blind changes onto the live lights">${icon('go')}Apply live</button>`:p?.saved?`<button class="chip-button go" id="pvLive">${icon('go')}Send to live</button>`:''}<button class="round-button small" id="pvClose" aria-label="${b?'Leave blind':'Stop preview'}" title="${b?'Leave blind (changes are kept)':'Stop preview'}">${icon('close')}</button>`;
+  banner.innerHTML=`<span class="pv-tag ${b?'blind':''}">${icon(b?'blind':'eye')}${b?'Blind':'Preview'}</span><span class="pv-name"><strong>${esc(name)}</strong><small id="pvMeta"></small></span><div class="segmented small"><button data-source="live" class="${viewSource==='live'?'active':''}">Live</button><button data-source="preview" class="${viewSource==='preview'?'active':''}">${b?'Blind':'Preview'}</button></div>${b&&page()?`<button class="chip-button" id="pvRecord" title="Record the blind look into ${esc(page().name)}">${icon('record')}Record</button>`:''}${b&&p?.saved?`<button class="chip-button go" id="pvLive" title="Play the previewed cue live (Shift+Space)">${icon('go')}Send to live</button>`:''}${b?`<button class="chip-button go" id="pvApply" ${changed?'':'disabled'} title="Fade the blind changes onto the live lights">${icon('go')}Apply live</button>`:p?.saved?`<button class="chip-button go" id="pvLive">${icon('go')}Send to live</button>`:''}<button class="round-button small" id="pvClose" aria-label="${b?'Leave blind':'Stop preview'}" title="${b?'Leave blind (changes are kept)':'Stop preview'}">${icon('close')}</button>`;
   $$('[data-source]').forEach(x=>x.onclick=()=>{viewSource=x.dataset.source;paint(runtime)});
   if($('#pvLive'))$('#pvLive').onclick=sendPreviewLive;if($('#pvRecord'))$('#pvRecord').onclick=recordDialog;
   if($('#pvApply'))$('#pvApply').onclick=()=>quiet(command('blind.apply',{}).then(()=>toast(show.playback.blindFade?`Blind changes fading onto the live lights over ${show.playback.blindFade} s.`:'Blind changes are live.')));
@@ -1027,9 +1035,11 @@ function paintScene(r){
 let tempoKey='';
 function paintTempo(r){
  const t=r.tempo??{},bpm=t.bpm??t.cue;setText($('#bpmValue'),bpm?String(Math.round(bpm*10)/10):'—');setText($('#bpmSource'),t.bpm?(t.source==='tap'?'TAP':'BPM'):t.cue?'CUE':'BPM');
- $('#tempo').classList.toggle('live',!!t.bpm);$('[data-tempo="reset"]').disabled=!t.bpm;$('#tapButton').title=t.bpm?`Live tempo ${t.bpm} BPM${t.cue?` (cue ${t.cue})`:''}: tap on the beat (T)`:t.cue?`The cue's own tempo, ${t.cue} BPM: tap on the beat (T) to follow the band`:'Tap tempo (T): tap on the beat';
- const key=bpm+'|'+(t.anchorAgo===null?'':Math.round((Date.now()-t.anchorAgo*1000)/250));if(key===tempoKey)return;tempoKey=key;
- const dot=$('#tapButton .beat-dot');dot.style.animation='none';if(!bpm)return;void dot.offsetWidth;const p=60/bpm;dot.style.animation=`beat ${p}s linear ${-((t.anchorAgo??0)%p)}s infinite`;
+ $('#tempo').classList.toggle('live',!!t.bpm);$('[data-tempo="reset"]').disabled=!t.bpm;$('#tapButton').title=t.bpm?`Live tempo ${t.bpm} BPM${t.cue?` (cue ${t.cue})`:''}: tap on the beat (T). Shift+T or ↺ goes back to the cue's own tempo.`:t.cue?`The cue's own tempo, ${t.cue} BPM: tap on the beat (T) to follow the band`:'Tap tempo (T): tap on the beat';
+ // A live tempo far from the cue's own (a stray tap: 58 BPM on 2026-11-01) shows amber with the speed it plays the cues at.
+ $('#tempo').classList.toggle('far',!!t.far);if(t.far){setText($('#bpmSource'),`×${t.ratio}`);$('#tapButton').title=`Live tempo ${t.bpm} BPM against the cue's ${t.cue??'own'} BPM: cues play at ×${t.ratio}. Shift+T or ↺ goes back to the cue's own tempo.`}
+ const key=bpm+'|'+(t.anchorAt??'');if(key===tempoKey)return;tempoKey=key;
+ const dot=$('#tapButton .beat-dot');dot.style.animation='none';if(!bpm)return;void dot.offsetWidth;const p=60/bpm;dot.style.animation=`beat ${p}s linear ${-(((Date.now()-(t.anchorAt??Date.now()))/1000)%p)}s infinite`;
 }
 // Sound hits blink their master (runtime.sound.hits), so even a hit shorter than a desk frame is seen.
 const lastHits={};
@@ -1045,10 +1055,13 @@ function paintLock(r){
  b.onpointerdown=e=>{if(!runtime?.locked)return;e.preventDefault();b.classList.add('holding');hold=setTimeout(()=>{hold=null;b.classList.remove('holding');quiet(command('performance.lock',{enabled:false}).then(()=>toast('Unlocked: the show can be edited.')))},1000)};
  b.onpointerup=b.onpointerleave=b.onpointercancel=()=>{if(hold){clearTimeout(hold);hold=null;b.classList.remove('holding');toast('Hold the padlock for a second to unlock.')}};
  b.onclick=()=>{if(!runtime?.locked)quiet(command('performance.lock',{enabled:true}).then(()=>toast('Locked for the show. A version was saved. Hold the padlock to unlock.')))}}
+// Desk code changed on disk while the engine kept running (runtime.desk, engine/desk-build.mjs): offer a reload, never
+// force one, since a reload mid-show lets go of held keys. Shown with the health banner.
+const deskUpdate=r=>r.desk?.build&&deskBuild&&r.desk.build!==deskBuild?[{id:'desk',level:'warn',message:'The desk was updated on this Mac. Reload when you have a moment (held keys are let go).',reload:true}]:[];
 // runtime.health: problems the operator must see during a show, worst first. Redrawn only when the list changes.
 let healthKey='';
-function paintHealth(r){const list=r.health??[],key=JSON.stringify(list);if(key===healthKey)return;healthKey=key;const el=$('#healthBar');if(!el)return;el.hidden=!list.length;
- el.innerHTML=list.map(h=>`<p class="${h.level==='error'?'error':''}">${icon('warning')}<span>${esc(h.message)}</span></p>`).join('')}
+function paintHealth(r){const list=[...(r.health??[]),...deskUpdate(r)],key=JSON.stringify(list);if(key===healthKey)return;healthKey=key;const el=$('#healthBar');if(!el)return;el.hidden=!list.length;
+ el.innerHTML=list.map(h=>`<p class="${h.level==='error'?'error':''}">${icon('warning')}<span>${esc(h.message)}${h.reload?' <button class="chip-button small" id="deskReload">Reload the desk</button>':''}</span></p>`).join('');if($('#deskReload'))$('#deskReload').onclick=()=>location.reload()}
 // After an unexpected engine restart during a show (runtime.resume): one press puts it back; nothing happens on its own.
 let resumeKey='';
 function paintResume(r){
@@ -1278,6 +1291,7 @@ function paint(r){
  setText($('#nextName'),next?entryName(next):onPage?'End of list':'—');
  setText($('#nextMeta'),next?(standby?'Standing by · ':'')+(onPage&&!standby&&stack.follow?`Auto in ${Math.ceil(stack.follow.remaining)}s`:next.fade>0?`Fade ${next.fade}s`:'Cut'):'');
  $('#goButton').disabled=!next;$('#backButton').disabled=!(stack&&stack.index>0);
+ const blindGo=!!r.blind?.enabled;if($('#goButton').classList.contains('blind-go')!==blindGo){$('#goButton').classList.toggle('blind-go',blindGo);$('#goButton').lastChild.textContent=blindGo?'PREVIEW':'GO';$('#goButton').title=blindGo?'Blind: GO previews the next cue, not live. Shift+Space or Send to live plays it.':''}
  // Cue list live / standby / done marks
  const key=[p?.id,stack?.entry,nextId,rev].join('|');
  if(key!==liveKey){liveKey=key;const liveIndex=onPage?stack.index:-1;$$('[data-entry-row]').forEach((row,i)=>{const id=row.dataset.entryRow;row.classList.toggle('live',onPage&&id===stack.entry);row.classList.toggle('standby',id===nextId);row.classList.toggle('done',liveIndex>=0&&i<liveIndex);setText(row.querySelector('.cue-state'),onPage&&id===stack.entry?'LIVE':id===nextId?'NEXT':'')})}
@@ -1368,11 +1382,11 @@ document.addEventListener('keydown',e=>{
  if(runtime?.find?.active&&(e.key==='ArrowLeft'||e.key==='ArrowRight')){e.preventDefault();findStep(e.key==='ArrowLeft'?'back':'next');return}
  if(e.key==='Escape'&&runtime?.find?.active&&$('#masterPop').hidden){quiet(command('find.stop'));return}
  if(e.key==='Escape'){if(!$('#masterPop').hidden)closeMasterPop();else if(!$('#ctxMenu').hidden){closeMenu()}else if(runtime?.preview){stopPreview()}else if(aligning){cancelAlignment();drawSide()}else if(!$('#menu').hidden)$('#menu').hidden=true;else if(ledOpen){ledOpen=false;drawLedTray()}else if(selected.length){applySelection([]);quiet(command('selection.set',{ids:[]}))}return}
- if(e.code==='Space'){e.preventDefault();$('#goButton').click()}
+ if(e.code==='Space'){e.preventDefault();if(e.shiftKey&&runtime?.blind?.enabled)goLive();else $('#goButton').click()}
  else if(e.key==='Backspace'){e.preventDefault();$('#backButton').click()}
  else if((e.key==='ArrowLeft'||e.key==='ArrowRight')&&paneShown()==='masters'){e.preventDefault();pageBank(e.key==='ArrowLeft'?-1:1)}
  else{const k=keyOf(e),desk=show?.masters.desk;if(!k||!desk)return;
-  if(k===desk.clear)$('#releaseButton').click();else if(k===desk.highlight)$('#highlightButton').click();else if(k===desk.blackout)$('#blackout').click();else if(k===desk.tap){e.preventDefault();if(!e.repeat)quiet(command('tempo.tap',{}))}
+  if(k===desk.clear)$('#releaseButton').click();else if(k===desk.highlight)$('#highlightButton').click();else if(k===desk.blackout)$('#blackout').click();else if(k===desk.tap){e.preventDefault();if(!e.repeat)quiet(command('tempo.tap',{}))}else if(desk.tap&&k==='shift+'+desk.tap&&!slots().some(x=>x.key===k)){e.preventDefault();quiet(command('tempo.set',{}).then(()=>toast('Back to each cue\'s own tempo.')))}
   else{const m=slots().find(x=>x.key===k);
    // Shift + a master's key switches its sound trigger, unless that combination is bound to something itself.
    if(!m){const base=k.startsWith('shift+')&&slots().find(x=>x.key===k.slice(6)&&x.sound);if(base){e.preventDefault();if(!e.repeat)toggleSound(base.id)}return}
@@ -1383,13 +1397,14 @@ document.addEventListener('keyup',e=>{const id=heldKeys.get(e.code);if(id){heldK
 addEventListener('blur',releaseAllMasters);document.addEventListener('visibilitychange',()=>{if(document.hidden)releaseAllMasters()});
 async function start(){
  fillIcons();document.body.dataset.mode=mode;$$('.mode-switch [data-mode]').forEach(b=>b.setAttribute('aria-selected',String(b.dataset.mode===mode)));
- try{({token,build}=await fetch('/api/session').then(r=>r.json()));schema=await fetch('/api/schema').then(r=>r.json());await refresh();
+ try{({token,build,desk:deskBuild}=await fetch('/api/session').then(r=>r.json()));schema=await fetch('/api/schema').then(r=>r.json());await refresh();
   stage=new Stage($('#viewport'),show.fixtures,selectFixture);stage.select(selected);syncLedWall();stage.update(runtime.frames);applyStageView();
   $$('[data-stage-view]').forEach(b=>b.onclick=()=>{if(b.dataset.stageView==='stage'&&visOut()){visWin.focus();return toast('The visualizer is in its own window. Use the dock button to bring it back.')}stageView=b.dataset.stageView;store.set('stageView',stageView);applyStageView()});
   $('#popoutButton').onclick=popOutVisualizer;
   // Desktop app: look for a newer release a few seconds after start and every six hours. Nothing installs by itself.
   if(shell){$('[data-menu=update]').hidden=false;setTimeout(()=>checkUpdate(),5000);setInterval(()=>checkUpdate(),6*3600e3)}
-  const events=new EventSource('/api/events');events.onopen=async()=>{try{const s=await fetch('/api/session').then(r=>r.json());if(s.build&&s.build!==build)return location.reload();token=s.token;await refresh()}catch(e){toast('Engine reconnect failed: '+e.message)}};events.onmessage=e=>paint(JSON.parse(e.data));events.onerror=()=>{$('#engineStatus').innerHTML='<i class="off"></i>Engine offline'};
+  // Frame deltas (engine/stream.mjs): each message is merged into the last one; a reconnect starts with a full message.
+  let streamed=null;const events=new EventSource('/api/events?delta=1');events.onopen=async()=>{try{const s=await fetch('/api/session').then(r=>r.json());if(s.build&&s.build!==build)return location.reload();token=s.token;await refresh()}catch(e){toast('Engine reconnect failed: '+e.message)}};events.onmessage=e=>{streamed=mergeRuntime(streamed,JSON.parse(e.data));paint(streamed)};events.onerror=()=>{$('#engineStatus').innerHTML='<i class="off"></i>Engine offline'};
  }catch(e){toast('Could not connect to the engine: '+e.message);$('#engineStatus').innerHTML='<i class="off"></i>Engine offline'}
 }
 start();
