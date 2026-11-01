@@ -10,12 +10,12 @@ export const PROFILE_DEFS = {
   reveE3:{name:'Ovation Rêve E-3 · 12ch',channels:12,moving:false,attributes:['intensity','color','white','amber','mint'],source:'https://chauvetprofessional.com/wp-content/uploads/2021/03/Ovation-Reve-E-3_UM_Rev14.pdf'},
   // Hog "RGBW Pendant Light 4ch" house lights. Layout from the Hog Fixture Builder (operator photo 2026-10-28): ch1 Intensity, ch2 Red, ch3 Green, ch4 Blue, each 0-255. No white channel despite the name.
   pendant4:{name:'RGBW Pendant Light · Hog 4ch (dimmer, R, G, B)',channels:4,moving:false,attributes:['intensity','color']},
-  rogue:{colorWheel:COLOR_WHEELS.rogue,name:'Rogue R3 Beam · 16ch',channels:16,moving:true,attributes:['intensity','color','pan','tilt','movementSpeed','gobo','prism','prismRotation','frost','focus'],source:'https://chauvetprofessional.com/wp-content/uploads/2021/04/Rogue_R3_Beam_UM_Rev6-1.pdf'},
+  rogue:{colorWheel:COLOR_WHEELS.rogue,name:'Rogue R3 Beam · 16ch',prismNames:{1:'5-face',2:'8-face',3:'Both · wide'},prismNote:'Observed on the venue units 2026-10-31: prism 1 (ch10) is the 5-facet narrow spread, prism 2 (ch12) the 8-facet; both in = full spread. Hog soft look = prism 1 in, frost 0, focus 255 (frost alone barely shows).',channels:16,moving:true,attributes:['intensity','color','pan','tilt','movementSpeed','gobo','prism','prismRotation','frost','focus'],source:'https://chauvetprofessional.com/wp-content/uploads/2021/04/Rogue_R3_Beam_UM_Rev6-1.pdf'},
   mh7:{colorWheel:COLOR_WHEELS.mh7,defaultOpticalMode:'beam',defaultGobo:0,opticalModes:['spot','beam'],lampControl:{channel:21,strike:50,douse:70,neutral:0,pulseSeconds:5},name:'Martin RUSH MH 7 Hybrid · 21ch',channels:21,moving:true,attributes:['intensity','color','pan','tilt','opticalMode','zoom','focus','frost','gobo','prism','prismRotation'],source:'https://www.fullcompass.com/common/files/27391-MartinProfessionalRUSHMH7HybridUserManual.pdf'},
   unknown:{name:'Unverified fixture · preview only',channels:0,moving:true,attributes:['intensity','color','pan','tilt']}
 };
 export const EFFECTS = {
-  strobe:{layer:'intensity',name:'Scattered strobe wave',description:'Staggered dimmer flashes travel forward and back; optional alternating pan/tilt fans around a saved position. No hardware strobe channel.'},
+  strobe:{layer:'intensity',name:'Scattered strobe wave',description:'Staggered dimmer flashes travel forward and back (params.even: every flash at full, no travelling wave); optional alternating pan/tilt fans around a saved position. No hardware strobe channel.'},
   static:{name:'Still look',description:'A palette or a calibrated position, held steadily.'},
   chase:{layer:'intensity',name:'Comet',description:'A bright head with a soft trailing tail across a group.'},
   wave:{layer:'color',name:'Color tide',description:'Smooth brightness waves with a two-color gradient.'},
@@ -29,6 +29,7 @@ export const EFFECTS = {
   step:{layer:'intensity',name:'Note step',description:'One light at a time across the group, advanced by each hit of a master\'s step-mode sound trigger (or masters.step), not by time. Dark until the first hit; the light holds until the next. Crossfades scale with how fast the hits come.'},
   breathe:{layer:'intensity',name:'Breathe',description:'All fixtures swell and relax together with a slow two-color drift.'},
   figure8:{layer:'position',name:'Figure eight',description:'Pan/tilt figure-eight inside each calibrated range. Moving heads only.'},
+  path:{layer:'position',name:'Path',description:'Flows through saved positions (params.points, in order, looping) on a smooth curve that never stops between them; params.lap = seconds per lap at speed 1. Follows the cue tempo like every effect.'},
   ballyhoo:{layer:'position',name:'Ballyhoo',description:'Wide, uneven pan and tilt swings across the group. Moving heads only.'}
 };
 // One-click starting points for people programming by hand. Agents can use
@@ -77,10 +78,12 @@ export function syncGroups(show){
  for(const g of show.groups){if(g.children)g.children=g.children.filter(c=>byId.has(c)&&c!==g.id);if(g.children&&!g.children.length)delete g.children;resolve(g,new Set())}
  return show;
 }
+// Attribute families, like the Hog's I/C/P/B record masks: what a cue saved with only some parts records and plays.
+export const ATTRIBUTE_FAMILIES={intensity:['intensity'],color:['color','white','amber','mint','colorWheel','colorWheel2'],position:['pan','tilt','movementSpeed'],beam:['gobo','goboShake','prism','prismRotation','frost','focus','zoom','opticalMode']};
 export function migrate(show){
  if(!show.pages)show.pages=[{id:'scene-1',name:'Scene 1',color:'#8bc9d0',cues:show.cues.map((c,i)=>({id:'entry-'+(i+1),cue:c.id,fade:2,follow:'manual'}))}];
  if(!show.groups.some(g=>g.id==='movers'))show.groups.push({id:'movers',name:'All moving heads',fixtures:show.fixtures.filter(f=>f.enabled&&['rogue','mh7','beam200','beam7r'].includes(f.profile)).map(f=>f.id)});
- show.media??=[];show.playback??={clearFade:3,blindFade:2};show.presets??=[];show.targets??=[];show.triggers??=[];show.zones??=[];show.visualizer??={hiddenGroups:[],hiddenFixtures:[]};show.ledWall??={media:'starfield',brightness:.85,fit:'cover'};
+ show.media??=[];show.beamPresets??=[];show.playback??={clearFade:3,blindFade:2};show.presets??=[];show.targets??=[];show.triggers??=[];show.zones??=[];show.visualizer??={hiddenGroups:[],hiddenFixtures:[]};show.ledWall??={media:'starfield',brightness:.85,fit:'cover'};
  // The Salvation title art was removed in 0.4.1; a show still showing it gets the default instead.
  if(show.ledWall.media==='salvation-title')show.ledWall.media='starfield';
  show.scenes??=[];show.masters??=defaultMasters();show.playback.sceneFade??=2;

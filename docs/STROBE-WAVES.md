@@ -9,3 +9,7 @@ The shared `strobe` effect flashes the dimmer at 0.25–6 Hz and keeps hardware 
 - `pointA`: saved position to use as the motion center; `panAmplitude`, `tiltAmplitude`: normalized travel around it. `speed` adjusts motion timing independently of flash rate. Motion clamps to fixture ranges and respects saved visual direction signs.
 
 This effect never strikes/douses lamps and does not use reset channels. MH7s retain the confirmed beam-mode default. Current show look/poses should be snapshotted before live playback. Stop fades to black while holding positions.
+
+## Even strobe — 2026-11-01
+
+`params.even: true` makes every flash full (no travelling wave), so each head flashes full-on or off at its own scattered phase. Praise · strobe uses it. Without `even`, the strobe wave keeps its travelling band.

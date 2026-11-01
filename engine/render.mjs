@@ -22,7 +22,7 @@ function effectPose(f,i,n,type,p,time,show,length=1,center=null){
   }
   const head=.5-.5*Math.cos(time*(p.travelSpeed??.15)*Math.PI*2);
   const seed=[...f.id].reduce((v,c)=>(v*31+c.charCodeAt(0))>>>0,17),offset=p.strobePattern==='wave'?position*spread:(seed*.61803398875)%1;
-  const pulse=(time*(p.frequency??3)+offset)%1,band=Math.exp(-2*(((position-head)/(p.width??.3))**2));
+  const pulse=(time*(p.frequency??3)+offset)%1,band=p.even?1:Math.exp(-2*(((position-head)/(p.width??.3))**2));
   intensity=pulse<(p.duty??.4)?(.12+.88*band):0;color=mix(a,b,head);break;
  }
  // Note step: params.step/stepAt/stepFade are written into the running copy of the cue by Engine.stepMaster, never saved.
@@ -37,8 +37,13 @@ function effectPose(f,i,n,type,p,time,show,length=1,center=null){
  case 'orbit':pan+=(p.panAmplitude??.03)*Math.sin(q*.8+ph);tilt+=(p.tiltAmplitude??.015)*Math.cos(q*.8+ph);break;
  // Fade ramps across the whole track; its own envelope replaces the track fade.
  case 'fade':{const k=smooth(time/Math.max(.001,length));intensity=p.direction==='out'?1-k:k;break}
- case 'breathe':intensity=.08+.92*(.5+.5*Math.sin(q*1.6-ph*.25))**2;color=mix(a,b,.5+.5*Math.sin(q*.4));break;
+ // depth: how far a breath dips (0.92 default; lower keeps it subtle, never fully off).
+ case 'breathe':{const d=p.depth??.92;intensity=1-d+d*(.5+.5*Math.sin(q*1.6-ph*.25))**2}color=mix(a,b,.5+.5*Math.sin(q*.4));break;
  case 'figure8':pan+=(p.panAmplitude??.04)*Math.sin(q*.7+ph);tilt+=(p.tiltAmplitude??.02)*Math.sin(2*(q*.7+ph));break;
+ // Path: Catmull-Rom through each fixture's saved positions, so it passes every point without stopping.
+ case 'path':{const pts=(p.points??[]).map(id=>show.points.find(x=>x.id===id)?.positions?.[f.id]).filter(Boolean),m=pts.length;if(m<2)break;
+  const u=(((time*speed/(p.lap??10))%1)+1)%1*m,k=Math.floor(u),s=u-k,P=j=>pts[((k+j)%m+m)%m],cr=(a,b,c,d)=>.5*(2*b+(c-a)*s+(2*a-5*b+4*c-d)*s*s+(3*b-a-3*c+d)*s*s*s);
+  pan=cr(P(-1).pan,P(0).pan,P(1).pan,P(2).pan);tilt=cr(P(-1).tilt,P(0).tilt,P(1).tilt,P(2).tilt);break}
  case 'ballyhoo':pan+=(p.panAmplitude??.05)*Math.sin(q*.55+ph);tilt+=(p.tiltAmplitude??.05)*Math.sin(q*1.3+ph*1.7);break;
  }
  if(p.pointA){const pa=show.points.find(x=>x.id===p.pointA)?.positions?.[f.id],pb=show.points.find(x=>x.id===p.pointB)?.positions?.[f.id];if(pa){const w=pb?(1-Math.cos(q*.8))/2:0;pan=pa.pan*(1-w)+(pb?.pan??pa.pan)*w;tilt=pa.tilt*(1-w)+(pb?.tilt??pa.tilt)*w;}}

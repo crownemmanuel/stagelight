@@ -108,6 +108,9 @@ Default map:
 | Track select 1–8 | press the fader bank's master |
 | Clip stop 1–8 | release the fader bank's master |
 | Master fader | grand master |
+| Solo 1–8 | kill the fader bank master's lights, for masters with **Solo kills its lights** ticked: off over everything until pressed again, LED lit while killed (docs/KILL.md, 2026-11-01). |
+| Record Arm 1–8 | the fader bank master's sound trigger on/off, same as the Activators. Its red LED is lit while that master's trigger is on (operator request 2026-10-31). |
+| Device knobs 1–3 | intensity, pan and tilt of the desk selection (pan and tilt only on moving heads). Each knob picks up from the first selected fixture's value (the programmer value, before the grand master) and picks up again after the selection changes, so nothing jumps. 128 steps, so pan moves about 4° a step on a 540° head. Added 2026-10-31. |
 | Scene launch 1–5 | scenes 1–5 (press the active one again to release it) |
 | Stop all clips | Stop: every cue, back to the scene |
 | Play / Stop | GO / Back |

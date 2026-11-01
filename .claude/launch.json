@@ -4,8 +4,51 @@
     {
       "name": "stagelight-dev",
       "runtimeExecutable": "env",
-      "runtimeArgs": ["LIGHTS_PORT=1470", "LIGHTS_OSC_PORT=1471", "node", "server.mjs"],
+      "runtimeArgs": [
+        "LIGHTS_PORT=1470",
+        "LIGHTS_OSC_PORT=1471",
+        "node",
+        "server.mjs"
+      ],
       "port": 1470
+    },
+    {
+      "name": "stagelight-scratch",
+      "runtimeExecutable": "env",
+      "runtimeArgs": [
+        "LIGHTS_PORT=1480",
+        "LIGHTS_OSC_PORT=1481",
+        "LIGHTS_DATA_DIR=/private/tmp/claude-501/-Users-emmanuelcrown-Documents-Projects-stagelight/e52d4b8b-8646-4661-8eae-f6d5578859c7/scratchpad/testdata",
+        "node",
+        "server.mjs"
+      ],
+      "port": 1480
+    },
+    {
+      "name": "stagelight-verify",
+      "runtimeExecutable": "env",
+      "runtimeArgs": [
+        "LIGHTS_PORT=1490",
+        "LIGHTS_OSC_PORT=1491",
+        "LIGHTS_DATA_DIR=/private/tmp/claude-501/-Users-emmanuelcrown-Documents-Projects-stagelight/865d1d86-e1a9-4cbe-bee7-3fb7c22174af/scratchpad/verifydata",
+        "LIGHTS_IO_BIN=tests/fixtures/fake-io.mjs",
+        "node",
+        "server.mjs"
+      ],
+      "port": 1490
+    },
+    {
+      "name": "stagelight-files",
+      "runtimeExecutable": "env",
+      "runtimeArgs": [
+        "LIGHTS_PORT=1475",
+        "LIGHTS_OSC_PORT=1476",
+        "LIGHTS_DATA_DIR=/private/tmp/claude-501/-Users-emmanuelcrown-Documents-Projects-stagelight/5535d1cf-b6ed-4be3-af11-1b7507b23e69/scratchpad/data",
+        "LIGHTS_SHOWS_DIR=/private/tmp/claude-501/-Users-emmanuelcrown-Documents-Projects-stagelight/5535d1cf-b6ed-4be3-af11-1b7507b23e69/scratchpad/shows",
+        "node",
+        "server.mjs"
+      ],
+      "port": 1475
     }
   ]
 }

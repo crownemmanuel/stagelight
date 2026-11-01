@@ -59,8 +59,8 @@ A scene is a saved look that stays on underneath every cue, like a Hog scene. On
   - The active scene shows under Now in the GO bar, and Stop's tooltip says it fades back to it.
 - **Safety.**
   - The active scene is **not** restored when the app starts.
-  - Arming output is refused while a scene is active, as it is while a cue runs, so arming never lights the rig by surprise.
-  - Disarming drops the scene.
+  - Arming output with a scene active sends the scene straight away (changed 2026-10-31 at the operator's request: re-arming after a problem must not go dark). The arm dialog names the scene that will go out. Arming is still refused while a cue runs or overrides are set; the desk stops cues first.
+  - Disarming blacks the rig out but keeps the scene: the preview shows it again, and re-arming sends it.
 
 Saved in the show as `show.scenes = [{id, name, color?, look:[{id, values}]}]`. The active scene is transient (`runtime.scene`).
 
@@ -103,3 +103,7 @@ The **Save** button's dialog has **Update a scene**: pick a scene (the active on
 ## What a recorded cue holds (2026-10-30)
 
 Recording a new cue (Save → Save as new cue, Record look, `cue.record`, `look.capture`) or replacing one keeps only fixtures that are **lit** or that you **changed** (programmer values, including ones set to zero on purpose, and programmer effects). Replacing a cue also keeps that cue's own fixtures. Untouched dark fixtures stay out, so playing the cue, or flashing it on a master, never blacks out the rest of the rig. `all: true` records every fixture. Scenes still record the whole rig, because a scene is a base look. Until then, cues held every fixture: on 2026-10-30, *House Lights* (master A) and *Back Light up* (F, G) were trimmed to their own lights.
+
+## Fader to zero releases — 2026-11-01
+
+Pulling a master's fader (or `masters.level`) to 0 releases the cue that master started, whether its key, pad or fader started it, like a Hog playback fader. A cue started some other way, such as a page GO, is never released by a fader. A toggle or go master pressed while its level is 0 comes up at full, so it never runs invisibly holding its lights at zero (operator report 2026-11-01: Energy chase on master 8 at fader 0 blacked out the Praise heads).

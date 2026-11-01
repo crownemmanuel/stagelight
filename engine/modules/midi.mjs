@@ -1,7 +1,7 @@
 // MIDI (docs/MIDI-AND-SOUND.md): a virtual "StageLight" output port that ProPresenter and other apps can map notes from,
 // and native controllers (APC40 mkII) with a default profile the operator changes in the visual editor. Every control
 // goes through the same engine commands as the desk, MCP and OSC, one at a time in the order they arrive.
-import * as APC from '../controllers/apc40mk2.mjs';import {masterColor,padColor} from '../../public/pad-colors.js';
+import * as APC from '../controllers/apc40mk2.mjs';import {PROFILE_DEFS} from '../model.mjs';import {masterColor,padColor} from '../../public/pad-colors.js';
 const PROFILE='apc40mk2';
 export class Midi{
  constructor(engine,io){
@@ -38,9 +38,14 @@ export class Midi{
   switch(a.do){
    case 'master.press':case 'bank.press':if(slot?.cue&&press)cmd('masters.trigger',{slot:slot.id,down});else if(slot?.cue&&!press)cmd('masters.level',{slot:slot.id,level:ev.value});return;
    case 'master.sound':case 'bank.sound':if(slot?.sound&&down)cmd('masters.sound',{slot:slot.id});return;
+   case 'master.kill':case 'bank.kill':if(slot?.cue&&slot.soloKill&&down)cmd('kill.set',{slot:slot.id});return;
    case 'master.release':case 'bank.release':if(slot?.cue&&down&&e.running().some(r=>r.cue.id===slot.cue))cmd('cue.release',{id:slot.cue,fade:slot.fade??0});return;
    case 'master.level':case 'bank.level':if(slot&&this.pickup(ev,this.levelOf(slot)))cmd('masters.level',{slot:slot.id,level:+ev.value.toFixed(3)});return;
    case 'grand':if(this.pickup(ev,e.master))cmd('master.set',{value:+ev.value.toFixed(3)});return;
+   // Intensity, pan or tilt of the desk selection (pan/tilt only on moving heads). The knob picks up from the first
+   // fixture's value, and again after the selection changes, so heads never jump.
+   case 'selection.intensity':case 'selection.pan':case 'selection.tilt':{const k=a.do.slice(10),ids=e.selection.ids.filter(id=>k==='intensity'||PROFILE_DEFS[e.show.fixtures.find(f=>f.id===id)?.profile]?.moving);if(!ids.length)return;
+    const f=this.faders.get(ev.control);if(f&&f.rev!==e.selection.revision){f.engaged=false;f.rev=e.selection.revision}if(this.pickup(ev,e.overrides[ids[0]]?.[k]??(e.raw??e.frames).find(x=>x.id===ids[0])?.[k]??0)){this.faders.get(ev.control).rev=e.selection.revision;cmd('fixture.set',{ids,values:{[k]:+ev.value.toFixed(4)}})}return}
    case 'tempo.fine':if(c.kind==='encoder'&&ev.value)cmd('tempo.nudge',{delta:ev.value*.1});return;
   }
   if(press&&!down)return;
@@ -84,6 +89,7 @@ export class Midi{
    if(a?.do==='master.press'||a?.do==='bank.press'||a?.do==='bank.release'){const s=a.do==='master.press'?this.slotAt(a.n):this.slotAt(a.n,true),st=stateOf(s);
     if(c.led==='rgb')pad(c.id,s&&color(s),st);else want.set(c.id,[APC.ledMessage(c.id,st==='empty'||st==='idle'?0:c.led==='clip'&&st==='paused'?2:1)])}
    else if(a?.do==='master.sound'||a?.do==='bank.sound'){const s=a.do==='master.sound'?this.slotAt(a.n):this.slotAt(a.n,true),on=!!s?.sound&&s.sound.enabled!==false;if(c.led==='rgb')pad(c.id,s?.sound?'#4fd18b':null,!s?.sound?'empty':on?'running':'idle');else want.set(c.id,[APC.ledMessage(c.id,on?1:0)])}
+   else if(a?.do==='master.kill'||a?.do==='bank.kill'){const s=a.do==='master.kill'?this.slotAt(a.n):this.slotAt(a.n,true);want.set(c.id,[APC.ledMessage(c.id,s?.soloKill&&e.kills.has('slot:'+s.id)?1:0)])}
    else if(a?.do==='scene'){const sc=e.show.scenes[(a.n??1)-1];pad(c.id,sc&&(sc.color??'#eac28a'),!sc?'empty':e.scene?.id===sc.id?'held':'idle')}
    else if(c.led==='single'||c.led==='clip'){const on=a?.do==='blackout'?e.blackout:a?.do==='highlight'?e.highlight:a?.do==='go'?!!(e.stackStatus()?.next??e.show.pages[0]):a?.do==='bank.prev'?this.bank>0:a?.do==='bank.next'?(this.bank+1)*8<e.show.masters.slots.length:false;want.set(c.id,[APC.ledMessage(c.id,on?1:0)])}
    else if(c.led==='rgb')want.set(c.id,[APC.ledMessage(c.id,0)]);

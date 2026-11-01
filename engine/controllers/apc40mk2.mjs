@@ -46,14 +46,16 @@ const byId=new Map(C.map(c=>[c.id,c]));
 
 // The default StageLight map. Faders 1-8 and the track buttons work on the fader bank (masters 1-8, A S D F G H J K,
 // moved by Bank ◀ ▶); the 40 pads are masters 1-40, top-left first; the five scene buttons are scenes 1-5; the eight
-// numbered Activator buttons switch the fader bank masters' sound triggers on and off (lit while on).
+// numbered Activator buttons and the red Record Arm buttons switch the fader bank masters' sound triggers on and off
+// (lit while on). Solo kills the lights of a fader bank master set to "Solo kills" (lit blue while killed). Device knobs 1-3
+// are intensity, pan and tilt of whatever is selected on the desk.
 export const DEFAULT_MAP=Object.fromEntries([
  ...Array.from({length:40},(_,i)=>[`pad-${i+1}`,{do:'master.press',n:i+1}]),
  ...Array.from({length:5},(_,i)=>[`scene-${i+1}`,{do:'scene',n:i+1}]),
- ...Array.from({length:8},(_,i)=>[[`fader-${i+1}`,{do:'bank.level',n:i+1}],[`track-${i+1}`,{do:'bank.press',n:i+1}],[`clip-stop-${i+1}`,{do:'bank.release',n:i+1}],[`activator-${i+1}`,{do:'bank.sound',n:i+1}]]).flat(),
+ ...Array.from({length:8},(_,i)=>[[`fader-${i+1}`,{do:'bank.level',n:i+1}],[`track-${i+1}`,{do:'bank.press',n:i+1}],[`clip-stop-${i+1}`,{do:'bank.release',n:i+1}],[`activator-${i+1}`,{do:'bank.sound',n:i+1}],[`arm-${i+1}`,{do:'bank.sound',n:i+1}],[`solo-${i+1}`,{do:'bank.kill',n:i+1}]]).flat(),
  ['master-fader',{do:'grand'}],['stop-all',{do:'stop'}],['play',{do:'go'}],['stop',{do:'back'}],['record',{do:'blackout'}],['session',{do:'highlight'}],
  ['tap',{do:'tap'}],['nudge-minus',{do:'tempo.nudge',delta:-1}],['nudge-plus',{do:'tempo.nudge',delta:1}],['shift-nudge-minus',{do:'tempo.half'}],['shift-nudge-plus',{do:'tempo.double'}],
- ['metronome',{do:'tempo.reset'}],['tempo',{do:'tempo.fine'}],['bank-left',{do:'bank.prev'}],['bank-right',{do:'bank.next'}],['left',{do:'bank.prev'}],['right',{do:'bank.next'}],['master',{do:'clear'}]
+ ['metronome',{do:'tempo.reset'}],['device-1',{do:'selection.intensity'}],['device-2',{do:'selection.pan'}],['device-3',{do:'selection.tilt'}],['tempo',{do:'tempo.fine'}],['bank-left',{do:'bank.prev'}],['bank-right',{do:'bank.next'}],['left',{do:'bank.prev'}],['right',{do:'bank.next'}],['master',{do:'clear'}]
 ]);
 // Introduction: Ableton Live Mode, app version 1.0.0 (protocol page 12).
 export const INTRO=[0xF0,0x47,0x7F,0x29,0x60,0x00,0x04,0x41,0x01,0x00,0x00,0xF7];

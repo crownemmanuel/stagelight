@@ -28,10 +28,9 @@ test('the active scene fills fixtures no cue uses, and release or stop fades bac
  await e.command('scene.release',{fade:0});at(7.1);assert.equal(frame('401').intensity,0,'releasing the scene goes dark');assert.equal(e.runtime().scene,null);
 });
 
-test('scene.go crossfades between scenes; deleting the active scene releases it; arming waits for release',async()=>{
+test('scene.go crossfades between scenes; deleting the active scene releases it',async()=>{
  const {e,at,frame}=rig();await setup(e);await e.command('scene.save',{scene:{id:'cool',name:'Cool',look:[{id:'401',values:{intensity:1,color:'#0000ff'}}]}});
  await e.command('scene.go',{id:'base',fade:0});at(.1);await e.command('scene.go',{id:'cool',fade:2});at(1.1);assert.ok(Math.abs(frame('401').intensity-.75)<.02,'halfway between scenes');at(2.2);assert.equal(frame('401').intensity,1);
- await assert.rejects(e.command('output.arm',{confirmation:'ENABLE_PHYSICAL_OUTPUT'}),/Release the scene/);assert.equal(e.output.armed,false);
  await e.command('scene.delete',{id:'cool'});at(5);assert.equal(e.runtime().scene,null);assert.equal(frame('401').intensity,0);assert.ok(!e.show.scenes.some(s=>s.id==='cool'));
  await assert.rejects(e.command('scene.go',{id:'cool'}),/Unknown scene/);
 });
@@ -59,4 +58,17 @@ test('recording a new cue keeps only lit or changed fixtures; a scene and all:tr
  await e.command('look.capture',{id:'all',name:'All',all:true});assert.equal(e.show.cues.find(x=>x.id==='all').look.length,e.show.fixtures.filter(f=>f.enabled).length);
  await e.command('scene.capture',{id:'sc',name:'Sc'});assert.equal(e.show.scenes.find(x=>x.id==='sc').look.length,e.show.fixtures.filter(f=>f.enabled).length,'a scene is a whole base look');
  await e.command('override.release',{fade:0});at(2);await assert.rejects(e.command('look.capture',{id:'none',name:'None'}),/Nothing is lit/);
+});
+
+// Operator, 2026-10-31: re-arming after a problem must not go dark. Arming sends the live scene; a disarm blacks the rig out but keeps it.
+test('arming with a scene on sends the scene; disarming keeps it, so re-arming brings it straight back',async()=>{
+ const sent=[],out={...output(),send(p){sent.push(p)}},{e,at,frame}=rig({output:out});await setup(e);
+ await e.command('scene.go',{id:'base',fade:0});at(.1);
+ await e.command('cue.play',{id:'c301'});at(.2);await e.command('cue.stop',{fade:0});at(.3);// the desk stops cues before arming
+ await e.command('output.arm',{confirmation:'ENABLE_PHYSICAL_OUTPUT'});at(.4);assert.equal(e.output.armed,true);
+ const addr=e.show.fixtures.find(f=>f.id==='401'),uni=e.show.settings.mappings[addr.universe],dim=()=>sent.findLast(p=>p.has(uni)).get(uni)[addr.address-1];
+ assert.equal(dim(),128,'scene 401 at 50% reaches the rig on arm');
+ await e.command('output.disarm');assert.equal(dim(),0,'disarm still blacks the rig out');assert.equal(e.output.armed,false);
+ at(.5);assert.deepEqual(e.runtime().scene,{id:'base',name:'Warm base'});assert.equal(frame('401').intensity,.5,'the preview shows the scene again');
+ await e.command('output.arm',{confirmation:'ENABLE_PHYSICAL_OUTPUT'});at(.6);assert.equal(dim(),128,'re-arming sends the scene, not dark');
 });

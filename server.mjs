@@ -13,6 +13,8 @@ const root=path.dirname(fileURLToPath(import.meta.url));
 const port=Number(process.env.LIGHTS_PORT??1460);
 const dataDir=process.env.LIGHTS_DATA_DIR??path.join(root,'data');
 const token=crypto.randomBytes(24).toString('hex'),version=JSON.parse(fs.readFileSync(path.join(root,'package.json'),'utf8')).version;
+// Fingerprint of the desk and engine code this server loaded: an open desk reloads when it reconnects to different code.
+const build=(()=>{const h=crypto.createHash('sha1');for(const dir of ['public','engine'])for(const f of fs.readdirSync(path.join(root,dir)).filter(f=>/\.(m?js|html|css)$/.test(f)).sort())h.update(f).update(fs.readFileSync(path.join(root,dir,f)));return h.digest('hex').slice(0,12)})();
 const engine=new Engine({dataDir});
 const clients=new Set();let queue=Promise.resolve();
 const execute=(command,args,opts)=>{const run=queue.then(()=>engine.command(command,args,opts));queue=run.catch(()=>{});return run};
@@ -24,7 +26,7 @@ const server=http.createServer(async(req,res)=>{
   if(![`localhost:${port}`,`127.0.0.1:${port}`].includes(req.headers.host))return json(res,403,{error:'Local host only'});
   if(req.headers.origin&&!origins.has(req.headers.origin))return json(res,403,{error:'Cross-origin request refused'});
   const url=new URL(req.url,`http://127.0.0.1:${port}`);
-  if(req.method==='GET'&&url.pathname==='/api/session')return json(res,200,{token,version});
+  if(req.method==='GET'&&url.pathname==='/api/session')return json(res,200,{token,version,build});
   // Exact values for the Connect an agent dialog: this Mac's Node, this folder's MCP server, this engine's URL.
   if(req.method==='GET'&&url.pathname==='/api/connect')return json(res,200,{node:['/opt/homebrew/bin/node','/usr/local/bin/node'].find(p=>fs.existsSync(p))??process.execPath,server:path.join(root,'mcp','server.mjs'),url:`http://127.0.0.1:${port}`,name:'stagelight'});
   if(req.method==='GET'&&url.pathname==='/api/state')return json(res,200,engine.snapshot());

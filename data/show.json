@@ -9894,7 +9894,8 @@
             "movementSpeed": 1
           }
         }
-      ]
+      ],
+      "bpm": 102.975
     },
     {
       "id": "ygn-verse1",
@@ -10492,7 +10493,8 @@
             "movementSpeed": 1
           }
         }
-      ]
+      ],
+      "bpm": 102.975
     },
     {
       "id": "ygn-chorus1",
@@ -10967,7 +10969,8 @@
             "movementSpeed": 1
           }
         }
-      ]
+      ],
+      "bpm": 102.975
     },
     {
       "id": "ygn-turn1",
@@ -11366,7 +11369,8 @@
             "movementSpeed": 1
           }
         }
-      ]
+      ],
+      "bpm": 102.975
     },
     {
       "id": "ygn-lift",
@@ -11912,7 +11916,8 @@
             "movementSpeed": 1
           }
         }
-      ]
+      ],
+      "bpm": 102.975
     },
     {
       "id": "ygn-chorus2",
@@ -12755,7 +12760,8 @@
             "movementSpeed": 1
           }
         }
-      ]
+      ],
+      "bpm": 102.975
     },
     {
       "id": "ygn-tag2",
@@ -13165,7 +13171,8 @@
             "movementSpeed": 1
           }
         }
-      ]
+      ],
+      "bpm": 102.975
     },
     {
       "id": "ygn-breakdown",
@@ -13715,7 +13722,8 @@
             "movementSpeed": 1
           }
         }
-      ]
+      ],
+      "bpm": 102.975
     },
     {
       "id": "ygn-chorus3a",
@@ -14231,7 +14239,8 @@
             "movementSpeed": 1
           }
         }
-      ]
+      ],
+      "bpm": 102.975
     },
     {
       "id": "ygn-chorus3b",
@@ -14901,7 +14910,8 @@
             "movementSpeed": 1
           }
         }
-      ]
+      ],
+      "bpm": 102.975
     },
     {
       "id": "ygn-hits",
@@ -16029,7 +16039,8 @@
             "movementSpeed": 1
           }
         }
-      ]
+      ],
+      "bpm": 102.975
     },
     {
       "id": "ygn-bridge",
@@ -16749,7 +16760,8 @@
             "movementSpeed": 1
           }
         }
-      ]
+      ],
+      "bpm": 102.975
     },
     {
       "id": "ygn-reset",
@@ -17294,7 +17306,8 @@
             "movementSpeed": 1
           }
         }
-      ]
+      ],
+      "bpm": 102.975
     },
     {
       "id": "ygn-vamp1",
@@ -18000,7 +18013,8 @@
             "movementSpeed": 1
           }
         }
-      ]
+      ],
+      "bpm": 102.975
     },
     {
       "id": "ygn-breath",
@@ -18532,7 +18546,8 @@
             "movementSpeed": 1
           }
         }
-      ]
+      ],
+      "bpm": 102.975
     },
     {
       "id": "ygn-vamp2",
@@ -19269,7 +19284,8 @@
             "movementSpeed": 1
           }
         }
-      ]
+      ],
+      "bpm": 102.975
     },
     {
       "id": "ygn-callresp",
@@ -19795,7 +19811,8 @@
             "movementSpeed": 1
           }
         }
-      ]
+      ],
+      "bpm": 102.975
     },
     {
       "id": "ygn-outro",
@@ -20200,7 +20217,8 @@
             "movementSpeed": 1
           }
         }
-      ]
+      ],
+      "bpm": 102.975
     },
     {
       "id": "ygn-ending",
@@ -20578,7 +20596,8 @@
             "movementSpeed": 1
           }
         }
-      ]
+      ],
+      "bpm": 102.975
     },
     {
       "id": "rig-check-all-lights",
@@ -21611,6 +21630,15 @@
       "5": 4,
       "6": 5,
       "8": 7
+    },
+    "modules": {
+      "sound": {
+        "enabled": false
+      },
+      "midi": {
+        "enabled": false,
+        "virtualPort": true
+      }
     }
   },
   "stage": {
@@ -21796,7 +21824,8 @@
   "media": [],
   "playback": {
     "clearFade": 3,
-    "blindFade": 2
+    "blindFade": 2,
+    "sceneFade": 2
   },
   "presets": [],
   "targets": [],
@@ -21856,5 +21885,116 @@
       "audience"
     ],
     "hiddenFixtures": []
-  }
+  },
+  "scenes": [],
+  "masters": {
+    "slots": [
+      {
+        "id": "m1",
+        "key": "a",
+        "action": "flash",
+        "fade": 0
+      },
+      {
+        "id": "m2",
+        "key": "s",
+        "action": "flash",
+        "fade": 0
+      },
+      {
+        "id": "m3",
+        "key": "d",
+        "action": "flash",
+        "fade": 0
+      },
+      {
+        "id": "m4",
+        "key": "f",
+        "action": "flash",
+        "fade": 0
+      },
+      {
+        "id": "m5",
+        "key": "g",
+        "action": "flash",
+        "fade": 0
+      },
+      {
+        "id": "m6",
+        "key": "h",
+        "action": "flash",
+        "fade": 0
+      },
+      {
+        "id": "m7",
+        "key": "j",
+        "action": "flash",
+        "fade": 0
+      },
+      {
+        "id": "m8",
+        "key": "k",
+        "action": "flash",
+        "fade": 0
+      },
+      {
+        "id": "m9",
+        "key": "l",
+        "action": "flash",
+        "fade": 0
+      },
+      {
+        "id": "m10",
+        "action": "flash",
+        "fade": 0
+      },
+      {
+        "id": "m11",
+        "action": "flash",
+        "fade": 0
+      },
+      {
+        "id": "m12",
+        "action": "flash",
+        "fade": 0
+      },
+      {
+        "id": "m13",
+        "action": "flash",
+        "fade": 0
+      },
+      {
+        "id": "m14",
+        "action": "flash",
+        "fade": 0
+      },
+      {
+        "id": "m15",
+        "action": "flash",
+        "fade": 0
+      },
+      {
+        "id": "m16",
+        "action": "flash",
+        "fade": 0
+      },
+      {
+        "id": "m17",
+        "action": "flash",
+        "fade": 0
+      },
+      {
+        "id": "m18",
+        "action": "flash",
+        "fade": 0
+      }
+    ],
+    "desk": {
+      "highlight": "shift+h",
+      "clear": "c",
+      "blackout": "b",
+      "tap": "t"
+    }
+  },
+  "parked": []
 }

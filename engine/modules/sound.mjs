@@ -10,7 +10,10 @@ export class Sound{
   this.offs=[io.on('hit',m=>this.hit(m)),io.on('level',m=>this.follow(m.levels??{})),io.on('meter',m=>{this.levels=m.levels??{};this.input=m.input??null}),io.on('audio',m=>{this.opened=m}),io.on('devices',()=>this.configure())];
  }
  device(){return this.engine.show.settings.modules?.sound?.device??null}
- triggers(){return this.engine.show.masters.slots.filter(m=>m.sound&&m.sound.enabled!==false&&m.cue).map(m=>({id:m.id,channel:m.sound.channel,band:m.sound.band??'kick',threshold:thresholdDb(m.sound.sensitivity),gapMs:m.sound.gapMs??90,
+ triggers(){return this.listening().filter(t=>!t.off).map(({off,...t})=>t)}
+ // Every set-up trigger is metered, switched off or not, so the panel shows its channel's audio while you set it up;
+ // hits and levels from one that is off are dropped in hit() and follow(), so it never fires.
+ listening(){return this.engine.show.masters.slots.filter(m=>m.sound&&m.cue).map(m=>({...(m.sound.enabled===false?{off:true}:{}),id:m.id,channel:m.sound.channel,band:m.sound.band??'kick',threshold:thresholdDb(m.sound.sensitivity),gapMs:m.sound.gapMs??90,
   ...(m.sound.mode==='follow'?{mode:'follow',attackMs:m.sound.attackMs??30,releaseMs:m.sound.releaseMs??300}:{})}))}
  // Follow mode: dBFS → master level, silent at the threshold and full rangeDb above it, through the same path as a
  // fader (masterLevel) so sound starts the cue. Quiet keeps it running dark; only SILENCE ms of quiet releases it.
@@ -30,7 +33,11 @@ export class Sound{
  }
  // Sent again whenever the device, a trigger or the device list changes; the helper reopens only what it must. The
  // input stays open while a device is chosen, even with no trigger yet, so the meter shows that audio is arriving.
- configure(){const dev=this.device(),t=this.triggers();if(!dev){this.io.send({op:'audio.close'});this.opened=null;this.input=null;return}this.io.send({op:'audio.open',device:dev,triggers:t})}
+ // A follow trigger switched off, removed or changed to another mode lets go of the cue its level brought up, as
+ // silence would; otherwise follow() skips it from then on and the cue stays up for good.
+ letGo(){for(const [id,f] of this.following){const s=this.engine.show.masters.slots.find(m=>m.id===id);if(f.released||(s?.sound?.mode==='follow'&&s.sound.enabled!==false))continue;
+  try{this.engine.masterLevel(id,0,true);this.engine.mods?.changed()}catch(e){this.engine.log('Sound follow: '+e.message)}this.following.delete(id)}}
+ configure(){this.letGo();const dev=this.device(),t=this.listening().map(({off,...t})=>t);if(!dev){this.io.send({op:'audio.close'});this.opened=null;this.input=null;return}this.io.send({op:'audio.open',device:dev,triggers:t})}
  hit({id,level}){if(this.engine.show.masters.slots.find(m=>m.id===id)?.sound?.enabled===false)return;this.lastHit[id]={level:level??null,at:new Date().toISOString()};this.hits[id]=(this.hits[id]??0)+1;try{this.engine.soundHit(id);this.engine.tick();this.engine.mods?.changed()}catch(e){this.engine.log('Sound trigger: '+e.message)}}
  async command(name,args){
   if(name==='sound.meter'){

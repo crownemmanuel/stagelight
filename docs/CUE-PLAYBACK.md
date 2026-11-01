@@ -32,3 +32,33 @@ The controls live on the cue list itself. While a cue runs, its play (or GO) but
 The Highlight button (Shift+H since 2026-10-29; H is master 6) works like the Hog Highlight key. While it is on, every selected fixture shows full intensity, open white (wheel colour overrides dropped so the wheel resolves to white) and open beam: gobo 0, no gobo shake, no prism, no frost, optical mode beam (the verified MH7 open beam). Position, zoom and focus are unchanged. It follows the selection live, so touching another fixture highlights that one instead.
 
 Highlight is applied after the programmer, so it is never recorded into cues, saved in the show or seen by look reports. The master and blackout still apply. It reaches the rig only while output is armed.
+
+## Cues with only some parts — 2026-11-01
+
+A cue can carry `only`: any of `intensity`, `color`, `position`, `beam` (the attribute families in `ATTRIBUTE_FAMILIES`, like the Hog's I/C/P/B record masks). On its fixtures it plays only the attributes it recorded in those parts. Everything else comes from the full cues, masters and scene below it. Such a cue never takes a fixture over completely, so it never retires the look underneath. Among several, the newest wins, and highest-precedence masters' come last.
+
+- **Save dialog:** choose **Whole look** or **Just my changes**, and tick Intensity / Colour / Position / Beam.
+  - "Just my changes" saves a new cue holding only the programmer's changes (`cue.record {changes:true}`).
+  - Unticking parts records only the ticked ones (`cue.record {only:[…]}`), for new, update and replace.
+  - Update a scene always saves everything.
+- **Example:** a drum hit that lifts the heads' intensity and keeps the song's colours and positions. Save the intensity change with only Intensity ticked, and put it on a master with a sound trigger.
+
+## Release fade — 2026-11-01
+
+A cue can carry `releaseFade` (seconds). Stop, or `cue.release` without a `fade`, settles it back over that time instead of 1.5 s. Worship · circle and R3 fan loop use 4 s, so the heads glide home rather than snapping back.
+
+## Path, breathe depth and following the BPM — 2026-11-01
+
+- **Path** (`effect: "path"`, position layer): flows through saved positions (`params.points`, 2–16, in order, looping) on a Catmull-Rom curve. It passes every point without stopping, and only slows where a head turns round. `params.lap` is the seconds per lap at speed 1. R3 fan loop uses it: R3 fan · up → down → spread, a 10 s lap. A position used by a path cannot be deleted.
+- **Breathe depth** (`params.depth`, 0–1, default 0.92): how far a breath dips. Grid pulse uses 0.45, so it swells and softens but never goes off.
+- **Following the BPM:** a cue with `bpm` plays at live tempo ÷ bpm, so tap tempo speeds up or slows down its effects, movement and loops. On the desk, right-click a cue row and choose **Follow BPM** (writes the current tempo, or 120, as the cue's bpm) or **Stop following BPM**. The same menu has **Remove from this page**, which keeps the cue in the Library. Over MCP, use `cue.save` with or without `bpm`, and `page.save`.
+- **Order with full cues:** a part cue plays over the full cues older than it. A newer full cue, such as Worship · closing, takes its fixtures back, and a part cue whose fixtures are all taken retires.
+
+## Own speed — 2026-11-01
+
+`cue.speed` (0.1–8) is a cue's own rate. With `bpm` it multiplies the tempo rate (tempo ÷ bpm × speed); without `bpm` the cue ignores the global tempo and plays at that speed alone. The master popup has **Follow the global tempo** (sets or clears the cue's bpm) and **Speed ×** (0.25–4). Both are saved on the master's cue and change a running cue at once, rebased so it never jumps.
+- **Waves:** in a part cue, a fixture driven only by tracks takes the cue's parts only while one of its tracks is running. So a wave (e.g. Praise · grid wave) leaves the waiting fixtures in whatever colour and level the look gives them.
+
+## Release all on a page — 2026-11-01
+
+The stop button beside the page name in Show mode (and `page.release {id, fade?}` / `lights_page_release`) releases every running cue on that page, its looks and the effects layered on them, with a 1.5 s fade by default. Masters' held flashes and other pages' cues keep running.
