@@ -319,3 +319,12 @@ test('an input that opens but never delivers audio is treated as lost once the h
  await r.command('fixture.set',{ids:['301'],values:{intensity:.8}});await r.command('selection.set',{ids:['301']});await r.command('highlight.set',{enabled:true});
  await r.command('cue.record',{id:'rec',name:'rec'});assert.equal(r.show.cues.find(c=>c.id==='rec').look.find(x=>x.id==='301').values.intensity,.12,'a recorded cue never holds a face light above its limit');
 });
+
+test('after a helper crash the APC40 and the virtual StageLight port come back on the new helper',async()=>{
+ const {e}=rig();const {BACKOFF}=await import('../engine/modules/io.mjs');const saved=[...BACKOFF];BACKOFF.splice(0,4,.05,.05,.05,.05);try{
+  await e.command('modules.set',{midi:{enabled:true}});await until(()=>e.mods.midi.apc);const io=e.mods.io,first=io.child,sent=[];const send=io.send.bind(io);io.send=m=>{sent.push(m);send(m)};
+  first.kill('SIGKILL');await until(()=>e.mods.midi.apc===null);await until(()=>io.child&&io.child!==first&&e.mods.midi.apc);
+  assert.ok(sent.some(m=>m.op==='midi.virtual'&&m.name==='StageLight'),'the virtual port is made again');assert.ok(sent.some(m=>m.op==='midi.open'&&m.id==='apc'),'the APC40 is opened again');
+  assert.ok(sent.some(m=>m.op==='midi.send'&&m.port==='apc'),'and put back in Ableton Live mode with its LEDs');assert.ok(e.logs.filter(l=>l.message==='APC40 mkII connected').length>=2);
+ }finally{BACKOFF.splice(0,4,...saved);await e.command('modules.set',{midi:{enabled:false}})}
+});
