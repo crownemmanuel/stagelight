@@ -15,7 +15,9 @@ export class Modules{
  changed(force=false){this.midi?.changed(force)}
  // Extra runtime fields, only while something needs them: the controller's fader bank and last input while one is connected.
  // runtime.sound: the input level and hit counts whenever an input is open (the desk's meter and hit blinks).
- live(){const out={};const s=this.sound;if(s?.opened?.ok)out.sound={input:s.input,meter:s.levels,hits:s.hits,device:s.opened.device};const c=this.midi?.live();if(c)out.controller=c;return out}
+ live(){const out={};const s=this.sound;if(s?.opened?.ok)out.sound={input:s.input,meter:s.levels,hits:s.hits,device:s.opened.device,...(s.channels?{channels:s.channels}:{})};const c=this.midi?.live();if(c)out.controller=c;return out}
+ // Problems worth a banner on the desk right now (runtime.health): the helper down, the sound input lost or silent.
+ health(){return [...(this.io&&!this.io.child?[{id:'helper',level:'error',message:this.io.error??'The sound and MIDI helper is not running'}]:[]),...(this.sound?.health()??[])]}
  checks(){return [...this.io.checks(),...(this.sound?.checks()??[]),...(this.midi?.checks()??[])]}
  async close(){this.sound?.close();this.midi?.close();this.sound=this.midi=null;await this.io?.close();this.io=null}
 }

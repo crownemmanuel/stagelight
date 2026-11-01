@@ -4,19 +4,36 @@ import net from 'node:net';
 import {artDmx} from './render.mjs';
 export const interfaces=()=>Object.entries(os.networkInterfaces()).flatMap(([name,items])=>items.filter(i=>i.family==='IPv4').map(i=>({name,address:i.address,netmask:i.netmask,internal:i.internal})));
 export function validateNetwork(c){for(const key of ['source','target']){if(!net.isIPv4(c[key]))throw Error(`${key} must be an IPv4 address`);const n=c[key].split('.').map(Number);if(n[0]===0||n[0]>=224||n[3]===255)throw Error('Only specific unicast addresses are allowed')}if(c.source===c.target)throw Error('Source and destination must differ')}
+// Armed is the operator's decision, and only disarm (or stopping the engine) takes it back. A network blip never does:
+// on 2026-11-01 the lighting adapter dropped for a moment (send EADDRNOTAVAIL), output closed itself, and the rig stayed
+// frozen for five minutes until the engine was restarted. Now a failing send is counted and logged at most every 10 s,
+// sending carries on every frame, and after 5 s of failures the socket is rebound to the source address (every 5 s)
+// in case the adapter came back with a fresh socket state. status() says whether packets are getting out.
+const RETRY_LOG=10,REBIND_AFTER=5;
 export class Output{
- constructor(log){this.log=log;this.socket=null;this.armed=false;this.sequence=0;this.stats={packets:0,bytes:0,lastSent:null,lastError:null,armedAt:null,receiver:'Unconfirmed · ArtDMX has no acknowledgment'};}
- async arm(config){validateNetwork(config);if(!interfaces().some(x=>x.address===config.source))throw Error(`Source ${config.source} is not present on this Mac`);if(this.socket)throw Error('Output already active');
-  const socket=dgram.createSocket('udp4');
-  await new Promise((resolve,reject)=>{socket.once('error',reject);socket.bind(6454,config.source,()=>{socket.removeListener('error',reject);resolve()})}).catch(e=>{socket.close();throw e});
-  this.socket=socket;this.config={...config};this.armed=true;this.stats.lastError=null;this.stats.armedAt=new Date().toISOString();
-  socket.on('error',e=>{this.stats.lastError=e.message;this.log('Output error: '+e.message);this.close()});this.log('Physical output armed');
+ constructor(log,{createSocket=()=>dgram.createSocket('udp4'),list=interfaces,now=()=>Date.now()/1000}={}){this.log=log;this.createSocket=createSocket;this.list=list;this.now=now;this.socket=null;this.armed=false;this.sequence=0;this.failing=null;this.binding=false;this.stats={packets:0,bytes:0,lastSent:null,lastError:null,armedAt:null,errors:0,rebinds:0,receiver:'Unconfirmed · ArtDMX has no acknowledgment'};}
+ async bind(config){
+  const socket=this.createSocket();
+  await new Promise((resolve,reject)=>{socket.once('error',reject);socket.bind(6454,config.source,()=>{socket.removeListener('error',reject);resolve()})}).catch(e=>{try{socket.close()}catch{}throw e});
+  socket.on('error',e=>{if(this.socket===socket&&this.armed)this.failed(e)});return socket;
  }
- send(universes){if(!this.armed)return;const seq=this.sequence=this.sequence%255+1;
-  for(const [u,d] of universes){const p=artDmx(u,d,seq);this.socket.send(p,6454,this.config.target,e=>{if(e){this.stats.lastError=e.message;this.log('Send failed: '+e.message);this.close()}else{this.stats.packets++;this.stats.bytes+=p.length;this.stats.lastSent=new Date().toISOString()}})}
+ async arm(config){validateNetwork(config);if(!this.list().some(x=>x.address===config.source))throw Error(`Source ${config.source} is not present on this Mac`);if(this.socket||this.armed)throw Error('Output already active');
+  this.gen=(this.gen??0)+1;this.socket=await this.bind(config);this.config={...config};this.armed=true;this.failing=null;this.stats.lastError=null;this.stats.armedAt=new Date().toISOString();this.log('Physical output armed');
  }
- close(){this.armed=false;if(this.socket){try{this.socket.close()}catch{}this.socket=null}}
- status(){return {armed:this.armed,...this.stats,interfaces:interfaces()}}
+ failed(e){const now=this.now(),f=this.failing;this.stats.lastError=e.message;this.stats.errors++;
+  if(!f){this.failing={since:now,at:new Date().toISOString(),logged:now,count:1,lastRebind:now};this.log(`Art-Net send failing: ${e.message} · output stays armed and keeps sending`);return}
+  f.count++;if(now-f.logged>=RETRY_LOG){this.log(`Art-Net still failing after ${Math.round(now-f.since)} s (${f.count} errors): ${e.message}`);f.logged=now}
+ }
+ sent(bytes){this.stats.packets++;this.stats.bytes+=bytes;this.stats.lastSent=new Date().toISOString();if(this.failing){this.log(`Art-Net sending again after ${Math.round(this.now()-this.failing.since)} s`);this.failing=null}}
+ // A fresh socket on the source address; until it binds (the adapter may still be gone), frames are skipped.
+ rebind(){const f=this.failing;if(!f||this.binding)return;f.lastRebind=this.now();this.binding=true;const old=this.socket,gen=this.gen;this.socket=null;try{old?.close()}catch{}
+  this.bind(this.config).then(s=>{this.binding=false;if(!this.armed||gen!==this.gen){try{s.close()}catch{}return}this.socket=s;this.stats.rebinds++;this.log('Art-Net socket rebound to '+this.config.source)},e=>{this.binding=false;if(this.armed&&gen===this.gen)this.failed(e)});
+ }
+ send(universes){if(!this.armed)return;const f=this.failing;if(f&&this.now()-f.since>=REBIND_AFTER&&this.now()-f.lastRebind>=REBIND_AFTER)this.rebind();const socket=this.socket;if(!socket)return;const seq=this.sequence=this.sequence%255+1;
+  for(const [u,d] of universes){const p=artDmx(u,d,seq);try{socket.send(p,6454,this.config.target,e=>{if(e)this.failed(e);else this.sent(p.length)})}catch(e){this.failed(e)}}
+ }
+ close(){this.armed=false;this.failing=null;this.gen=(this.gen??0)+1;if(this.socket){try{this.socket.close()}catch{}this.socket=null}}
+ status(){const f=this.failing;return {armed:this.armed,...this.stats,sending:this.armed&&!f,failing:f?{since:f.at,errors:f.count}:null,interfaces:this.list()}}
  check(config){return checkConnection(config,{socket:this.armed?this.socket:null})}
 }
 

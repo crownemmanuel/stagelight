@@ -52,7 +52,7 @@ export class Engine{
  constructor({dataDir,showsDir,output,clock=()=>performance.now()/1000}={}){
   this.dir=dataDir;this.clock=clock;this.logs=[];this.output=output??new Output(m=>this.log(m));this.show=defaults();const seed=new URL('../show-template.json',import.meta.url);if(fs.existsSync(seed)){this.show=migrate(JSON.parse(fs.readFileSync(seed,'utf8')));validateShow(this.show)}
   if(dataDir){fs.mkdirSync(dataDir,{recursive:true});const file=path.join(dataDir,'show.json');if(fs.existsSync(file)){const raw=JSON.parse(fs.readFileSync(file,'utf8')),added=!raw.pages;this.show=migrate(raw);validateShow(this.show);if(added)this.save()}else this.save();}
-  this.layers=[];this.kills=new Map();this.killVersion=0;this.highlight=false;this.find=null;this.scene=null;this.flashes=new Map();this.bumps=new Set();this.tempo={bpm:null,source:null,taps:[],anchor:null};this.levels=new Map();this.faderOwned=new Set();this.mods=null;this.soundHolds=new Map();this.agents=new Map();this.net={in:[],out:[],count:{in:0,out:0,rejected:0},listener:{listening:false},presets:{}};this.looks=new Map();this.presetBursts=new Map();this.presetAsks=new Map();this.sendHook=null;this.onNetworkChange=null;this.selection={ids:[],group:'backlights',revision:0};this.lampCommands=new Map();this.revision=1;this.playback=null;this.overrides={};this.fx=[];this.master=1;this.blackout=false;this.held=null;this.fading=null;this.transition=null;this.stack=null;this.release=null;this.programmed=null;this.raw=null;this.preview=null;this.previewFrames=null;this.blind=false;this.blindOverrides={};this.blindRelease=null;this.blindStates=null;this.fxPreview=null;this.requests=new Map();this.listeners=new Set();this.tickCount=0;this.dropped=0;this.lastTick=null;this.frames=render(this.show,null,0);this.log('Engine ready in preview. Physical output is disarmed.');
+  this.layers=[];this.kills=new Map();this.killVersion=0;this.highlight=false;this.find=null;this.scene=null;this.flashes=new Map();this.bumps=new Map();this.tempo={bpm:null,source:null,taps:[],anchor:null};this.levels=new Map();this.faderOwned=new Set();this.mods=null;this.soundHolds=new Map();this.agents=new Map();this.net={in:[],out:[],count:{in:0,out:0,rejected:0},listener:{listening:false},presets:{}};this.looks=new Map();this.presetBursts=new Map();this.presetAsks=new Map();this.sendHook=null;this.onNetworkChange=null;this.selection={ids:[],group:'backlights',revision:0};this.lampCommands=new Map();this.revision=1;this.playback=null;this.overrides={};this.fx=[];this.master=1;this.blackout=false;this.held=null;this.fading=null;this.transition=null;this.stack=null;this.release=null;this.programmed=null;this.raw=null;this.preview=null;this.previewFrames=null;this.blind=false;this.blindOverrides={};this.blindRelease=null;this.blindStates=null;this.fxPreview=null;this.requests=new Map();this.listeners=new Set();this.tickCount=0;this.dropped=0;this.lastTick=null;this.frames=render(this.show,null,0);this.log('Engine ready in preview. Physical output is disarmed.');
   // Show safety (docs/SHOW-SAFETY.md): the lock survives a restart; an unclean live-state file becomes an offer to resume.
   this.versions=new Versions(dataDir,()=>this.clock());this.live=new LiveState(dataDir);
   // Show files: savedRevision is the revision last saved to or opened from the current file; any other revision is unsaved.
@@ -142,7 +142,9 @@ export class Engine{
    for(const [id,keys] of keyed){const i=index.get(id),st=own.get(id);if(i===undefined||!st||(fullAge.get(id)??-1)>age)continue;const next={...states[i]};for(const key of keys){if(st[key]===undefined)delete next[key];else next[key]=key==='intensity'?st[key]*k:st[key]}states[i]=next}}
   return states;
  }
- levelOf(r){return !r.master||!this.levels.size||this.flashes.get(r.master)===r.cue.id||this.bumps.has(r.master)?1:this.levels.get(r.master)??1}
+ levelOf(r){return !r.master||!this.levels.size||this.flashes.get(r.master)===r.cue.id||this.bumped(r.cue.id)?1:this.levels.get(r.master)??1}
+ // A held flash bumps the cue it holds, whoever started it (bumps: slot → cue ID).
+ bumped(cue){for(const c of this.bumps.values())if(c===cue)return true;return false}
  compositeFull(top,layers){
   [top,layers]=this.byPrecedence(top,layers);
   const states=compose(this.show,top.cue,this.sourceTime(top)),floor=this.scene&&this.floor(),dim=r=>this.levelOf(r);
@@ -182,7 +184,7 @@ export class Engine{
  killedIds(){if(!this.kills.size)return null;const key=this.revision+':'+this.killVersion;if(this.killCache?.key===key)return this.killCache.ids;const ids=new Set();
   for(const k of this.kills.values()){if(k.group){for(const id of this.show.groups.find(g=>g.id===k.group)?.fixtures??[])ids.add(id)}else{const m=this.show.masters.slots.find(s=>s.id===k.slot),cue=m?.cue&&this.show.cues.find(c=>c.id===m.cue);if(cue)for(const id of this.controls(cue))ids.add(id)}}
   this.killCache={key,ids};return ids}
- flashIds(){if(!this.flashes.size&&!this.bumps.size)return null;const ids=new Set(),slots=this.show.masters.slots;for(const id of [...this.flashes.keys(),...this.bumps]){const m=slots.find(s=>s.id===id),cue=m?.cue&&this.show.cues.find(c=>c.id===m.cue);if(cue)for(const f of this.controls(cue))ids.add(f)}return ids}
+ flashIds(){if(!this.flashes.size&&!this.bumps.size)return null;const ids=new Set(),slots=this.show.masters.slots;for(const id of [...this.flashes.keys(),...this.bumps.keys()]){const m=slots.find(s=>s.id===id),cue=m?.cue&&this.show.cues.find(c=>c.id===m.cue);if(cue)for(const f of this.controls(cue))ids.add(f)}return ids}
  killStatus(){const slots=this.show.masters.slots;return [...this.kills.values()].map(k=>{if(k.group)return {group:k.group,name:this.show.groups.find(g=>g.id===k.group)?.name??k.group};const i=slots.findIndex(s=>s.id===k.slot),m=slots[i];return {slot:k.slot,master:i+1,name:m?.label??this.show.cues.find(c=>c.id===m?.cue)?.name??k.slot}})}
  parkIndex(){const list=this.show.parked;if(this.parkCache?.list!==list)this.parkCache={list,map:new Map(list.map(p=>[p.id,p.values]))};return this.parkCache.map}
  // Park: capture what each fixture shows right now (after master) and hold it; unpark lets playback take it back.
@@ -227,10 +229,12 @@ export class Engine{
   const cue=this.show.cues.find(c=>c.id===slot.cue),run=this.running().find(l=>l.cue.id===slot.cue),fade=slot.fade??0;
   const start=(keep=false)=>{this.startCue(cue,{fade,keep});this.playback.master=slot.id};
   if(slot.midi)this.mods?.midi?.note(slot.midi,down);
-  if(!down){if(slot.action==='flash'&&this.flashes.get(slot.id)===slot.cue){this.flashes.delete(slot.id);if(run)this.releaseCue(run,fade)}else this.bumps.delete(slot.id);return}
-  // A held flash is the master at full and on top, whatever its fader says (like a Hog flash button). Over its own
-  // cue that is already running (its fader started it) it bumps it to full and to the top until let go.
-  if(slot.action==='flash'){if(!run){start(true);this.flashes.set(slot.id,cue.id)}else if(run.master===slot.id){this.bumps.add(slot.id);this.bringToTop(run)}}
+  if(!down){this.bumps.delete(slot.id);if(slot.action==='flash'&&this.flashes.get(slot.id)===slot.cue){this.flashes.delete(slot.id);if(run)this.releaseCue(run,fade)}return}
+  // A held flash is the master at full and on top, whatever its fader says (like a Hog flash button). Over its cue
+  // already running it bumps that cue to full and to the top until let go: its own fader's cue, or the same cue held by
+  // another master or the cue list. Before 2026-11-01 a flash over another master's cue did nothing at all: with Back
+  // Light up on m2 (kick), m3 (lead, follow) and m5 (tom), kicks showed nothing while the lead rode it at a low level.
+  if(slot.action==='flash'){if(!run){start(true);this.flashes.set(slot.id,cue.id)}else if(this.flashes.get(slot.id)!==cue.id){this.bumps.set(slot.id,cue.id);this.bringToTop(run)}}
   // Pressed with its fader at zero, a master starts at full instead of running invisibly and holding its lights at zero.
   else if(slot.action==='toggle'){if(run)this.releaseCue(run,fade);else{if(this.levels.get(slot.id)===0)this.levels.delete(slot.id);start()}}
   else if(slot.action==='go'){if(this.levels.get(slot.id)===0)this.levels.delete(slot.id);start()}
@@ -239,7 +243,16 @@ export class Engine{
  }
  // Put a running cue on top without restarting it, so it wins every fixture it uses.
  bringToTop(run){if(run===this.playback)return;this.layers=this.layers.filter(l=>l!==run);if(this.playback)this.layers.push(this.playback);this.playback=run}
- mastersStatus(){const running=new Set(this.running().map(l=>l.cue.id));return {held:[...[...this.flashes].filter(([,cue])=>running.has(cue)).map(([slot])=>slot),...this.bumps],levels:Object.fromEntries(this.levels)}}
+ mastersStatus(){const running=new Set(this.running().map(l=>l.cue.id));return {held:[...[...this.flashes].filter(([,cue])=>running.has(cue)).map(([slot])=>slot),...this.bumps.keys()],levels:Object.fromEntries(this.levels)}}
+ // masters.status: every slot as the desk shows it, plus cues shared by several masters. While one master holds a shared
+ // cue at full, a flash on another can only bump it to where it already is, so the operator sees nothing (2026-11-01).
+ mastersReport(){
+  const slots=this.show.masters.slots,by=new Map(),running=new Set(this.running().map(r=>r.cue.id)),held=new Set(this.mastersStatus().held),name=id=>this.show.cues.find(c=>c.id===id)?.name??id;
+  for(const m of slots)if(m.cue)by.set(m.cue,[...(by.get(m.cue)??[]),m.id]);const num=id=>slots.findIndex(x=>x.id===id)+1;
+  const shared=[...by].filter(([,ids])=>ids.length>1).map(([cue,ids])=>({cue,name:name(cue),slots:ids,numbers:ids.map(num),warning:`${name(cue)} is on masters ${ids.map(num).join(', ')}: while one of them holds it up at full, a flash on another shows no change. Give each its own cue (masters.own).`}));
+  return {slots:slots.map((m,i)=>({id:m.id,number:i+1,key:m.key??null,label:m.label??null,cue:m.cue??null,cueName:m.cue?name(m.cue):null,action:m.action,fade:m.fade??0,priority:!!m.priority,soloKill:!!m.soloKill,
+   sound:m.sound?{mode:m.sound.mode??'hit',channel:m.sound.channel,enabled:m.sound.enabled!==false}:null,level:this.levels.get(m.id)??1,held:held.has(m.id),running:!!m.cue&&running.has(m.cue),sharedWith:m.cue?by.get(m.cue).filter(x=>x!==m.id):[]})),shared};
+ }
  // A master's level (its fader) scales the cue that master started. Like a Hog fader, raising it from zero starts the
  // cue and bringing it back to zero releases it, but only if the fader started it.
  masterLevel(id,level,go=true){
@@ -468,7 +481,13 @@ export class Engine{
  }
  // Agents count as connected while their MCP server keeps saying hello (every 10 s).
  connectedAgents(){const now=this.clock();for(const [k,a] of this.agents)if(now-a.lastSeen>30)this.agents.delete(k);return [...this.agents.values()].map(a=>({client:a.client,version:a.version,connectedFor:Math.round(now-a.connectedAt)}))}
- runtime(){return {agents:this.connectedAgents(),showFile:this.showFileStatus(),selection:copy(this.selection),lampCommands:Object.fromEntries([...this.lampCommands].map(([id,p])=>[id,{action:p.action,remaining:Math.max(0,p.until-this.clock())}])),revision:this.revision,running:this.runningStatus(),highlight:this.highlight,find:this.findStatus(),parked:(this.show.parked??[]).map(p=>p.id),kills:this.killStatus(),tempo:this.tempoStatus(),locked:this.locked,resume:this.resumeStatus(),...(this.mods?.live()??{}),scene:this.scene?{id:this.scene.id,name:this.scene.name}:null,masters:this.mastersStatus(),playback:this.playback?{id:this.playback.cue.id,name:this.playback.cue.name,duration:this.playback.cue.duration,loop:this.playback.cue.loop,hold:!!this.playback.cue.hold,paused:this.playback.paused,elapsed:Math.min(this.elapsed()% (this.playback.cue.loop?this.playback.cue.duration:Infinity),this.playback.cue.duration)}:null,stack:this.stackStatus(),net:{in:this.net.count.in,out:this.net.count.out,rejected:this.net.count.rejected,listening:!!this.net.listener.listening,last:this.net.in[0]?.address??null},preview:this.previewStatus(),fx:this.fx.map(x=>this.fxSummary(x)),fxPreview:this.fxSummary(this.fxPreview),blind:{enabled:this.blind,fixtures:Object.keys(this.blindOverrides),overrides:this.blindOverrides,release:this.blindRelease?{fixtures:Object.keys(this.blindRelease.frames),progress:Math.min(1,(this.clock()-this.blindRelease.start)/Math.max(.001,this.blindRelease.duration))}:null},previewFrames:this.previewFrames,transition:this.transition?{from:this.transition.from.cue?.id??null,duration:this.transition.duration,progress:Math.min(1,(this.clock()-this.transition.start)/Math.max(.001,this.transition.duration))}:null,release:this.release?{fixtures:Object.keys(this.release.frames),progress:Math.min(1,(this.clock()-this.release.start)/Math.max(.001,this.release.duration))}:null,master:this.master,blackout:this.blackout,overrides:this.overrides,frames:this.frames,output:this.output.status(),tickCount:this.tickCount,slowFrames:this.dropped,logs:this.logs.slice(-15)}}
+ runtime(){return {agents:this.connectedAgents(),showFile:this.showFileStatus(),selection:copy(this.selection),lampCommands:Object.fromEntries([...this.lampCommands].map(([id,p])=>[id,{action:p.action,remaining:Math.max(0,p.until-this.clock())}])),revision:this.revision,running:this.runningStatus(),highlight:this.highlight,find:this.findStatus(),parked:(this.show.parked??[]).map(p=>p.id),kills:this.killStatus(),tempo:this.tempoStatus(),locked:this.locked,resume:this.resumeStatus(),health:this.health(),...(this.mods?.live()??{}),scene:this.scene?{id:this.scene.id,name:this.scene.name}:null,masters:this.mastersStatus(),playback:this.playback?{id:this.playback.cue.id,name:this.playback.cue.name,duration:this.playback.cue.duration,loop:this.playback.cue.loop,hold:!!this.playback.cue.hold,paused:this.playback.paused,elapsed:Math.min(this.elapsed()% (this.playback.cue.loop?this.playback.cue.duration:Infinity),this.playback.cue.duration)}:null,stack:this.stackStatus(),net:{in:this.net.count.in,out:this.net.count.out,rejected:this.net.count.rejected,listening:!!this.net.listener.listening,last:this.net.in[0]?.address??null},preview:this.previewStatus(),fx:this.fx.map(x=>this.fxSummary(x)),fxPreview:this.fxSummary(this.fxPreview),blind:{enabled:this.blind,fixtures:Object.keys(this.blindOverrides),overrides:this.blindOverrides,release:this.blindRelease?{fixtures:Object.keys(this.blindRelease.frames),progress:Math.min(1,(this.clock()-this.blindRelease.start)/Math.max(.001,this.blindRelease.duration))}:null},previewFrames:this.previewFrames,transition:this.transition?{from:this.transition.from.cue?.id??null,duration:this.transition.duration,progress:Math.min(1,(this.clock()-this.transition.start)/Math.max(.001,this.transition.duration))}:null,release:this.release?{fixtures:Object.keys(this.release.frames),progress:Math.min(1,(this.clock()-this.release.start)/Math.max(.001,this.release.duration))}:null,master:this.master,blackout:this.blackout,overrides:this.overrides,frames:this.frames,output:this.output.status(),tickCount:this.tickCount,slowFrames:this.dropped,logs:this.logs.slice(-15)}}
+ // What is wrong right now, worst first, for the desk's banner and agents (runtime.health): [{id, level error|warn, message}].
+ // Empty when all is well. Cheap enough for the 10 Hz stream: flags only, no scans of the show.
+ health(){const out=[],o=this.output.status?.()??{};
+  if(o.armed&&o.failing)out.push({id:'output',level:'error',message:`Art-Net is not getting out since ${o.failing.since}: ${o.lastError}. Output stays armed and keeps retrying: check the lighting network adapter.`});
+  if(this.tickError)out.push({id:'engine',level:'error',message:`Engine frames are failing since ${this.tickError.at}: ${this.tickError.message}. The rig holds its last look; Stop or release the newest cue.`});
+  out.push(...(this.mods?.health()??[]));return out.sort((a,b)=>(a.level==='error'?0:1)-(b.level==='error'?0:1))}
  snapshot(){return {show:copy(this.show),runtime:this.runtime()}}
  showFileStatus(){const c=this.files.current;return {name:c?.name??null,savedAt:c?.at??null,dirty:this.revision!==this.savedRevision}}
  // Opening and importing replace the whole show; this Mac's network settings stay and the old show is kept as a version.
@@ -502,7 +521,7 @@ export class Engine{
   const params={...(preset?.params??{}),...copy(args.params??{})};for(const id of fixtures)validateWheelAttributes(this.show.fixtures.find(f=>f.id===id),params);
   return {fixtures,effect,layer,params,preset:args.preset??null,name:preset?.name??EFFECTS[effect].name,duration:preset?.duration??20};
  }
- outputStatus(){const s=this.show.settings,o=this.output.status();return {armed:o.armed,source:s.source,target:s.target,port:s.port??6454,mappings:copy(s.mappings),packets:o.packets,lastSent:o.lastSent,lastError:o.lastError,armedAt:o.armedAt??null,receiver:o.receiver,interfaces:o.interfaces,lastCheck:this.lastCheck??null,note:o.armed?'Sending Art-Net. ArtDMX has no acknowledgment, so watch the rig.':'Output is disarmed: nothing is sent to the rig. Arm output (output.arm) to send Art-Net.'}}
+ outputStatus(){const s=this.show.settings,o=this.output.status();return {armed:o.armed,sending:o.sending??o.armed,failing:o.failing??null,errors:o.errors??0,rebinds:o.rebinds??0,source:s.source,target:s.target,port:s.port??6454,mappings:copy(s.mappings),packets:o.packets,lastSent:o.lastSent,lastError:o.lastError,armedAt:o.armedAt??null,receiver:o.receiver,interfaces:o.interfaces,lastCheck:this.lastCheck??null,note:o.failing?`Armed, but Art-Net sends are failing since ${o.failing.since} (${o.lastError}). Output stays armed and keeps retrying; check the lighting network adapter.`:o.armed?'Sending Art-Net. ArtDMX has no acknowledgment, so watch the rig.':'Output is disarmed: nothing is sent to the rig. Arm output (output.arm) to send Art-Net.'}}
  fxSummary(fx){return fx&&{id:fx.id,name:fx.name,preset:fx.preset,effect:fx.effect,layer:fx.layer,fixtures:fx.fixtures,params:fx.params}}
  upsert(list,item){const i=list.findIndex(x=>x.id===item.id);if(i<0)list.push(copy(item));else list[i]=copy(item)}
  ensureIds(ids){for(const id of ids)if(!this.show.fixtures.some(f=>f.id===id))throw Error('Unknown fixture '+id)}
@@ -515,7 +534,7 @@ export class Engine{
   // Sound trigger tuning (channel, band, sensitivity, hold, gap) is a live adjustment like a fader, so it stays open.
   const soundTuning=name==='masters.assign'&&Object.keys(args).every(k=>['slot','sound','clearSound'].includes(k));
   if(this.locked&&SHOW_EDITS.has(name)&&!soundTuning)throw Error('The performance lock is on: unlock it to change the show.');
-  if(name==='show.versions')return {versions:this.versions.list()};if(name==='show.files')return {folder:this.files.folder,current:this.showFileStatus(),files:this.files.list(args.query)};if(name==='show.check')return this.showCheck(args);if(name==='modules.status')return this.modulesStatus();if(name==='sound.inputs')return {inputs:this.show.audioInputs??[]};
+  if(name==='show.versions')return {versions:this.versions.list()};if(name==='masters.status')return this.mastersReport();if(name==='show.files')return {folder:this.files.folder,current:this.showFileStatus(),files:this.files.list(args.query)};if(name==='show.check')return this.showCheck(args);if(name==='modules.status')return this.modulesStatus();if(name==='sound.inputs')return {inputs:this.show.audioInputs??[]};
   if(['sound.status','midi.status'].includes(name)){const m=this.mods?.[name.split('.')[0]];if(!m)throw Error(this.moduleOff(name.split('.')[0]));return m.status()}
   if(name==='agent.hello'){const known=this.agents.get(args.session);this.agents.set(args.session,{session:args.session,client:args.client,version:args.version??'',connectedAt:known?.connectedAt??this.clock(),lastSeen:this.clock()});if(!known)this.log(`Agent connected · ${args.client}${args.version?' '+args.version:''}`);return {ok:true}}
   if(name==='status')return this.snapshot();if(name==='visualizer.status')return this.visualizerStatus();if(name==='patch.report')return this.patchReport();if(name==='network.status')return this.networkStatus();if(name==='look.report')return this.lookReport(args);
@@ -573,9 +592,12 @@ export class Engine{
      if(args.color)m.color=args.color;if(args.clearColor)delete m.color;if(args.priority!==undefined){if(args.priority)m.priority=true;else delete m.priority}if(args.soloKill!==undefined){if(args.soloKill)m.soloKill=true;else delete m.soloKill}if(args.sound)m.sound=args.sound;if(args.clearSound)delete m.sound;if(args.midi)m.midi=args.midi;if(args.clearMidi)delete m.midi});
     if(args.clear||args.cue)this.flashes.delete(args.slot);if(args.sound||args.clearSound||args.clear)await this.mods?.sound?.configure();break}
    case 'masters.level':this.masterLevel(args.slot,args.level,args.go??true);break;
+   case 'masters.own':{const slots=this.show.masters.slots,m=masterSlot(this.show,args.slot),n=slots.indexOf(m)+1;if(!m.cue)throw Error(`Master ${n} has no cue`);const src=this.show.cues.find(c=>c.id===m.cue),id=args.id??`${src.id}-${m.id}`.slice(0,64);
+    if(this.show.cues.some(c=>c.id===id))throw Error(`A cue ${id} already exists: give another id`);
+    this.update(s=>{s.cues.push({...copy(src),id,name:(args.name??`${src.name} · M${n}`).slice(0,100)});masterSlot(s,args.slot).cue=id});this.flashes.delete(args.slot);this.bumps.delete(args.slot);this.log(`Master ${n} has its own cue · ${id}`);created={cue:id};break}
    case 'masters.sound':{const m=this.show.masters.slots.find(x=>x.id===args.slot);if(!m)throw Error('Unknown master '+args.slot);if(!m.sound)throw Error(`Master ${this.show.masters.slots.indexOf(m)+1} has no sound trigger: give it one in its editor first`);
     const on=args.enabled??m.sound.enabled===false;this.update(s=>{masterSlot(s,args.slot).sound.enabled=on});if(!on&&this.soundHolds.has(args.slot)){clearTimeout(this.soundHolds.get(args.slot));this.soundHolds.delete(args.slot);this.masterTrigger(args.slot,false)}
-    this.mods?.sound?.configure();this.log(`Master ${this.show.masters.slots.indexOf(m)+1} sound trigger ${on?'on':'off'}`);created={slot:args.slot,sound:on};break}
+    this.mods?.sound?.configure();this.log(`Master ${this.show.masters.slots.findIndex(x=>x.id===args.slot)+1} sound trigger ${on?'on':'off'}`);created={slot:args.slot,sound:on};break}
    case 'tempo.tap':this.tapTempo();break;
    case 'tempo.set':this.setTempo(args.bpm??null,'set');break;
    case 'tempo.scale':this.setTempo(this.tempoBase()*args.factor,this.tempo.source??'set');break;
@@ -590,7 +612,8 @@ export class Engine{
     this.log('Resumed after an unexpected restart'+(sc?' · scene '+sc.name:'')+(i>=0?` · ${pg.name} cue ${i+1}`:''));break}
    case 'resume.dismiss':this.resume=null;this.live.write(this.liveSnapshot());break;
    case 'sound.inputs.set':this.update(s=>{const m=new Map(args.replace?[]:(s.audioInputs??[]).map(a=>[a.channel,a.name]));for(const a of args.inputs){const n=a.name.trim();if(n)m.set(a.channel,n);else m.delete(a.channel)}s.audioInputs=[...m].sort((a,b)=>a[0]-b[0]).map(([channel,name])=>({channel,name}))});break;
-   case 'modules.set':this.update(s=>{const m=s.settings.modules??={};if(args.sound)m.sound={...m.sound,...args.sound};if(args.midi)m.midi={...m.midi,...args.midi}});await this.syncModules();break;
+   // A device change is logged with both names, so a trigger that went deaf can be traced to the moment its input moved.
+   case 'modules.set':{const before=this.show.settings.modules?.sound?.device??null;this.update(s=>{const m=s.settings.modules??={};if(args.sound)m.sound={...m.sound,...args.sound};if(args.midi)m.midi={...m.midi,...args.midi}});const after=this.show.settings.modules?.sound?.device??null;if(after!==before)this.log(`Sound input device · ${before??'none'} → ${after??'none'}`);await this.syncModules();break}
    case 'sound.meter':case 'sound.test':case 'midi.test':case 'controller.test':{const which=name.startsWith('sound')?'sound':'midi',mod=this.mods?.[which];if(!mod)throw Error(this.moduleOff(which));created=await mod.command(name,args);break}
    case 'controller.save':this.update(s=>{const list=s.controllers??=[];let c=list.find(x=>x.id===args.id);if(!c)list.push(c={id:args.id,model:args.model??'apc40mk2',map:{}});Object.assign(c.map,args.map??{});for(const k of ['name','deskNumbers','deskColors'])if(args[k])c[k]=args[k]});this.mods?.changed(true);break;
    case 'controller.reset':this.update(s=>{s.controllers=(s.controllers??[]).filter(c=>c.id!==args.id)});this.mods?.changed(true);break;
@@ -832,18 +855,26 @@ export class Engine{
  async showCheck({network=true}={}){
   const rows=[],add=(id,label,state,detail)=>rows.push({id,label,state,detail}),out=this.outputStatus(),rep=this.patchReport();
   if(network){const c=await(this.output.check?this.output.check(this.show.settings):checkConnection(this.show.settings));this.lastCheck=c;add('network','Art-Net path to '+this.show.settings.target,c.ok?'pass':'fail',c.ok?'Source, subnet, ping and ArtPoll all answered':(c.steps.find(x=>!x.ok)?.label??'The check failed')+' Open Settings → Art-Net output for every step.')}
-  add('output','Output',out.armed?'pass':'warn',out.armed?'Armed and sending':'Off: arm it before the show');
+  add('output','Output',out.failing?'fail':out.armed?'pass':'warn',out.failing?`Armed, but sends are failing since ${out.failing.since}: ${out.lastError}`:out.armed?'Armed and sending':'Off: arm it before the show');
+  if(this.tickError)add('engine','Engine','fail',`Frames are failing (${this.tickError.count}×) since ${this.tickError.at}: ${this.tickError.message}`);
   const unrouted=rep.fixtures.filter(f=>f.state==='unrouted').length,unverified=rep.fixtures.filter(f=>f.enabled&&f.state==='unverified').length,enabled=rep.fixtures.filter(f=>f.enabled).length;
   add('routing','Universes routed',unrouted?'fail':'pass',unrouted?`${unrouted} fixtures are on a universe with no Art-Net route`:`${rep.universes.filter(u=>u.artnet!==null).length} universes routed`);
   add('fixtures','Fixtures',unverified?'warn':'pass',`${enabled} enabled`+(unverified?` · ${unverified} unverified (preview only, never sent)`:''));
   const v=this.versions.list()[0];add('saved','Show saved',this.dir?'pass':'warn',this.dir?(v?`Latest version ${v.at}`:'Saved; no version yet'):'No data folder: nothing is saved');
   add('lock','Performance lock',this.locked?'pass':'warn',this.locked?'On':'Off: lock the show before it starts');
+  const shared=this.mastersReport().shared;add('masters','Masters sharing a cue',shared.length?'warn':'pass',shared.length?shared.map(x=>x.warning).join(' '):'Every master has its own cue');
   add('timing','Engine timing',this.dropped>10?'warn':'pass',this.dropped?`${this.dropped} slow frames since start`:'No slow frames');
   if(this.mods)rows.push(...this.mods.checks());
   const rig=this.show.pages.find(p=>/rig/i.test(p.id+' '+p.name)&&p.cues.length);add('rig','Rig check',rig?'pass':'warn',rig?`Page “${rig.name}” is ready to run`:'No rig check page with a cue');
   return {ok:!rows.some(r=>r.state==='fail'),rows,at:new Date().toISOString()};
  }
- start(){this.live.write(this.liveSnapshot());this.syncModules().catch(e=>this.log('Modules: '+e.message));this.timer=setInterval(()=>{try{this.tick()}catch(e){this.log('Engine error: '+e.message);this.output.close()}},1000/30)}
+ start(){this.live.write(this.liveSnapshot());this.syncModules().catch(e=>this.log('Modules: '+e.message));this.timer=setInterval(()=>{try{this.tick();if(this.tickError)this.tickRecovered()}catch(e){this.tickFailed(e)}},1000/30)}
+ // A tick that throws sends nothing, so the rig holds its last packets. It used to close output as well, which left the
+ // operator to re-arm (refused while cues run) and logged 30 lines a second. Now output stays armed, the error is logged
+ // once and then every 10 s with a count, runtime.health shows it, and the next good tick sends again.
+ tickFailed(e){const now=this.clock(),t=this.tickError;if(!t||t.message!==e.message){this.tickError={message:e.message,since:now,at:new Date().toISOString(),count:1,logged:now};this.log('Engine error: '+e.message+(e.stack?' · '+String(e.stack).split('\n')[1]?.trim():''));return}
+  t.count++;if(now-t.logged>=10){t.logged=now;this.log(`Engine error repeating (${t.count}× in ${Math.round(now-t.since)} s): ${e.message}`)}}
+ tickRecovered(){const t=this.tickError;this.tickError=null;this.log(`Engine ticking again after ${t.count} failed frame${t.count===1?'':'s'}`)}
  // Stopping the engine blacks out the rig first, unless show.playback.holdOnStop is false: by default the last packets stand (docs/SHOW-SAFETY.md).
  async close(){clearInterval(this.timer);this.live.close(this.liveSnapshot());await this.mods?.close();this.mods=null;if(this.show.playback.holdOnStop!==false&&this.output.armed){this.log('Engine stopped · output left at the last look (keep the last look on stop)');this.output.close()}else await this.disarm();const audit=this.audit;this.audit=null;await new Promise(r=>audit?audit.end(r):r())}
 }
