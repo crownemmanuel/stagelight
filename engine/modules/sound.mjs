@@ -50,9 +50,12 @@ export class Sound{
   try{this.engine.masterLevel(id,0,true);this.engine.tick();this.engine.mods?.changed()}catch(e){this.engine.log('Sound follow: '+e.message)}this.following.delete(id)}}
  // Sent again whenever the device, a trigger or the device list changes; the helper reopens only what it must. The
  // input stays open while a device is chosen, even with no trigger yet, so the meter shows that audio is arriving.
- configure(){this.letGo();const dev=this.device(),t=this.listening().map(({off,...t})=>t);if(!dev){clearTimeout(this.reopenTimer);this.reopenTimer=null;this.io.send({op:'audio.close'});this.opened=null;this.input=null;return}this.io.send({op:'audio.open',device:dev,triggers:t})}
+ configure(){this.letGo();const dev=this.device();if(this.lost&&this.lost.device!==dev)this.lost=null;const t=this.listening().map(({off,...t})=>t);if(!dev){clearTimeout(this.reopenTimer);this.reopenTimer=null;this.io.send({op:'audio.close'});this.opened=null;this.input=null;return}this.io.send({op:'audio.open',device:dev,triggers:t})}
+ // lost: the input failed under us (helper error or no audio callbacks). It stays lost, logged once and shown in health,
+ // through every reopen until audio actually arrives again (a meter message): a Dante card without its clock opens and
+ // goes quiet again and again, and that must not log two lines every five seconds.
  audio(m){const was=this.opened;this.opened=m;this.metered=false;clearTimeout(this.staleTimer);this.staleTimer=null;
-  if(m.ok){clearTimeout(this.reopenTimer);this.reopenTimer=null;this.signalAt=Date.now();if(was&&!was.ok)this.engine.log(`Sound input open again · ${m.device}`);
+  if(m.ok){clearTimeout(this.reopenTimer);this.reopenTimer=null;this.signalAt=Date.now();if(was&&!was.ok&&!this.lost)this.engine.log(`Sound input open again · ${m.device}`);
    // An input that opens but never delivers audio (a Dante card without its clock) is lost too, once this helper has
    // shown it meters at all.
    if(this.everMetered){this.staleTimer=setTimeout(()=>{this.staleTimer=null;if(this.opened?.ok)this.failed('Audio input: no audio callbacks for '+TIMING.stale/1000+' s')},TIMING.stale);this.staleTimer.unref?.()}return}
@@ -62,10 +65,10 @@ export class Sound{
  // helper's input error, or when its meter (sent ~15 times a second while open) stops, the stream is closed and opened
  // fresh every 2 s until it works.
  failed(message){if(!/^Audio input/.test(message??''))return;const dev=this.device();if(!dev)return;
-  if(this.opened?.ok!==false)this.engine.log(`Sound input lost · ${dev}: ${message.replace(/^Audio input:\s*/,'')} · reopening every ${TIMING.reopen/1000} s`);
-  this.opened={ok:false,device:dev,error:message.replace(/^Audio input:\s*/,'')};this.input=null;this.levels={};this.io.send({op:'audio.close'});this.letGo(true,'the input was lost');this.reopenLater()}
+  const error=message.replace(/^Audio input:\s*/,'');if(!this.lost){this.lost={error,device:dev,at:new Date().toISOString()};this.engine.log(`Sound input lost · ${dev}: ${error} · reopening every ${TIMING.reopen/1000} s`)}
+  this.opened={ok:false,device:dev,error};this.input=null;this.levels={};this.io.send({op:'audio.close'});this.letGo(true,'the input was lost');this.reopenLater()}
  reopenLater(){if(this.reopenTimer||!this.device())return;this.reopenTimer=setTimeout(()=>{this.reopenTimer=null;if(this.device()&&this.opened?.ok!==true){this.io.send({op:'audio.close'});this.configure()}},TIMING.reopen);this.reopenTimer.unref?.()}
- meter(m){this.everMetered=true;this.levels=m.levels??{};this.input=m.input??null;if(m.channels)this.channels=m.channels;if(this.input!==null&&this.input>DEAD_DB)this.signalAt=Date.now();
+ meter(m){this.everMetered=true;if(this.lost){this.engine.log(`Sound input back · ${this.device()} (lost since ${this.lost.at})`);this.lost=null}this.levels=m.levels??{};this.input=m.input??null;if(m.channels)this.channels=m.channels;if(this.input!==null&&this.input>DEAD_DB)this.signalAt=Date.now();
   // Only once this helper has shown it meters the open input do we watch for the meter stopping.
   this.metered=true;clearTimeout(this.staleTimer);this.staleTimer=setTimeout(()=>{this.staleTimer=null;if(this.opened?.ok&&this.metered)this.failed('Audio input: no audio callbacks for '+TIMING.stale/1000+' s')},TIMING.stale);this.staleTimer.unref?.()}
  // The device list changed (hot-plug every 2 s). "System default input" follows the Mac's Sound settings, so when macOS
@@ -74,7 +77,7 @@ export class Sound{
  devicesChanged(m){const def=(m.audio??[]).find(d=>d.name===DEFAULT_INPUT)?.device??null;
   if(this.device()===DEFAULT_INPUT&&this.defaultDevice&&def!==this.defaultDevice)this.engine.log(`Sound input: the Mac's default input changed from ${this.defaultDevice} to ${def??'none'}, and the sound triggers follow it`);
   this.defaultDevice=def;this.configure()}
- stopped(){this.opened=null;this.input=null;this.levels={};this.metered=false;clearTimeout(this.staleTimer);this.staleTimer=null;this.letGo(true,'the helper stopped')}
+ stopped(){this.lost=null;this.opened=null;this.input=null;this.levels={};this.metered=false;clearTimeout(this.staleTimer);this.staleTimer=null;this.letGo(true,'the helper stopped')}
  hit({id,level}){if(this.engine.show.masters.slots.find(m=>m.id===id)?.sound?.enabled===false)return;this.lastHit[id]={level:level??null,at:new Date().toISOString()};this.hits[id]=(this.hits[id]??0)+1;try{this.engine.soundHit(id);this.engine.tick();this.engine.mods?.changed()}catch(e){this.engine.log('Sound trigger: '+e.message)}}
  async command(name,args){
   if(name==='sound.meter'){
@@ -95,7 +98,7 @@ export class Sound{
  // What the desk banner and the pre-show check should say about the input right now.
  health(){
   const dev=this.device(),out=[],n=this.triggers().length;if(!dev)return out;
-  if(this.opened&&!this.opened.ok)out.push({id:'sound-input',level:'error',message:`Sound input ${dev} is not working: ${this.opened.error??'it did not open'}. Retrying every ${TIMING.reopen/1000} s.`});
+  if(this.lost||this.opened&&!this.opened.ok)out.push({id:'sound-input',level:'error',message:`Sound input ${dev} is not working: ${this.lost?.error??this.opened.error??'it did not open'}. Retrying every ${TIMING.reopen/1000} s.`});
   else if(n&&this.silentFor()*1000>=TIMING.deadAfter)out.push({id:'sound-silent',level:'warn',message:`No audio at all on ${dev} since ${new Date(this.signalAt).toLocaleTimeString()}: check the Dante feed (Dante Controller, the console's Dante card).`});
   if(dev===DEFAULT_INPUT)out.push({id:'sound-default',level:'warn',message:`Sound triggers follow the Mac's default input${this.defaultDevice?` (now ${this.defaultDevice})`:''}: choose the device by name so a change in macOS cannot move them.`});
   return out;

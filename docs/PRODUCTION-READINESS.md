@@ -12,7 +12,7 @@ This update changes the engine, so it needs one engine restart. Do it between se
 2. Once this version is running, Resume and the hot-load paths below cover later fixes. The engine running today has none of them, so it cannot pick any of this up live.
 3. Do not copy only the new desk files into the app running today. The new desk sends `output.arm {keepLook}` and `masters.own`, which the old engine refuses.
 4. Rebuild the app so it bundles the new `stagelight-io` helper. The engine-side fixes work with the old helper too: it reopens the lost input itself, and only the per-channel meter needs the new helper.
-5. The face lights get an intensity limit of 12% the first time the show loads (see *Intensity limits*). *Special · light up* has ten face lights at 18%, so it will look dimmer on those ten.
+5. The face lights get an intensity limit of 12% the first time the show loads: the `face-lights` group and `face-unpatched` (42–44, which are still sent DMX). See *Intensity limits*. *Special · light up* has ten face lights at 18%, so it will look dimmer on those ten.
 
 ## What changed
 
@@ -30,7 +30,7 @@ At 02:14:57 on 2026-11-01, seven Art-Net sends failed at once with `EADDRNOTAVAI
 
 At 02:15:06, nine seconds after the network blip, the helper logged *"The requested device is no longer available"*. When Dante came back, the engine asked the helper to open the same device. The helper reused the dead stream, so the triggers stayed deaf until the engine restarted. The same thing happened at 02:56:28. This is the likely cause of "Dante has no audio".
 
-- **The engine reopens the input.** On the helper's input error, or when its meter (sent about 15 times a second while an input is open) stops for 3 s, the engine closes the input and opens it fresh every 2 s until it works. It logs the loss, each new kind of failure, and the recovery.
+- **The engine reopens the input.** On the helper's input error, or when its meter (sent about 15 times a second while an input is open) stops for 3 s, the engine closes the input and opens it fresh every 2 s until it works. An input that opens but never delivers audio (a Dante card without its clock) counts as lost too. The loss is logged once and stays in `runtime.health` through every reopen until audio actually arrives, then `Sound input back` is logged.
 - **The helper no longer reuses a dead stream** (`src-tauri/io/src/main.rs`, the `alive` flag). This needs an app rebuild.
 - **A crashed helper restarts itself** after 1, 2, 5, then 10 s, at most 5 times a minute. Its device list then makes the sound and MIDI modules reopen their input and ports.
 - **Follow cues are never left up for good.** A follow trigger's cue is let go when no level arrives for 2 s (input or helper gone), when the module turns off, and, as already in the baseline, when the trigger is switched off.
@@ -56,14 +56,15 @@ Arming was refused whenever anything played, so getting the rig back took `cue.s
 - **Arm with the current look.** `output.arm {confirmation, keepLook:true}` arms with what the preview shows, with no stop and no dark gap. The arm dialog offers **Arm with this look** (or **Stop everything, then arm**) whenever something runs.
 - **The live-state file records more.** It now holds every running cue with its position, master levels, the programmer and its effects, kills and blackout, besides the scene, page, master, tempo and lock.
 - **A deliberate restart offers Resume too.** Stopping the engine while armed, with *keep the last look* on, offers Resume (`runtime.resume.reason: "restart"`) for 30 minutes. A crash offers it as before.
-- **Resume restores everything first and arms output last,** so the first packet out is the whole look. It no longer fires the page entry's sends: the old resume re-sent ProPresenter its MIDI note. `resume.apply` returns how many cues came back and which are no longer in the show.
+- **What Resume leaves out.** A cue a held flash started (a key or a sound hit) is a moment, not part of the look, so it is not restored: nothing would let go of it. A follow trigger's cue comes back with the sound itself.
+- **Resume restores everything else first and arms output last,** so the first packet out is the whole look. It no longer fires the page entry's sends: the old resume re-sent ProPresenter its MIDI note. `resume.apply` returns how many cues came back and which are no longer in the show.
 
 ### Intensity limits (operator rule: face lights at most 12%)
 
 - **The cap.** `limit.set {group, max}` / `lights_limit_set` caps a group's output. It applies after the grand master, park and kills, over every cue, scene, master, the programmer, Highlight and the preview. Blackout and kills still reach zero.
 - **Overlaps and edits.** A fixture in several limited groups takes the lowest limit. Deleting a group drops its limit. Changing limits is a show edit, so the performance lock refuses it.
 - **Where it lives.** Limits are saved in `show.limits`, listed in the pre-show check, and set on the desk with **Limit intensity…** in the group's right-click menu.
-- **Migration.** A show that has never had limits and has a `face-lights` group gets `face-lights` at 0.12, once. An operator who later removes it keeps it removed.
+- **Migration.** A show that has never had limits gets 0.12, once, on `face-lights` and on `face-unpatched` (42–44 are Rêve E-3 face lights, enabled and verified, kept out of `face-lights` while faulty). An operator who later removes a limit keeps it removed.
 
 ### Audit log (medium)
 
@@ -142,6 +143,16 @@ Measured on a copy of the live show (171 fixtures), Apple silicon, Node 26. The 
 | Low | A stale `engine.pid` with a reused PID | The watchdog would think the engine is alive and not restart it. Only after a crash and a PID collision. |
 | Low | The meter watchdog needs meter messages | The engine treats a stopped meter as a lost stream only after the helper has sent at least one meter for the open input, so helpers that never meter are never closed by it. |
 | Low | Resume restarts timed cues at their saved position | The position is from the last live-state write (at most a second old), not compensated for the restart time. |
+
+## Independent review
+
+An independent review of the engine diff found five bugs, now fixed and tested:
+
+1. **A held flash latched on by Resume.** A cue a flash or sound hit was holding at the moment of the snapshot came back for good on Resume.
+2. **A follow cue Resume left up.** A follow trigger's cue restored by Resume was never released by silence.
+3. **Face lights 42–44 missed the 12% limit.** They were outside `face-lights`.
+4. **Input-loss log churn.** A dead-clock input logged two lines every five seconds and its health error flapped.
+5. **A stuck bump.** A bump outlived its master being cleared, re-assigned or removed while held.
 
 ## New commands (MCP)
 

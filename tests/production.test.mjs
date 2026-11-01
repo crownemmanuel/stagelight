@@ -72,7 +72,8 @@ test('a lost sound input is closed and reopened until it works, instead of the h
   sent.length=0;await until(()=>sent.some(m=>m.op==='audio.open'));say({ev:'audio',ok:false,device:'Dante Virtual Soundcard',error:'“Dante Virtual Soundcard” is not connected'});
   assert.equal(e.logs.filter(l=>/did not open/.test(l.message)).length,1,'the same failure is logged once');
   sent.length=0;await until(()=>sent.some(m=>m.op==='audio.open'));say({ev:'audio',ok:true,device:'Dante Virtual Soundcard',channels:64});
-  assert.deepEqual(e.runtime().health,[]);assert.ok(e.logs.some(l=>/Sound input open again/.test(l.message)));const n=sent.length;await wait(150);assert.equal(sent.length,n,'no more retries once open');
+  assert.equal(e.runtime().health[0]?.id,'sound-input','open again, but lost until audio actually arrives');say({ev:'meter',input:-22,levels:{}});
+  assert.deepEqual(e.runtime().health,[]);assert.ok(e.logs.some(l=>/Sound input back · Dante Virtual Soundcard/.test(l.message)));const n=sent.length;await wait(150);assert.equal(sent.length,n,'no more retries once open');
  }finally{await restore()}
 });
 
@@ -327,4 +328,36 @@ test('after a helper crash the APC40 and the virtual StageLight port come back o
   assert.ok(sent.some(m=>m.op==='midi.virtual'&&m.name==='StageLight'),'the virtual port is made again');assert.ok(sent.some(m=>m.op==='midi.open'&&m.id==='apc'),'the APC40 is opened again');
   assert.ok(sent.some(m=>m.op==='midi.send'&&m.port==='apc'),'and put back in Ableton Live mode with its LEDs');assert.ok(e.logs.filter(l=>l.message==='APC40 mkII connected').length>=2);
  }finally{BACKOFF.splice(0,4,...saved);await e.command('modules.set',{midi:{enabled:false}})}
+});
+
+// ── Found by the independent review (2026-11-01) ──
+test('resume never brings back a held flash or a follow trigger\'s cue; the cue list and toggles still come back',async()=>{
+ const dir=tmp();try{const {e,at}=rig({dataDir:dir});await e.command('master.set',{value:1});
+  await e.command('cue.save',{cue:look('kick',['401'])});await e.command('cue.save',{cue:look('pad',['402'])});await e.command('cue.save',{cue:look('keep',['403'])});
+  await e.command('masters.assign',{slot:'m2',cue:'kick'});await e.command('masters.assign',{slot:'m3',cue:'pad',sound:{channel:2,mode:'follow'}});await e.command('masters.assign',{slot:'m4',cue:'keep',action:'toggle'});
+  await e.command('output.arm',{confirmation:'ENABLE_PHYSICAL_OUTPUT'});await e.command('masters.trigger',{slot:'m2',down:true});await e.command('masters.level',{slot:'m3',level:.33});await e.command('masters.trigger',{slot:'m4',down:true});at(.1);
+  const snap=e.liveSnapshot();assert.deepEqual(snap.running.map(r=>r.cue),['keep'],'the held kick and the follow pad are moments, not the look');assert.deepEqual(snap.levels,{});
+  await e.close();const b=new Engine({dataDir:dir,output:output(),clock:()=>1});await b.command('resume.apply',{confirmation:'ENABLE_PHYSICAL_OUTPUT'});b.tick();
+  assert.deepEqual(b.running().map(r=>r.cue.id),['keep']);assert.equal(b.frames.find(f=>f.id==='401').intensity,0);
+  for(let i=0;i<3;i++){await b.command('masters.trigger',{slot:'m2',down:true});await b.command('masters.trigger',{slot:'m2',down:false})}b.tick();assert.equal(b.frames.find(f=>f.id==='401').intensity,0,'the kick flashes and lets go as normal');
+ }finally{fs.rmSync(dir,{recursive:true,force:true})}
+});
+
+test('a bump never outlives its master being cleared, re-assigned or removed while held',async()=>{
+ const {e,at,frame}=rig();await e.command('master.set',{value:1});await e.command('cue.save',{cue:look('back',['401'])});
+ await e.command('masters.assign',{slot:'m3',cue:'back',action:'go'});await e.command('masters.assign',{slot:'m2',cue:'back'});await e.command('masters.trigger',{slot:'m3',down:true});await e.command('masters.level',{slot:'m3',level:.3});
+ await e.command('masters.trigger',{slot:'m2',down:true});at(.1);assert.equal(frame('401').intensity,1);
+ await e.command('masters.assign',{slot:'m2',clear:true});await e.command('masters.trigger',{slot:'m2',down:false});await e.command('masters.level',{slot:'m3',level:.2});at(.2);assert.equal(frame('401').intensity,.2);assert.equal(e.bumps.size,0);
+ await e.command('masters.assign',{slot:'m2',cue:'back'});await e.command('masters.trigger',{slot:'m2',down:true});const slots=e.show.masters.slots.filter(m=>m.id!=='m2');await e.command('masters.save',{slots});
+ assert.equal(e.bumps.size,0,'removing the slot drops its bump');await assert.rejects(e.command('masters.trigger',{slot:'m2',down:false}),/Unknown master/);at(.3);assert.equal(frame('401').intensity,.2);
+});
+
+test('face lights kept out of face-lights while faulty (face-unpatched, 42–44) get the 12% limit too; a dead-clock input logs its loss once',async()=>{
+ const {migrate}=await import('../engine/model.mjs');const show=JSON.parse(fs.readFileSync('data/show.json','utf8'));delete show.limits;const face=show.groups.find(g=>g.id==='face-lights');
+ if(face){show.groups.push({id:'face-unpatched',name:'42–44 not responding',fixtures:[face.fixtures.at(-1)]});face.fixtures=face.fixtures.slice(0,-1);assert.deepEqual(migrate(show).limits,[{group:'face-lights',max:.12},{group:'face-unpatched',max:.12}])}
+ const {e,say,restore}=await soundRig({stale:40,reopen:20},{mute:true});try{
+  say({ev:'audio',ok:true,device:'Dante Virtual Soundcard',channels:64});say({ev:'meter',input:-20,levels:{}});
+  for(let i=0;i<4;i++){await wait(80);say({ev:'audio',ok:true,device:'Dante Virtual Soundcard',channels:64})}
+  assert.equal(e.logs.filter(l=>/Sound input lost/.test(l.message)).length,1,'lost once');assert.equal(e.logs.filter(l=>/open again/.test(l.message)).length,0);assert.equal(e.runtime().health[0]?.id,'sound-input','the error stays up through the reopens');
+ }finally{await restore()}
 });

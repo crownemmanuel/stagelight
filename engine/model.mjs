@@ -93,9 +93,10 @@ export function migrate(show){
  show.settings.modules??={sound:{enabled:false},midi:{enabled:false,virtualPort:true}};
  syncGroups(show);
  // Intensity limits (docs/PRODUCTION-READINESS.md): the operator's standing rule is that the face lights never go above
- // 12% (2026-11-01). A show that has never had limits gets that one, once, if it has the face-lights group; after that
- // show.limits is the operator's to change (limit.set).
- if(show.limits===undefined&&show.groups.some(g=>g.id==='face-lights'))show.limits=[{group:'face-lights',max:.12}];
+ // 12% (2026-11-01). A show that has never had limits gets that for the face-lights group and for face-unpatched (42–44,
+ // Rêve E-3 heads kept out of face-lights while they are faulty, but still sent DMX), once; after that show.limits is
+ // the operator's to change (limit.set).
+ if(show.limits===undefined){const face=['face-lights','face-unpatched'].filter(id=>show.groups.some(g=>g.id===id));if(face.length)show.limits=face.map(group=>({group,max:.12}))}
  return show;
 }
 const track=(group,effect,start,duration,params={})=>({group,effect,start,duration,params,fadeIn:1,fadeOut:1});

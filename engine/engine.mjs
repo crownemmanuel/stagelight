@@ -252,6 +252,9 @@ export class Engine{
  // Masters (docs/MASTERS-AND-SCENES.md): a slot holds a cue and an action. Keyboard, mouse, MCP and OSC all press it here.
  // Cues start on top of whatever runs, keeping the programmer and the page stack. A flash only lets go of a cue it started.
  masterTrigger(id,down){
+  // A let-go always drops this slot's bump first, even for a slot cleared, re-assigned or removed while held, so a bump
+  // can never stay behind holding a shared cue at full.
+  if(!down)this.bumps.delete(id);
   const slots=this.show.masters.slots,slot=slots.find(x=>x.id===id);if(!slot)throw Error('Unknown master '+id);
   if(!slot.cue){if(down)throw Error(`Master ${slots.indexOf(slot)+1} has no cue`);return}
   const cue=this.show.cues.find(c=>c.id===slot.cue),run=this.running().find(l=>l.cue.id===slot.cue),fade=slot.fade??0;
@@ -634,7 +637,7 @@ export class Engine{
    case 'masters.assign':{if(args.cue&&!this.show.cues.some(c=>c.id===args.cue))throw Error('Unknown cue '+args.cue);
     this.update(s=>{const m=masterSlot(s,args.slot);if(args.clear){delete m.cue;delete m.label}if(args.cue)m.cue=args.cue;if(args.action)m.action=args.action;if(args.fade!==undefined)m.fade=args.fade;if(args.label!==undefined){if(args.label)m.label=args.label;else delete m.label}
      if(args.color)m.color=args.color;if(args.clearColor)delete m.color;if(args.priority!==undefined){if(args.priority)m.priority=true;else delete m.priority}if(args.soloKill!==undefined){if(args.soloKill)m.soloKill=true;else delete m.soloKill}if(args.sound)m.sound=args.sound;if(args.clearSound)delete m.sound;if(args.midi)m.midi=args.midi;if(args.clearMidi)delete m.midi});
-    if(args.clear||args.cue)this.flashes.delete(args.slot);if(args.sound||args.clearSound||args.clear)await this.mods?.sound?.configure();break}
+    if(args.clear||args.cue){this.flashes.delete(args.slot);this.bumps.delete(args.slot)}if(args.sound||args.clearSound||args.clear)await this.mods?.sound?.configure();break}
    case 'masters.level':this.masterLevel(args.slot,args.level,args.go??true);break;
    case 'limit.set':{const g=this.show.groups.find(x=>x.id===args.group);if(!g)throw Error('Unknown group '+args.group);const max=args.max??1;
     this.update(s=>{const rest=(s.limits??[]).filter(l=>l.group!==g.id);s.limits=max<1?[...rest,{group:g.id,max}]:rest});this.log(max<1?`Intensity limit · ${g.name} at most ${Math.round(max*100)}%`:`Intensity limit removed · ${g.name}`);created={limits:this.show.limits};break}
@@ -670,7 +673,7 @@ export class Engine{
    case 'controller.save':this.update(s=>{const list=s.controllers??=[];let c=list.find(x=>x.id===args.id);if(!c)list.push(c={id:args.id,model:args.model??'apc40mk2',map:{}});Object.assign(c.map,args.map??{});for(const k of ['name','deskNumbers','deskColors'])if(args[k])c[k]=args[k]});this.mods?.changed(true);break;
    case 'controller.reset':this.update(s=>{s.controllers=(s.controllers??[]).filter(c=>c.id!==args.id)});this.mods?.changed(true);break;
    case 'masters.key':{if(!args.clear&&!args.key)throw Error('Give a key, or clear:true');this.update(s=>setMasterKey(s,args.slot,args.clear?null:args.key,args.conflict));break}
-   case 'masters.save':this.update(s=>{if(args.slots)s.masters.slots=args.slots;if(args.desk)s.masters.desk=args.desk});for(const id of [...this.flashes.keys()])if(!this.show.masters.slots.some(m=>m.id===id&&m.cue===this.flashes.get(id)))this.flashes.delete(id);break;
+   case 'masters.save':this.update(s=>{if(args.slots)s.masters.slots=args.slots;if(args.desk)s.masters.desk=args.desk});for(const id of [...this.flashes.keys()])if(!this.show.masters.slots.some(m=>m.id===id&&m.cue===this.flashes.get(id)))this.flashes.delete(id);for(const [id,cue] of [...this.bumps])if(!this.show.masters.slots.some(m=>m.id===id&&m.cue===cue))this.bumps.delete(id);break;
    case 'effect.preview':{
     const cue={id:'ad-hoc',name:'Unsaved effect',duration:args.duration??20,loop:true,tracks:[{group:args.group,effect:args.effect,start:0,duration:args.duration??20,params:args.params,fadeIn:.5,fadeOut:.5}]};
     const probe=copy(this.show);probe.cues.push(cue);validateShow(probe);this.overrides={};this.fx=[];this.release=null;this.stack=null;this.startCue(cue);break;}
@@ -905,16 +908,19 @@ export class Engine{
  // What is live, for a resume after a crash or restart (docs/SHOW-SAFETY.md): every running cue with its position, master
  // levels, the programmer and its effects, kills and blackout as well as the scene, page, master, tempo and lock.
  liveSnapshot(){const st=this.stack;return {clean:false,at:new Date().toISOString(),armed:!!this.output.armed,scene:this.scene?.id??null,stack:st?{page:st.page,entry:st.entry}:null,master:this.master,tempo:this.tempo.bpm,locked:this.locked,
-  running:this.running().map(r=>({cue:r.cue.id,...(r.master?{master:r.master}:{}),...(r.page?{page:r.page,entry:r.entry}:{}),at:+this.sourceTime(r,true).toFixed(3),...(r.paused?{paused:true}:{})})),
-  levels:Object.fromEntries(this.levels),faderOwned:[...this.faderOwned],overrides:this.overrides,fx:this.fx.map(({started,...x})=>x),kills:[...this.kills.values()],blackout:this.blackout}}
+  // A cue a held flash started (a key or a sound hit) is a moment, not part of the look: resumed, nothing would let go of
+  // it. A follow trigger's cue comes back with the sound itself.
+  running:this.running().filter(r=>!(r.master&&(this.flashes.get(r.master)===r.cue.id||this.followSlot(r.master)))).map(r=>({cue:r.cue.id,...(r.master?{master:r.master}:{}),...(r.page?{page:r.page,entry:r.entry}:{}),at:+this.sourceTime(r,true).toFixed(3),...(r.paused?{paused:true}:{})})),
+  levels:Object.fromEntries([...this.levels].filter(([id])=>!this.followSlot(id))),faderOwned:[...this.faderOwned].filter(id=>!this.followSlot(id)),overrides:this.overrides,fx:this.fx.map(({started,...x})=>x),kills:[...this.kills.values()],blackout:this.blackout}}
+ followSlot(id){const s=this.show.masters.slots.find(m=>m.id===id)?.sound;return s?.mode==='follow'&&s.enabled!==false}
  // Put back what liveSnapshot saved, without firing any cue's sends (no MIDI note to ProPresenter, no Look Link): the
  // show already did them. Cues start where they were, oldest first, so the look matches what the rig held.
  restoreLive(r){
   const index=fixtureIndex(this.show),cues=new Map(this.show.cues.map(c=>[c.id,c])),missing=[];
   const list=r.running??(r.stack?[{cue:this.show.pages.find(p=>p.id===r.stack.page)?.cues.find(e=>e.id===r.stack.entry)?.cue,page:r.stack.page,entry:r.stack.entry,at:0}]:[]);
-  for(const x of list){const cue=cues.get(x.cue);if(!cue){if(x.cue)missing.push(x.cue);continue}this.startCue(cue,{keep:true});const p=this.playback;p.offset=Math.max(0,x.at??0);p.started=this.clock();p.paused=!!x.paused;if(x.master)p.master=x.master;if(x.page){p.page=x.page;p.entry=x.entry}}
+  for(const x of list){const cue=cues.get(x.cue);if(x.master&&this.followSlot(x.master))continue;if(!cue){if(x.cue)missing.push(x.cue);continue}this.startCue(cue,{keep:true});const p=this.playback;p.offset=Math.max(0,x.at??0);p.started=this.clock();p.paused=!!x.paused;if(x.master)p.master=x.master;if(x.page){p.page=x.page;p.entry=x.entry}}
   const pg=r.stack&&this.show.pages.find(p=>p.id===r.stack.page),i=pg?pg.cues.findIndex(e=>e.id===r.stack.entry):-1;if(i>=0)this.stack={page:pg.id,entry:r.stack.entry,index:i};
-  const slots=new Set(this.show.masters.slots.map(m=>m.id));this.levels=new Map(Object.entries(r.levels??{}).filter(([id])=>slots.has(id)));this.faderOwned=new Set((r.faderOwned??[]).filter(id=>slots.has(id)));
+  const slots=new Set(this.show.masters.slots.map(m=>m.id));this.levels=new Map(Object.entries(r.levels??{}).filter(([id])=>slots.has(id)&&!this.followSlot(id)));this.faderOwned=new Set((r.faderOwned??[]).filter(id=>slots.has(id)&&!this.followSlot(id)));
   this.overrides=Object.fromEntries(Object.entries(r.overrides??{}).filter(([id])=>index.has(id)));
   this.fx=(r.fx??[]).map(x=>({...x,fixtures:x.fixtures.filter(id=>index.has(id)),started:this.clock()})).filter(x=>x.fixtures.length&&EFFECTS[x.effect]);
   for(const k of r.kills??[])if(k.group?this.show.groups.some(g=>g.id===k.group):slots.has(k.slot))this.kills.set(k.group?'group:'+k.group:'slot:'+k.slot,k);this.killVersion++;
