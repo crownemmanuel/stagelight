@@ -2,8 +2,9 @@
 import fs from 'node:fs';import path from 'node:path';
 
 // Timestamped copies of the show in <data>/versions: at most one per five minutes of edits, and always before an import
-// or a restore and when the performance lock goes on. Keeps the newest 50 plus the last one of each older day.
-const KEEP=50,EVERY=300;
+// or a restore and when the performance lock goes on. Keeps the newest 50 plus the last one of each older day for 90
+// days, so the folder stops growing (it was one more ~300 kB file a day for ever).
+const KEEP=50,EVERY=300,DAYS=90;
 const stamp=d=>d.toISOString().replace(/[:.]/g,'-');
 export class Versions{
  constructor(dir,clock){this.dir=dir?path.join(dir,'versions'):null;this.clock=clock;this.last=-Infinity}
@@ -21,7 +22,7 @@ export class Versions{
  read(id){const f=this.dir&&/^[\w.-]{1,120}$/.test(id)&&path.join(this.dir,id+'.json');if(!f||!fs.existsSync(f))throw Error('Unknown show version '+id);return JSON.parse(fs.readFileSync(f,'utf8'))}
  prune(){
   const all=this.list(),keep=new Set(all.slice(0,KEEP).map(v=>v.id)),days=new Set();
-  for(const v of all.slice(KEEP)){const day=v.at?.slice(0,10);if(day&&!days.has(day)){days.add(day);keep.add(v.id)}}
+  const oldest=new Date(Date.now()-DAYS*864e5).toISOString().slice(0,10);for(const v of all.slice(KEEP)){const day=v.at?.slice(0,10);if(day&&day>=oldest&&!days.has(day)){days.add(day);keep.add(v.id)}}
   for(const v of all)if(!keep.has(v.id))fs.rmSync(path.join(this.dir,v.id+'.json'),{force:true});
  }
 }

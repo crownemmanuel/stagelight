@@ -10,5 +10,6 @@ Kill turns lights off over everything, for a moment, without touching what runs 
   - `kill.set {group | slot, killed?}` / `lights_kill_set` toggles a kill when `killed` is omitted.
   - `kill.clear` / `lights_kill_clear` brings everything back.
   - `runtime.kills` lists what is killed.
-- **Live only.** Kills are never saved in the show, recorded into cues or scenes, or restored after a restart. They work under the performance lock.
+- **Live only.** Kills are never saved in the show, recorded into cues or scenes, or restored at startup. Resume after a restart (docs/SHOW-SAFETY.md) puts them back with the rest of the look (2026-11-01). They work under the performance lock.
+- **Shared cues.** A flash on a master whose cue another master holds now bumps that cue (docs/MASTERS-AND-SCENES.md), so its fixtures punch through a kill too.
 - **Cost.** With no kills, nothing is added to the tick. With kills, the killed set is computed once per show change, and the tick does one set lookup per fixture.

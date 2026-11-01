@@ -22,7 +22,12 @@ test('A full tick over the 232-fixture show with effects, a scene, a held flash,
  await e.command('preview.cue',{id:'perf'});await e.command('blind.set',{enabled:true});await e.command('fixture.set',{ids:['401','402'],values:{intensity:1}});
  await e.command('zone.save',{zone:{id:'perf-zone',name:'Perf',role:'face',groups:['face-lights']}});
  await e.command('target.save',{target:{id:'perf-target',name:'Perf',kind:'osc',host:'10.0.0.9',port:9000,look:{mode:'change'}}});
+ // Production readiness (2026-11-01): the face lights' intensity limit (migrated in), a kill with a held flash punching
+ // through, and the health checks in runtime() are part of the budget too.
+ assert.deepEqual(e.show.limits,[{group:'face-lights',max:.12}]);await e.command('kill.set',{group:'rear-heads'});
  const ms=average(()=>{time+=1/30;e.lastWatch=-Infinity;e.tick()});
  assert.ok(ms<4,`tick took ${ms.toFixed(2)} ms`);
+ // The desk's delta stream (engine/stream.mjs) encodes each 10 Hz message from the runtime.
+ const {RuntimeStream}=await import('../engine/stream.mjs');const rs=new RuntimeStream();const delta=average(()=>{time+=1/10;e.tick();rs.next(e.runtime())},50);assert.ok(delta<4,`delta stream message took ${delta.toFixed(2)} ms`);
  const stringify=average(()=>JSON.stringify(e.runtime()));assert.ok(stringify<2,`runtime serialisation took ${stringify.toFixed(2)} ms`);
 });

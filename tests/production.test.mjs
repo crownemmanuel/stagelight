@@ -301,3 +301,10 @@ test('MCP lists the production-readiness tools with their schemas and read-only 
  assert.deepEqual(tools.lights_limit_set.inputSchema.required,['group']);
  const {SHOW_EDITS}=await import('../engine/spec.mjs');for(const n of ['masters.own','limit.set'])assert.ok(SHOW_EDITS.has(n),n+' is refused under the performance lock');for(const n of ['show.autosave','modules.reload','masters.status'])assert.ok(!SHOW_EDITS.has(n),n);
 });
+
+test('show versions keep the newest 50 and one a day for 90 days, then stop growing',async()=>{
+ const {Versions}=await import('../engine/safety.mjs');const dir=tmp();try{const v=new Versions(dir,()=>0);fs.mkdirSync(path.join(dir,'versions'));
+  const day=n=>new Date(Date.now()-n*864e5).toISOString().replace(/[:.]/g,'-');for(let n=1;n<=200;n++)fs.writeFileSync(path.join(dir,'versions',`${day(n)}-edits.json`),'{}');
+  v.snapshot({version:1},'edits');const left=v.list();assert.ok(left.length<=50+91,`${left.length} kept`);assert.ok(left.every(x=>Date.now()-Date.parse(x.at)<91*864e5),'nothing older than 90 days');assert.ok(left.length>=50);
+ }finally{fs.rmSync(dir,{recursive:true,force:true})}
+});
