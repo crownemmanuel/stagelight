@@ -10,9 +10,12 @@ import {hiddenFixtureIds} from '../public/visibility.js';
 import {OSC_ADDRESSES} from './osc-routes.mjs';
 import {COMMANDS,SHOW_EDITS,validate,validateShow,validateWheelAttributes,groupDescendants} from './spec.mjs';
 import {Versions,LiveState} from './safety.mjs';
+import {ShowFiles,showHash} from './show-files.mjs';
 import {render,compose,applyOverrides,finish,blend,blendState,encode,layerEffect,trackFixtures} from './render.mjs';
 import {Output,validateNetwork,checkConnection} from './output.mjs';
 const copy=x=>structuredClone(x);
+// Show in Finder: select the file, or open the folder. Never waits on Finder.
+const reveal=(p,file)=>{if(process.platform!=='darwin')throw Error('Show in Finder works on macOS only: the file is at '+p);import('node:child_process').then(({spawn})=>spawn('open',file?['-R',p]:[p],{stdio:'ignore',detached:true}).unref())};
 // Master slots and their keys (show.masters). A key is on one slot or one desk shortcut at most.
 const DESK_KEYS={highlight:'Highlight',clear:'Clear',blackout:'Blackout',tap:'Tap tempo'};
 const keyName=k=>k.split('+').map(p=>p.length===1?p.toUpperCase():p[0].toUpperCase()+p.slice(1)).join('+');
@@ -38,12 +41,14 @@ const targetHost=t=>{if(t.kind==='osc')return t.host;try{return new URL(t.url).h
 export const MOVING=['rogue','mh7','beam200','beam7r'];
 export const MEDIA_TYPES={'.png':'image','.jpg':'image','.jpeg':'image','.webp':'image','.gif':'image','.mp4':'video','.webm':'video','.mov':'video','.m4v':'video'};
 export class Engine{
- constructor({dataDir,output,clock=()=>performance.now()/1000}={}){
+ constructor({dataDir,showsDir,output,clock=()=>performance.now()/1000}={}){
   this.dir=dataDir;this.clock=clock;this.logs=[];this.output=output??new Output(m=>this.log(m));this.show=defaults();const seed=new URL('../show-template.json',import.meta.url);if(fs.existsSync(seed)){this.show=migrate(JSON.parse(fs.readFileSync(seed,'utf8')));validateShow(this.show)}
   if(dataDir){fs.mkdirSync(dataDir,{recursive:true});const file=path.join(dataDir,'show.json');if(fs.existsSync(file)){const raw=JSON.parse(fs.readFileSync(file,'utf8')),added=!raw.pages;this.show=migrate(raw);validateShow(this.show);if(added)this.save()}else this.save();}
   this.layers=[];this.highlight=false;this.find=null;this.scene=null;this.flashes=new Map();this.bumps=new Set();this.tempo={bpm:null,source:null,taps:[],anchor:null};this.levels=new Map();this.faderOwned=new Set();this.mods=null;this.soundHolds=new Map();this.agents=new Map();this.net={in:[],out:[],count:{in:0,out:0,rejected:0},listener:{listening:false},presets:{}};this.looks=new Map();this.presetBursts=new Map();this.presetAsks=new Map();this.sendHook=null;this.onNetworkChange=null;this.selection={ids:[],group:'backlights',revision:0};this.lampCommands=new Map();this.revision=1;this.playback=null;this.overrides={};this.fx=[];this.master=.8;this.blackout=false;this.held=null;this.fading=null;this.transition=null;this.stack=null;this.release=null;this.programmed=null;this.raw=null;this.preview=null;this.previewFrames=null;this.blind=false;this.blindOverrides={};this.blindRelease=null;this.blindStates=null;this.fxPreview=null;this.requests=new Map();this.listeners=new Set();this.tickCount=0;this.dropped=0;this.lastTick=null;this.frames=render(this.show,null,0);this.log('Engine ready in preview. Physical output is disarmed.');
   // Show safety (docs/SHOW-SAFETY.md): the lock survives a restart; an unclean live-state file becomes an offer to resume.
-  this.versions=new Versions(dataDir,()=>this.clock());this.live=new LiveState(dataDir);const prev=this.live.read();this.locked=!!prev?.locked;
+  this.versions=new Versions(dataDir,()=>this.clock());this.live=new LiveState(dataDir);
+  // Show files: savedRevision is the revision last saved to or opened from the current file; any other revision is unsaved.
+  this.files=new ShowFiles(dataDir,showsDir);this.savedRevision=this.files.current?.hash===showHash(this.show)?this.revision:-1;const prev=this.live.read();this.locked=!!prev?.locked;
   this.resume=prev&&!prev.clean&&(prev.armed||prev.scene||prev.stack)?prev:null;if(this.resume)this.log('The engine restarted unexpectedly during a show: offering to resume.');
  }
  save(){if(!this.dir)return;const f=path.join(this.dir,'show.json');fs.writeFileSync(f+'.tmp',JSON.stringify(this.show,null,2));fs.renameSync(f+'.tmp',f)}
@@ -427,8 +432,11 @@ export class Engine{
  }
  // Agents count as connected while their MCP server keeps saying hello (every 10 s).
  connectedAgents(){const now=this.clock();for(const [k,a] of this.agents)if(now-a.lastSeen>30)this.agents.delete(k);return [...this.agents.values()].map(a=>({client:a.client,version:a.version,connectedFor:Math.round(now-a.connectedAt)}))}
- runtime(){return {agents:this.connectedAgents(),selection:copy(this.selection),lampCommands:Object.fromEntries([...this.lampCommands].map(([id,p])=>[id,{action:p.action,remaining:Math.max(0,p.until-this.clock())}])),revision:this.revision,running:this.runningStatus(),highlight:this.highlight,find:this.findStatus(),parked:(this.show.parked??[]).map(p=>p.id),tempo:this.tempoStatus(),locked:this.locked,resume:this.resumeStatus(),...(this.mods?.live()??{}),scene:this.scene?{id:this.scene.id,name:this.scene.name}:null,masters:this.mastersStatus(),playback:this.playback?{id:this.playback.cue.id,name:this.playback.cue.name,duration:this.playback.cue.duration,loop:this.playback.cue.loop,hold:!!this.playback.cue.hold,paused:this.playback.paused,elapsed:Math.min(this.elapsed()% (this.playback.cue.loop?this.playback.cue.duration:Infinity),this.playback.cue.duration)}:null,stack:this.stackStatus(),net:{in:this.net.count.in,out:this.net.count.out,rejected:this.net.count.rejected,listening:!!this.net.listener.listening,last:this.net.in[0]?.address??null},preview:this.previewStatus(),fx:this.fx.map(x=>this.fxSummary(x)),fxPreview:this.fxSummary(this.fxPreview),blind:{enabled:this.blind,fixtures:Object.keys(this.blindOverrides),overrides:this.blindOverrides,release:this.blindRelease?{fixtures:Object.keys(this.blindRelease.frames),progress:Math.min(1,(this.clock()-this.blindRelease.start)/Math.max(.001,this.blindRelease.duration))}:null},previewFrames:this.previewFrames,transition:this.transition?{from:this.transition.from.cue?.id??null,duration:this.transition.duration,progress:Math.min(1,(this.clock()-this.transition.start)/Math.max(.001,this.transition.duration))}:null,release:this.release?{fixtures:Object.keys(this.release.frames),progress:Math.min(1,(this.clock()-this.release.start)/Math.max(.001,this.release.duration))}:null,master:this.master,blackout:this.blackout,overrides:this.overrides,frames:this.frames,output:this.output.status(),tickCount:this.tickCount,slowFrames:this.dropped,logs:this.logs.slice(-15)}}
+ runtime(){return {agents:this.connectedAgents(),showFile:this.showFileStatus(),selection:copy(this.selection),lampCommands:Object.fromEntries([...this.lampCommands].map(([id,p])=>[id,{action:p.action,remaining:Math.max(0,p.until-this.clock())}])),revision:this.revision,running:this.runningStatus(),highlight:this.highlight,find:this.findStatus(),parked:(this.show.parked??[]).map(p=>p.id),tempo:this.tempoStatus(),locked:this.locked,resume:this.resumeStatus(),...(this.mods?.live()??{}),scene:this.scene?{id:this.scene.id,name:this.scene.name}:null,masters:this.mastersStatus(),playback:this.playback?{id:this.playback.cue.id,name:this.playback.cue.name,duration:this.playback.cue.duration,loop:this.playback.cue.loop,hold:!!this.playback.cue.hold,paused:this.playback.paused,elapsed:Math.min(this.elapsed()% (this.playback.cue.loop?this.playback.cue.duration:Infinity),this.playback.cue.duration)}:null,stack:this.stackStatus(),net:{in:this.net.count.in,out:this.net.count.out,rejected:this.net.count.rejected,listening:!!this.net.listener.listening,last:this.net.in[0]?.address??null},preview:this.previewStatus(),fx:this.fx.map(x=>this.fxSummary(x)),fxPreview:this.fxSummary(this.fxPreview),blind:{enabled:this.blind,fixtures:Object.keys(this.blindOverrides),overrides:this.blindOverrides,release:this.blindRelease?{fixtures:Object.keys(this.blindRelease.frames),progress:Math.min(1,(this.clock()-this.blindRelease.start)/Math.max(.001,this.blindRelease.duration))}:null},previewFrames:this.previewFrames,transition:this.transition?{from:this.transition.from.cue?.id??null,duration:this.transition.duration,progress:Math.min(1,(this.clock()-this.transition.start)/Math.max(.001,this.transition.duration))}:null,release:this.release?{fixtures:Object.keys(this.release.frames),progress:Math.min(1,(this.clock()-this.release.start)/Math.max(.001,this.release.duration))}:null,master:this.master,blackout:this.blackout,overrides:this.overrides,frames:this.frames,output:this.output.status(),tickCount:this.tickCount,slowFrames:this.dropped,logs:this.logs.slice(-15)}}
  snapshot(){return {show:copy(this.show),runtime:this.runtime()}}
+ showFileStatus(){const c=this.files.current;return {name:c?.name??null,savedAt:c?.at??null,dirty:this.revision!==this.savedRevision}}
+ // Opening and importing replace the whole show; this Mac's network settings stay and the old show is kept as a version.
+ replaceShow(raw,reason){const next=migrate(copy(raw));next.settings=copy(this.show.settings);validateShow(next);if(this.dir&&reason==='before-import')fs.writeFileSync(path.join(this.dir,'show-before-import-'+Date.now()+'.json'),JSON.stringify(this.show,null,2));this.versions.snapshot(this.show,reason);this.resetLive();this.update(s=>{for(const k of Object.keys(s))delete s[k];Object.assign(s,next)})}
  update(fn){const next=copy(this.show);fn(next);if(next.groups?.some(g=>g.children))syncGroups(next);validateShow(next);this.show=next;this.revision++;this.save();this.versions.edited(this.show)}
  appendEntry(s,pageId,cue,fade=2,after){const page=s.pages.find(p=>p.id===pageId);if(!page)throw Error('Unknown page');const id=shortId('entry'),at=after?page.cues.findIndex(e=>e.id===after):-1;page.cues.splice(at<0?page.cues.length:at+1,0,{id,cue,fade,follow:'manual'});return id}
  // What is seen right now (blind view while blind), with master removed, as look entries. Highlight is never recorded.
@@ -469,14 +477,14 @@ export class Engine{
   // Sound trigger tuning (channel, band, sensitivity, hold, gap) is a live adjustment like a fader, so it stays open.
   const soundTuning=name==='masters.assign'&&Object.keys(args).every(k=>['slot','sound','clearSound'].includes(k));
   if(this.locked&&SHOW_EDITS.has(name)&&!soundTuning)throw Error('The performance lock is on: unlock it to change the show.');
-  if(name==='show.versions')return {versions:this.versions.list()};if(name==='show.check')return this.showCheck(args);if(name==='modules.status')return this.modulesStatus();if(name==='sound.inputs')return {inputs:this.show.audioInputs??[]};
+  if(name==='show.versions')return {versions:this.versions.list()};if(name==='show.files')return {folder:this.files.folder,current:this.showFileStatus(),files:this.files.list(args.query)};if(name==='show.check')return this.showCheck(args);if(name==='modules.status')return this.modulesStatus();if(name==='sound.inputs')return {inputs:this.show.audioInputs??[]};
   if(['sound.status','midi.status'].includes(name)){const m=this.mods?.[name.split('.')[0]];if(!m)throw Error(this.moduleOff(name.split('.')[0]));return m.status()}
   if(name==='agent.hello'){const known=this.agents.get(args.session);this.agents.set(args.session,{session:args.session,client:args.client,version:args.version??'',connectedAt:known?.connectedAt??this.clock(),lastSeen:this.clock()});if(!known)this.log(`Agent connected · ${args.client}${args.version?' '+args.version:''}`);return {ok:true}}
   if(name==='status')return this.snapshot();if(name==='visualizer.status')return this.visualizerStatus();if(name==='patch.report')return this.patchReport();if(name==='network.status')return this.networkStatus();if(name==='look.report')return this.lookReport(args);
   if(name==='output.status')return this.outputStatus();if(name==='output.check'){const c={...this.show.settings,...Object.fromEntries(Object.entries(args).filter(([,v])=>v))};this.lastCheck=await(this.output.check?this.output.check(c):checkConnection(c));this.log(`Connection check · ${c.target} · ${this.lastCheck.ok?'all good':this.lastCheck.steps.filter(x=>!x.ok).map(x=>x.id).join(', ')+' failed'}`);return this.lastCheck}
   if(name==='target.presets'){const t=this.targetById(args.id);if(args.refresh)this.askPresets(t);return {target:t.id,requested:!!args.refresh,...(this.net.presets[t.id]??{at:null,presets:[]})}}
  if(name==='schema')return {version:1,commands:COMMANDS,profiles:PROFILE_DEFS,effects:EFFECTS,presets:this.allPresets(),icons:ICONS,media:BUILTIN_MEDIA};let created;
-  if(this.output.armed&&['show.import','fixture.patch','output.configure','cue.seek','effect.preview'].includes(name))throw Error('Disarm physical output before this operation.');
+  if(this.output.armed&&['show.import','show.open','fixture.patch','output.configure','cue.seek','effect.preview'].includes(name))throw Error('Disarm physical output before this operation.');
   switch(name){
    case 'park.set':this.park(args);break;
    case 'find.start':this.findStart(args);break;
@@ -586,10 +594,20 @@ export class Engine{
    }
    case 'show.import':{
     if(!args.show||typeof args.show!=='object')throw Error('Invalid show');
-    const next=migrate(copy(args.show));next.settings=copy(this.show.settings);validateShow(next);
-    if(this.dir)fs.writeFileSync(path.join(this.dir,'show-before-import-'+Date.now()+'.json'),JSON.stringify(this.show,null,2));this.versions.snapshot(this.show,'before-import');
-    this.selection={ids:[],group:'all',revision:this.selection.revision+1};this.preview=null;this.blind=false;this.blindOverrides={};this.playback=null;this.layers=[];this.overrides={};this.fx=[];this.held=null;this.fading=null;this.transition=null;this.release=null;this.stack=null;this.blackout=false;this.update(s=>{for(const k of Object.keys(s))delete s[k];Object.assign(s,next)});break;
+    this.replaceShow(args.show,'before-import');this.files.track(null);break;
    }
+   case 'show.save':{
+    const c=this.files.current,name=args.name===undefined?c?.name:this.files.name(args.name);if(!name)throw Error('This show has no file yet: give it a name (Save As).');
+    const same=c&&name.toLowerCase()===c.name.toLowerCase(),existing=this.files.find(name);
+    if(existing&&!same&&!args.overwrite)throw Error(`A show named "${existing.name}" is already in ${this.files.folder}. Pass overwrite:true to replace it.`);
+    const saved=this.files.write(existing?.name??name,this.show);this.files.track(saved.name,this.show);this.savedRevision=this.revision;created={file:saved};this.log('Show saved · '+saved.name);break;
+   }
+   case 'show.open':{
+    if(this.revision!==this.savedRevision&&!args.discard)throw Error(`The current show has unsaved changes${this.files.current?' to "'+this.files.current.name+'"':''}. Save it first, or pass discard:true (it is kept in show.versions).`);
+    const f=this.files.read(args.name);this.replaceShow(f.show,'before-open');this.files.track(f.name,this.show,f.modified);this.savedRevision=this.revision;created={file:{name:f.name,file:f.file}};this.log('Show opened · '+f.name);break;
+   }
+   case 'show.folder.set':created={folder:this.files.setFolder(args.path)};this.log('Shows folder · '+created.folder);break;
+   case 'show.reveal':{const p=args.name?this.files.read(args.name).file:this.files.current&&this.files.find(this.files.current.name)?.file;const target=p??this.files.dir();fs.mkdirSync(this.files.dir(),{recursive:true});(this.revealHook??reveal)(target,!!p);break}
    case 'fixture.patch':this.update(s=>this.upsert(s.fixtures,args.fixture));break;
    case 'group.save':{if(!args.fixtures&&!args.children)throw Error('Give fixtures, or children for a parent group');if(args.fixtures)this.ensureIds(args.fixtures);if(args.children)for(const c of args.children)if(!this.show.groups.some(g=>g.id===c))throw Error('Unknown group '+c);if(args.children&&!args.fixtures)args={...args,fixtures:[]};const old=this.show.groups.find(g=>g.id===args.id)?.color;this.update(s=>this.upsert(s.groups,{...args,...(args.color??old?{color:args.color??old}:{})}));break}
    case 'palette.save':this.update(s=>this.upsert(s.palettes,args));break;

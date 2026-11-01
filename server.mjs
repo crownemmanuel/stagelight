@@ -2,6 +2,7 @@ import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
+import os from 'node:os';
 import dgram from 'node:dgram';
 import {fileURLToPath} from 'node:url';
 import {Engine,MEDIA_TYPES} from './engine/engine.mjs';
@@ -36,6 +37,16 @@ const server=http.createServer(async(req,res)=>{
    if(req.headers['x-lights-token']!==token)return json(res,403,{error:'Missing session token'});
    let body='';for await(const chunk of req){body+=chunk;if(body.length>300000)throw Error('Request too large')}
    const {command,args={}}=JSON.parse(body);return json(res,200,await execute(command,args));
+  }
+  if(req.method==='POST'&&url.pathname==='/api/choose-folder'){
+   // The Finder's folder picker for Save / Open show. Outside the command queue: it waits on the operator, never on the engine.
+   // The desk then sets the folder with show.folder.set, which agents call directly with a path.
+   if(req.headers['x-lights-token']!==token)return json(res,403,{error:'Missing session token'});
+   if(process.platform!=='darwin')return json(res,400,{error:'The folder picker works on macOS only: type a path with show.folder.set.'});
+   const start=engine.files.folder&&fs.existsSync(engine.files.folder)?engine.files.folder:os.homedir(),esc=s=>s.replaceAll('\\','\\\\').replaceAll('"','\\"');
+   const {execFile}=await import('node:child_process');
+   const picked=await new Promise(r=>execFile('osascript',['-e',`POSIX path of (choose folder with prompt "Choose the folder for StageLight shows" default location (POSIX file "${esc(start)}"))`],{timeout:600000},(e,out)=>r(e?null:out.trim())));
+   return json(res,200,{path:picked||null});
   }
   if(req.method==='POST'&&url.pathname==='/api/media'){
    // Raw upload body; the engine validates type and size, then moves it into data/media.

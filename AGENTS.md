@@ -106,3 +106,6 @@ Group `band` (parent) → `band-piano` (face lights 45, 49, 25, 35, 40, 41 on th
 
 ## Recording — 2026-10-30
 `cue.record` / `look.capture` snapshots keep only lit or changed fixtures (`activeLook`), plus the cue's own when replacing; `all:true` keeps everything. Scenes stay whole-rig. Never save a cue that holds untouched fixtures at zero: it blacks out the rest of the rig when played or flashed.
+
+## Show files — 2026-10-31
+Save / Save As / Open of named shows in a folder on this Mac (docs/SHOW-FILES.md): ⌘S, ⇧⌘S, ⌘O, the ☰ menu, and the show name in the top bar (a gold dot = unsaved; click to open). `show.files {query?}`, `show.save {name?,overwrite?}`, `show.open {name,discard?}`, `show.folder.set {path}`, `show.reveal {name?}` (`lights_show_*`). The folder (default `~/Documents/StageLight Shows`) and the open file live in `<data>/show-files.json`, never in the show. Opening works like Import (settings stay, a `before-open` version is kept), is refused while armed or locked, and refuses unsaved changes unless `discard:true`. `runtime.showFile {name,savedAt,dirty}`: dirty compares the show revision with the one last saved or opened, and a hash makes it survive restarts. Export / Import remain.

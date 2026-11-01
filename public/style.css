@@ -813,3 +813,20 @@ body.locked .build-only,body.locked [data-lib-delete],body.locked #sheetDelete,b
 .sd-actions{display:flex;gap:6px}.sd-actions .chip-button{flex:1}
 
 .swatch.labelled b{font-size:10px;font-weight:800;color:#1b2430;letter-spacing:.02em}
+/* Show files: the top-bar title shows the open show file; a dot means unsaved changes (docs/SHOW-FILES.md). */
+button.show-name{display:inline-flex;align-items:center;gap:7px;background:none;cursor:pointer;font:inherit;font-weight:600;font-size:13px;max-width:260px}
+button.show-name>span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+button.show-name:hover{color:var(--text);background:var(--card2)}
+.unsaved-dot{width:7px;height:7px;border-radius:50%;background:var(--warm);flex:none}
+.file-name{width:100%;font-size:15px}
+.file-folder{display:flex;align-items:center;gap:8px;margin-top:12px;color:var(--muted);font-size:12px}
+.file-folder>[data-icon]{flex:none;width:16px;height:16px}
+.file-path{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.file-list{max-height:42vh}
+.file-row{border:1px solid transparent;text-align:left;cursor:pointer;font:inherit}
+.file-row.selected{border-color:var(--accent,var(--text));background:var(--raise)}
+.file-row[disabled]{opacity:.5;cursor:default}
+.file-main{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+.file-main strong{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.file-main em{font-style:normal;font-size:11px;color:var(--muted);font-weight:500;margin-left:6px}
+#openSearch{width:100%}

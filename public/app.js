@@ -28,7 +28,7 @@ function setText(el,value){if(el&&el.textContent!==value)el.textContent=value}
 async function command(name,args={}){try{const r=await fetch('/api/command',{method:'POST',headers:{'content-type':'application/json','x-lights-token':token},body:JSON.stringify({command:name,args})});const v=await r.json();if(!r.ok)throw Error(v.error);if(v.runtime){if(v.runtime.revision!==rev)await refresh();else paint(v.runtime)}return v}catch(e){toast(e.message);throw e}}
 const quiet=p=>p.catch(()=>{});
 async function refresh(){const v=await fetch('/api/state').then(r=>r.json());show=v.show;runtime=v.runtime;rev=runtime.revision;if(!show.pages.some(p=>p.id===pageId))pageId=runtime.stack?.page??show.pages[0]?.id??null;selected=selected.filter(id=>show.fixtures.some(f=>f.id===id));if(stage){stage.setFixtures(visibleFixtures(show));syncLedWall()}drawAll();paint(runtime)}
-function drawAll(){drawPages();drawGroups();drawChips();drawMasters();applyPane();if(mode==='library'){if(libCue&&!show.cues.some(c=>c.id===libCue))libCue=null;$('#libraryView').innerHTML='';applyStageView()}drawSide();drawSelectionBar();drawLedTray();setText($('#showName'),show.name.split('·')[0].trim())}
+function drawAll(){drawPages();drawGroups();drawChips();drawMasters();applyPane();if(mode==='library'){if(libCue&&!show.cues.some(c=>c.id===libCue))libCue=null;$('#libraryView').innerHTML='';applyStageView()}drawSide();drawSelectionBar();drawLedTray();paintShowFile(runtime)}
 // Fixture lookup indexed per show object: paint() asks for hundreds of fixtures ten times a second.
 let fixtureIndex=null,fixtureIndexFor=null;const fixture=id=>{if(fixtureIndexFor!==show?.fixtures){fixtureIndexFor=show?.fixtures;fixtureIndex=new Map((show?.fixtures??[]).map(f=>[f.id,f]))}return fixtureIndex.get(id)};
 // Styles cost layout and paint even when unchanged, so each live dot remembers what it last showed.
@@ -863,6 +863,49 @@ function paintAgentStatus(r){
  if($('#agentDone'))$('#agentDone').onclick=()=>$('#dialog').close();
 }
 function importDialog(){dialog('Import a show',`<p class="hint">Includes fixtures, placement, alignment, positions, groups, cues, pages and LED wall choice. Network settings stay. Output must be disarmed; the current show is backed up. Imported media files are not inside the show file.</p><input id="showFile" type="file" accept=".json,application/json" aria-label="Show file"><div class="dialog-actions"><button id="loadShow" class="primary"><span data-icon="upload"></span>Import</button></div>`);$('#loadShow').onclick=async()=>{try{const file=$('#showFile').files[0];if(!file)return toast('Choose an exported show file.');if(file.size>300000)throw Error('Show file is too large');await command('show.import',{show:JSON.parse(await file.text())});cancelAlignment();selected=[];group=null;$('#dialog').close();toast('Show imported. Output remains disarmed.')}catch(e){toast(e.message)}}}
+// Show files (show.save / show.open / show.files, docs/SHOW-FILES.md): named shows in a folder on this Mac, like documents.
+let showFileKey='';
+function paintShowFile(r){const f=r?.showFile,name=f?.name??show?.name.split('·')[0].trim()??'',key=`${name}|${f?.name?1:0}|${f?.dirty?1:0}`;if(key===showFileKey)return;showFileKey=key;const el=$('#showName');
+ el.innerHTML=`<span>${esc(name)}</span>${f?.dirty?'<i class="unsaved-dot" aria-hidden="true"></i>':''}`;el.classList.toggle('unsaved',!!f?.dirty);
+ el.title=!f?.name?'Not saved to a show file yet · ⌘S to save':f.dirty?`${f.name} · unsaved changes · ⌘S to save`:`${f.name} · saved · click to open another show`}
+const when=iso=>new Date(iso).toLocaleString([],{dateStyle:'medium',timeStyle:'short'});
+function folderBar(folder,back){return `<div class="file-folder"><span data-icon="folder"></span><span class="file-path" title="${esc(folder??'')}">${esc(folder?(folder.split('/').length>4?'…/'+folder.split('/').slice(-2).join('/'):folder):'No folder')}</span><button class="chip-button" id="fileFolder">Change…</button><button class="chip-button" id="fileReveal">Show in Finder</button></div>`}
+function wireFolderBar(back){
+ $('#fileReveal').onclick=()=>quiet(command('show.reveal',{}));
+ $('#fileFolder').onclick=async()=>{try{const r=await fetch('/api/choose-folder',{method:'POST',headers:{'x-lights-token':token}}).then(r=>r.json());if(r.error)throw Error(r.error);if(r.path){await command('show.folder.set',{path:r.path});back()}}catch(e){toast(e.message)}};
+}
+async function saveShow(){const f=runtime?.showFile;if(!f?.name)return saveAsDialog();try{await command('show.save',{});toast(`Saved “${f.name}”.`)}catch{}}
+async function saveAsDialog(){
+ let list;try{list=await command('show.files')}catch{return}const cur=list.current.name??show.name.split('·')[0].trim();
+ dialog('Save show as',`<label class="field-label" for="saveName">Name</label><input id="saveName" class="file-name" value="${esc(cur)}" maxlength="80" autocomplete="off" spellcheck="false">${folderBar(list.folder)}
+  ${list.files.length?`<div class="field-label">In this folder</div><div class="pool-list file-list">${list.files.map(f=>`<button class="pool-row" data-file-name="${esc(f.name)}"><span class="pill-icon" data-icon="${f.valid?'show':'warning'}"></span><strong>${esc(f.name)}</strong><small>${esc(when(f.modified))}</small></button>`).join('')}</div>`:''}
+  <p class="hint">Saves the whole show: patch, placement, groups, cues, pages, scenes and masters. Media files stay in this Mac's library.</p><div class="dialog-actions"><button class="ghost-button" id="saveCancel">Cancel</button><button class="primary" id="saveGo"><span data-icon="save"></span>Save</button></div>`);
+ const input=$('#saveName');input.focus();input.select();wireFolderBar(saveAsDialog);$('#saveCancel').onclick=()=>$('#dialog').close();
+ $$('[data-file-name]').forEach(b=>b.onclick=()=>{input.value=b.dataset.fileName;input.focus()});
+ const go=async()=>{const name=input.value.trim().replace(/\.json$/i,'');if(!name)return toast('Name the show first.');
+  const save=overwrite=>command('show.save',{name,...(overwrite?{overwrite}:{})}).then(()=>{$('#dialog').close();toast(`Saved “${name}”.`)}),same=n=>n.toLowerCase()===name.toLowerCase();
+  // Saving over another file asks first; saving to the open show's own file is a plain Save.
+  if(list.files.some(f=>same(f.name))&&!(list.current.name&&same(list.current.name)))return confirmDialog(`Replace “${name}”?`,`A show with this name is already in ${list.folder}. Saving replaces it with the current show.`,'Replace',()=>save(true));
+  quiet(save(false))};
+ $('#saveGo').onclick=()=>go();input.onkeydown=e=>{if(e.key==='Enter')go()};
+}
+async function openDialog(){
+ let list;try{list=await command('show.files')}catch{return}let chosen=null;
+ dialog('Open show',`<input id="openSearch" type="search" placeholder="Search ${list.files.length} saved shows" aria-label="Search shows"><div class="pool-list file-list" id="openList"></div>${folderBar(list.folder)}
+  <div class="dialog-actions"><button class="ghost-button" id="openCancel">Cancel</button><button class="primary" id="openGo" disabled><span data-icon="upload"></span>Open</button></div>`);
+ const draw=()=>{const q=$('#openSearch').value.trim().toLowerCase(),rows=list.files.filter(f=>!q||f.name.toLowerCase().includes(q)||f.title?.toLowerCase().includes(q));if(chosen&&!rows.some(f=>f.name===chosen))chosen=null;
+  $('#openList').innerHTML=rows.map(f=>`<button class="pool-row file-row${f.name===chosen?' selected':''}" data-open="${esc(f.name)}" ${f.valid?'':'disabled'}><span class="pill-icon" data-icon="${f.valid?'show':'warning'}"></span><span class="file-main"><strong>${esc(f.name)}${f.name===list.current.name?' <em>open now</em>':''}</strong><small>${f.valid?`${esc(f.title&&f.title!==f.name?f.title+' · ':'')}${f.fixtures} fixtures · ${f.cues} cues`:'Not a StageLight show'}</small></span><small>${esc(when(f.modified))}</small></button>`).join('')||`<p class="hint">${list.files.length?'No show matches.':'No saved shows in this folder yet. Use Save show as… to make one.'}</p>`;
+  fillIcons($('#openList'));$('#openGo').disabled=!chosen;
+  $$('[data-open]').forEach(b=>{b.onclick=()=>{chosen=b.dataset.open;draw()};b.ondblclick=()=>{chosen=b.dataset.open;open()}})};
+ const open=async()=>{if(!chosen)return;const name=chosen,f=runtime.showFile,run=async discard=>{await command('show.open',{name,...(discard?{discard}:{})});cancelAlignment();selected=[];group=null;$('#dialog').close();toast(`Opened “${name}”. Output remains disarmed.`)};
+  if(runtime.output.armed)return toast('Turn output off before opening another show.');
+  // Like any document app: unsaved changes ask first, with Save offered when the show already has a file.
+  if(f.dirty){dialog(`Open “${name}”?`,`<p>${f.name?`“${esc(f.name)}” has unsaved changes.`:'The current show has not been saved to a file. Cancel and use Save show as… to keep it.'} Opening replaces it; a copy stays in Settings → Show versions.</p><div class="dialog-actions"><button class="ghost-button" id="openNo">Cancel</button><button class="ghost-button danger" id="openDiscard">Don't save</button>${f.name?'<button class="primary" id="openSave"><span data-icon="save"></span>Save and open</button>':''}</div>`);
+   $('#openNo').onclick=()=>$('#dialog').close();$('#openDiscard').onclick=()=>quiet(run(true));if($('#openSave'))$('#openSave').onclick=()=>quiet(command('show.save',{}).then(()=>run(false)));return}
+  quiet(run(false))};
+ $('#openSearch').oninput=draw;$('#openSearch').onkeydown=e=>{if(e.key==='Enter'){const first=$('[data-open]:not([disabled])');if(!chosen&&first)chosen=first.dataset.open;open()}};
+ $('#openGo').onclick=open;$('#openCancel').onclick=()=>$('#dialog').close();wireFolderBar(openDialog);draw();$('#openSearch').focus();
+}
 function helpDialog(){dialog('Guides',`<div class="pool-list"><a class="pool-row link" href="/help/operator.html" target="_blank"><span class="pill-icon" data-icon="show"></span><strong>Running the show</strong><small>Pages, GO, overrides</small></a><a class="pool-row link" href="/help/hog-setup.html" target="_blank"><span class="pill-icon" data-icon="plug"></span><strong>Hog 4 setup</strong><small>Field guide</small></a><a class="pool-row link" href="/help/mh7.html" target="_blank"><span class="pill-icon" data-icon="beam"></span><strong>MH7 notes</strong><small>Verified behavior</small></a><a class="pool-row link" href="/help/triggers.html" target="_blank"><span class="pill-icon" data-icon="network"></span><strong>Triggers from other apps</strong><small>OSC setup</small></a><a class="pool-row link" href="/help/agent-api.html" target="_blank"><span class="pill-icon" data-icon="agent"></span><strong>Agent API</strong><small>HTTP, OSC, MCP</small></a></div><h3>Keys</h3><dl class="diagnostic"><dt>Space</dt><dd>GO</dd><dt>⌫</dt><dd>Back</dd>${Object.entries(DESK_NAMES).filter(([k])=>show.masters.desk[k]).map(([k,n])=>`<dt>${esc(keyLabel(show.masters.desk[k]))}</dt><dd>${n}</dd>`).join('')}<dt>← →</dt><dd>Page through the masters</dd><dt>Master keys</dt><dd>${esc(slots().filter(m=>m.key).slice(0,9).map(m=>keyLabel(m.key)).join(' '))}… shown on each master</dd><dt>Esc</dt><dd>Close panels</dd></dl><p class="hint">Version 0.2 prototype. The stage is an approximate spatial model, not a photometric simulator.</p>`)}
 // Art-Net output: where the desk sends DMX and a check of the path (output.status / output.check / output.configure,
 // the same commands agents use as lights_output_*). The check sends no DMX.
@@ -1146,7 +1189,7 @@ function armDialog(){if(runtime.output.armed){quiet(command('output.disarm'));re
 // ── 10 Hz paint: readback only, no structural redraws ──
 function paint(r){
  paintOutputHint(r);paintOutputState();paintRunning(r);
- if(!r)return;runtime=r;paintAgentStatus(r);paintMasters(r);paintLibrary(r);if(show){paintScene(r);paintTempo(r);paintLock(r);paintResume(r);paintHits(r)}
+ if(!r)return;runtime=r;paintAgentStatus(r);paintMasters(r);paintLibrary(r);if(show){paintScene(r);paintTempo(r);paintLock(r);paintResume(r);paintHits(r);paintShowFile(r)}
  if(show&&r.selection&&r.selection.revision>selectionRevision){const first=!selectionRevision;selectionRevision=r.selection.revision;if(!first||r.selection.ids.length)applySelection(r.selection.ids,r.selection.group)}$('#engineStatus').innerHTML='<i></i>Engine ready';document.body.classList.toggle('live',r.output.armed);
  setText($('#outputButton span'),r.output.armed?'LIVE':'Output off');setText($('.preview-label'),stage?.mode==='reference'?'Reference render · not live lighting':r.output.armed?'Live view · output on':'Live view · output off');drawPreviewBanner(r);
  stage?.setLedPlaying(!r.output.armed);
@@ -1239,13 +1282,14 @@ $('#pillToggle').onclick=()=>{drawerOpen=!drawerOpen;store.set('pillDrawer',draw
 $('#outputButton').onclick=armDialog;$('#outputHintArm').onclick=armDialog;$('#outputHintClose').onclick=()=>{outputHintDismissed=true;$('#outputHint').hidden=true};
 $('#menuButton').onclick=e=>{e.stopPropagation();const open=$('#menu').hidden;$('#menu').hidden=!open;$('#menuButton').setAttribute('aria-expanded',String(open))};
 document.addEventListener('click',e=>{if(!e.target.closest('#ctxMenu'))closeMenu();if(!$('#masterPop').hidden&&!e.target.closest('#masterPop,[data-master-edit]'))closeMasterPop();if(learning&&!e.target.closest('[data-master-key],#mpKey')){learning=null;drawMasters()}if(!$('#menu').hidden&&!e.target.closest('.menu-wrap')){$('#menu').hidden=true;$('#menuButton').setAttribute('aria-expanded','false')}});
-$$('[data-menu]').forEach(b=>b.onclick=()=>{$('#menu').hidden=true;({preshow:preshowDialog,agent:agentHelp,connection,settings:settingsDialog,patch:patchSheet,network:networkSheet,export:()=>window.open('/api/show'),import:importDialog,help:helpDialog,update:updatesDialog})[b.dataset.menu]()});
+$$('[data-menu]').forEach(b=>b.onclick=()=>{$('#menu').hidden=true;({preshow:preshowDialog,agent:agentHelp,connection,settings:settingsDialog,patch:patchSheet,network:networkSheet,export:()=>window.open('/api/show'),import:importDialog,save:saveShow,saveAs:saveAsDialog,open:openDialog,help:helpDialog,update:updatesDialog})[b.dataset.menu]()});
 $('#closeDialog').onclick=()=>$('#dialog').close();$('#dialog').onclick=e=>{if(e.target===$('#dialog'))$('#dialog').close()};
 // Keys: Space GO, Backspace back, Esc cancels, ← → page the masters; Clear, Highlight and Blackout and every master key
 // come from show.masters (desk shortcuts default to C, Shift+H, B). A held master key flashes until it is let go.
 document.addEventListener('keydown',e=>{
  if(learning){e.preventDefault();learnKey(e);return}
  if(['INPUT','TEXTAREA','SELECT'].includes(document.activeElement.tagName)||$('#dialog').open||document.activeElement.id==='joystick')return;
+ if(e.metaKey&&!e.altKey&&!e.ctrlKey&&(e.code==='KeyS'||e.code==='KeyO')){e.preventDefault();if($('#dialog').open||!show)return;if(e.code==='KeyO')openDialog();else if(e.shiftKey)saveAsDialog();else saveShow();return}
  if(runtime?.find?.active&&(e.key==='ArrowLeft'||e.key==='ArrowRight')){e.preventDefault();findStep(e.key==='ArrowLeft'?'back':'next');return}
  if(e.key==='Escape'&&runtime?.find?.active&&$('#masterPop').hidden){quiet(command('find.stop'));return}
  if(e.key==='Escape'){if(!$('#masterPop').hidden)closeMasterPop();else if(!$('#ctxMenu').hidden){closeMenu()}else if(runtime?.preview){stopPreview()}else if(aligning){cancelAlignment();drawSide()}else if(!$('#menu').hidden)$('#menu').hidden=true;else if(ledOpen){ledOpen=false;drawLedTray()}else if(selected.length){applySelection([]);quiet(command('selection.set',{ids:[]}))}return}
