@@ -25,7 +25,7 @@ function markdown(text,esc){
 
 export function mountAssistant({command,esc,icon,fillIcons,toast,store}){
  const panel=document.getElementById('assistantPanel'),button=document.getElementById('assistantButton');
- let open=store.get('assistant.open','0')==='1',view='chat',st=null,seen=0,loading=false,draft='',models=[];
+ let open=store.get('assistant.open','0')==='1',view='chat',st=null,seen=0,loading=false,draft='';
  const q=s=>panel.querySelector(s);
  const place=()=>{const w=document.querySelector('.workspace')?.getBoundingClientRect();if(!w)return;panel.style.top=(w.top+10)+'px';panel.style.bottom=Math.max(10,innerHeight-w.bottom+10)+'px'};
  addEventListener('resize',()=>{if(open)place()});
@@ -37,7 +37,7 @@ export function mountAssistant({command,esc,icon,fillIcons,toast,store}){
 
  function header(){
   const p=st?.providers?.[st.provider];
-  return `<header class="as-head"><span class="as-mark" data-icon="spark"></span><div class="as-title"><h2>Assistant</h2><small>${st?.configured?`${esc(PROVIDER_NAMES[st.provider])} · ${esc(st.model)}`:'Not set up yet'}</small></div>
+  return `<header class="as-head"><span class="as-mark" data-icon="spark"></span><div class="as-title"><h2>Assistant</h2><small>${st?.configured?`${esc(PROVIDER_NAMES[st.provider])} · ${esc(st.model)}${st.effort!=='default'?' · '+esc(st.effort):''}`:'Not set up yet'}</small></div>
    <button class="round-button small" id="asNew" title="New chat" aria-label="New chat" data-icon="plus" ${st?.busy||!st?.messages?.length?'disabled':''}></button>
    <button class="round-button small ${view==='settings'?'active':''}" id="asSettings" title="Assistant settings" aria-label="Assistant settings" data-icon="settings"></button>
    <button class="round-button small" id="asClose" title="Close (Esc)" aria-label="Close assistant" data-icon="close"></button></header>`;
@@ -61,15 +61,17 @@ export function mountAssistant({command,esc,icon,fillIcons,toast,store}){
    <p class="as-foot">${st.allowLive?'Can change the live rig while output is armed.':'Builds and previews; never arms output. Live commands are refused while armed.'}</p>`;
  }
  function settings(){
-  const p=st.providers[st.provider],options=[...new Set([...models,...p.suggested,p.model])];
+  const p=st.providers[st.provider],options=[...new Set([p.model,...(p.models??p.suggested)])];
   return `<div class="as-body as-settings">
    <section><h3>Provider</h3><div class="segmented">${Object.keys(st.providers).map(k=>`<button data-provider="${k}" class="${k===st.provider?'active':''}">${esc(PROVIDER_NAMES[k])}${st.providers[k].configured?' ✓':''}</button>`).join('')}</div>
     <p class="hint">Switching provider starts a new conversation.</p></section>
    <section><h3>API key</h3><div class="as-row"><input id="asKey" type="password" autocomplete="off" spellcheck="false" placeholder="${p.configured?'Saved ('+esc(p.keyHint)+'). Paste a new key to replace it':'Paste your '+esc(PROVIDER_NAMES[st.provider])+' API key'}"><button class="chip-button accent" id="asSaveKey">Save</button></div>
     <div class="as-row"><button class="chip-button" id="asCheck" ${p.configured?'':'disabled'}><span data-icon="check"></span>Check key</button>${p.configured?`<button class="chip-button" id="asRemoveKey"><span data-icon="trash"></span>Remove key</button>`:''}<span class="as-check" id="asCheckResult"></span></div>
     <p class="hint">Get one at ${esc(KEY_HELP[st.provider])}. The key stays on this Mac in the data folder (an owner-only file). It is never saved in the show, its versions or exports, and only the last 4 characters are ever shown. Requests go straight from this Mac to ${esc(PROVIDER_NAMES[st.provider])} and are billed to that key.</p></section>
-   <section><h3>Model</h3><div class="as-row"><input id="asModel" list="asModels" value="${esc(p.model)}" spellcheck="false"><datalist id="asModels">${options.map(m=>`<option value="${esc(m)}">`).join('')}</datalist><button class="chip-button" id="asSaveModel">Use</button></div>
-    <p class="hint">Check key lists every model your key can use.</p></section>
+   <section><h3>Model</h3><div class="as-row"><select id="asModel" ${p.configured?'':'disabled'}>${options.map(m=>`<option value="${esc(m)}" ${m===p.model?'selected':''}>${esc(m)}</option>`).join('')}</select><button class="round-button small" id="asRefresh" title="Reload models from ${esc(PROVIDER_NAMES[st.provider])}" aria-label="Reload models" data-icon="restore" ${p.configured?'':'disabled'}></button></div>
+    <p class="hint" id="asModelHint">${!p.configured?'Add a key to load the models it can use.':p.models?`${p.models.length} models from ${esc(PROVIDER_NAMES[st.provider])}.`:'Loading models from '+esc(PROVIDER_NAMES[st.provider])+'…'}</p></section>
+   <section><h3>Reasoning level</h3><div class="segmented as-effort">${p.efforts.map(e=>`<button data-effort="${e}" class="${e===p.effort?'active':''}">${e==='default'?'Auto':e==='xhigh'?'Extra high':e[0].toUpperCase()+e.slice(1)}</button>`).join('')}</div>
+    <p class="hint">Higher levels think longer before building: better for big multi-cue requests, but slower and more expensive. Auto lets the model decide.</p></section>
    <section><label class="as-toggle"><span><h3>Let the assistant run the live rig</h3><small class="hint">While output is armed, allow it to play cues, change masters, scenes and fixture values. It can never arm output.</small></span><span class="switch"><input type="checkbox" id="asLive" ${st.allowLive?'checked':''}><span></span></span></label></section>
    <section><h3>House rules for this show</h3><textarea id="asNotes" rows="4" maxlength="4000" placeholder="e.g. Face lights never above 12%. Keep the house lights off in cues.">${esc(st.instructions)}</textarea><div class="as-row"><button class="chip-button" id="asSaveNotes">Save rules</button></div>
     <p class="hint">Saved in the show and followed in every cue, scene and effect the assistant builds.</p></section>
@@ -84,6 +86,13 @@ export function mountAssistant({command,esc,icon,fillIcons,toast,store}){
   if(keepInput){const t=q('#asInput');t?.focus();t?.setSelectionRange(t.value.length,t.value.length)}
  }
  const configure=async(args,msg)=>{try{st=await command('assistant.configure',args);seen=st.revision;if(msg)toast(msg);draw()}catch{}};
+ // Fills the model dropdown from the provider (once per provider, or on demand); it also proves the key works.
+ let fetching=null;
+ async function loadModels(force){
+  if(fetching===st.provider&&!force)return;fetching=st.provider;const out=q('#asCheckResult');if(out){out.textContent='Checking…';out.className='as-check'}
+  try{const r=await command('assistant.models');st=await command('assistant.status');seen=st.revision;draw();const o=q('#asCheckResult');if(o){o.textContent=`Key works · ${r.models.length} models`;o.className='as-check ok'}}
+  catch(e){const o=q('#asCheckResult'),h=q('#asModelHint');if(o){o.textContent=e.message;o.className='as-check bad'}if(h)h.textContent='Could not load models: check the key.'}
+ }
  async function send(text){
   text=text.trim();if(!text||st?.busy)return;draft='';
   try{await command('assistant.send',{message:text});await load()}catch{draft=text;draw()}
@@ -99,13 +108,14 @@ export function mountAssistant({command,esc,icon,fillIcons,toast,store}){
   const form=q('#asForm');if(form)form.onsubmit=e=>{e.preventDefault();send(input.value)};
   const stop=q('#asStop');if(stop)stop.onclick=()=>command('assistant.stop').catch(()=>{});
   if(view!=='settings')return;
-  for(const b of panel.querySelectorAll('[data-provider]'))b.onclick=()=>{if(b.dataset.provider!==st.provider){models=[];configure({provider:b.dataset.provider})}};
-  q('#asSaveKey').onclick=()=>{const v=q('#asKey').value.trim();if(v.length<8)return toast('Paste the whole API key');configure({apiKey:v},'API key saved on this Mac')};
+  for(const b of panel.querySelectorAll('[data-provider]'))b.onclick=()=>{if(b.dataset.provider!==st.provider){fetching=null;configure({provider:b.dataset.provider})}};
+  q('#asSaveKey').onclick=()=>{const v=q('#asKey').value.trim();if(v.length<8)return toast('Paste the whole API key');fetching=null;configure({apiKey:v},'API key saved on this Mac')};
   const remove=q('#asRemoveKey');if(remove)remove.onclick=()=>configure({clearKey:true},'API key removed');
-  q('#asCheck').onclick=async()=>{const out=q('#asCheckResult');out.textContent='Checking…';out.className='as-check';
-   try{const r=await command('assistant.models');models=r.models;out.textContent=`Key works · ${r.models.length} models`;out.className='as-check ok';const dl=q('#asModels');if(dl)dl.innerHTML=[...new Set([...models,...st.providers[st.provider].suggested])].map(m=>`<option value="${esc(m)}">`).join('')}
-   catch(e){out.textContent=e.message;out.className='as-check bad'}};
-  q('#asSaveModel').onclick=()=>{const v=q('#asModel').value.trim();if(v)configure({model:v},'Model set to '+v)};
+  q('#asCheck').onclick=()=>loadModels(true);
+  q('#asModel').onchange=e=>configure({model:e.target.value},'Model set to '+e.target.value);
+  q('#asRefresh').onclick=()=>loadModels(true);
+  for(const b of panel.querySelectorAll('[data-effort]'))b.onclick=()=>configure({effort:b.dataset.effort},'Reasoning level: '+b.textContent);
+  if(st.providers[st.provider].configured&&!st.providers[st.provider].models)loadModels();
   q('#asLive').onchange=e=>configure({allowLive:e.target.checked});
   q('#asSaveNotes').onclick=()=>configure({instructions:q('#asNotes').value},'House rules saved in the show');
   q('#asBack').onclick=()=>{view='chat';draw()};

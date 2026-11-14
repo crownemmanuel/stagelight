@@ -17,6 +17,8 @@ export const PROVIDERS={
 export const HUMAN_ONLY=new Set(['agent.hello','output.arm','resume.apply','resume.dismiss','show.import','show.restore','performance.lock','output.configure','network.configure','status','schema']);
 const isAssistantCommand=k=>k.startsWith('assistant.');
 export const toolName=k=>'lights_'+k.replaceAll('.','_');
+// Reasoning level each provider accepts; 'default' sends nothing and lets the model choose.
+export const EFFORTS={anthropic:['default','low','medium','high','xhigh','max'],openai:['default','minimal','low','medium','high']};
 const MAX_ROUNDS=30,RESULT_CHARS=40000,LONG_CONVERSATION=400000;
 // Models that accept Anthropic's server-side refusal fallback.
 const FALLBACK_MODELS=new Set(['claude-fable-5-2','claude-fable-5-1','claude-opus-5-5','claude-opus-5','claude-sonnet-5-5']);
@@ -62,8 +64,8 @@ const providerError=(name,status,body)=>{const m=body?.error?.message??body?.mes
 export class Assistant{
  constructor({dir,engine,fetch:fetcher=(...a)=>globalThis.fetch(...a)}){
   this.file=dir?path.join(dir,'assistant.json'):null;this.engine=engine;this.fetch=fetcher;
-  this.config={provider:'anthropic',keys:{},models:{},allowLive:false};
-  try{if(this.file&&fs.existsSync(this.file)){const c=JSON.parse(fs.readFileSync(this.file,'utf8'));this.config={...this.config,...c,keys:{...c.keys},models:{...c.models}}}}catch{engine?.log('Assistant settings could not be read; starting without a saved key.')}
+  this.config={provider:'anthropic',keys:{},models:{},efforts:{},allowLive:false};this.modelLists={};
+  try{if(this.file&&fs.existsSync(this.file)){const c=JSON.parse(fs.readFileSync(this.file,'utf8'));this.config={...this.config,...c,keys:{...c.keys},models:{...c.models},efforts:{...c.efforts}}}}catch{engine?.log('Assistant settings could not be read; starting without a saved key.')}
   if(!PROVIDERS[this.config.provider])this.config.provider='anthropic';
   // Engine commands run through this; the server routes it through its command queue.
   this.exec=(name,args)=>engine.command(name,args,{lean:true});
@@ -72,13 +74,14 @@ export class Assistant{
  }
  get provider(){return this.config.provider}
  get model(){return this.config.models[this.provider]||PROVIDERS[this.provider].model}
+ get effort(){const e=this.config.efforts[this.provider];return EFFORTS[this.provider].includes(e)?e:'default'}
  get key(){return this.config.keys[this.provider]}
  changed(){this.revision++}
  save(){if(!this.file)return;const tmp=this.file+'.tmp';fs.writeFileSync(tmp,JSON.stringify(this.config,null,1),{mode:0o600});fs.renameSync(tmp,this.file);try{fs.chmodSync(this.file,0o600)}catch{}}
  live(){return {busy:this.busy,revision:this.revision}}
  status(){
   const configured=Object.fromEntries(Object.keys(PROVIDERS).map(p=>[p,!!this.config.keys[p]]));
-  return {provider:this.provider,model:this.model,providers:Object.fromEntries(Object.entries(PROVIDERS).map(([k,v])=>[k,{name:v.name,model:this.config.models[k]||v.model,suggested:v.models,configured:configured[k],keyHint:this.config.keys[k]?'…'+this.config.keys[k].slice(-4):null}])),
+  return {provider:this.provider,model:this.model,effort:this.effort,providers:Object.fromEntries(Object.entries(PROVIDERS).map(([k,v])=>[k,{name:v.name,model:this.config.models[k]||v.model,suggested:v.models,models:this.modelLists[k]??null,effort:EFFORTS[k].includes(this.config.efforts[k])?this.config.efforts[k]:'default',efforts:EFFORTS[k],configured:configured[k],keyHint:this.config.keys[k]?'…'+this.config.keys[k].slice(-4):null}])),
    configured:configured[this.provider],allowLive:!!this.config.allowLive,instructions:this.engine?.show?.settings?.assistant?.instructions??'',busy:this.busy,revision:this.revision,error:this.error,tools:this.tools.length,
    usage:{...this.usage,conversationTokens:this.tokens},messages:this.transcript.slice(-60)};
  }
@@ -87,11 +90,12 @@ export class Assistant{
   const provider=args.provider??this.provider;
   if(args.provider&&args.provider!==this.provider){this.config.provider=args.provider;this.reset()}
   if(args.apiKey!==undefined)this.config.keys[provider]=args.apiKey.trim();
-  if(args.clearKey)delete this.config.keys[provider];
+  if(args.clearKey){delete this.config.keys[provider];delete this.modelLists[provider]}
   if(args.model!==undefined){if(args.model!==this.config.models[provider]&&provider===this.provider)this.reset();this.config.models[provider]=args.model}
+  if(args.effort!==undefined){if(!EFFORTS[provider].includes(args.effort))throw Error(`${PROVIDERS[provider].name} reasoning levels: ${EFFORTS[provider].join(', ')}`);this.config.efforts[provider]=args.effort}
   if(args.allowLive!==undefined)this.config.allowLive=args.allowLive;
   this.save();this.changed();
-  this.engine?.log(`Assistant · ${PROVIDERS[this.provider].name} ${this.model}${args.apiKey!==undefined?' · key saved':''}${args.clearKey?' · key removed':''}${args.allowLive!==undefined?' · live '+(args.allowLive?'allowed':'not allowed'):''}`);
+  this.engine?.log(`Assistant · ${PROVIDERS[this.provider].name} ${this.model}${args.apiKey!==undefined?' · key saved':''}${args.clearKey?' · key removed':''}${args.effort!==undefined?' · reasoning '+args.effort:''}${args.allowLive!==undefined?' · live '+(args.allowLive?'allowed':'not allowed'):''}`);
   return this.status();
  }
  reset(){this.history=[];this.transcript=[];this.tokens=0;this.error=null;this.changed()}
@@ -104,7 +108,8 @@ export class Assistant{
   const v=await r.json().catch(()=>({}));if(!r.ok)throw Error(providerError(PROVIDERS[provider].name,r.status,v));
   let ids=(v.data??[]).map(m=>m.id).filter(id=>typeof id==='string');
   if(!anthropic)ids=ids.filter(id=>/^(gpt-|o\d|chatgpt-)/.test(id)&&!/(audio|realtime|transcribe|tts|image|search|embedding|instruct)/.test(id));
-  return {provider,ok:true,models:ids.sort()};
+  ids.sort();if(anthropic)ids.sort((a,b)=>(v.data.findIndex(m=>m.id===a))-(v.data.findIndex(m=>m.id===b)));this.modelLists[provider]=ids;this.changed();
+  return {provider,ok:true,models:ids};
  }
  send(message){
   if(this.busy)throw Error('The assistant is still replying. Wait, or stop it first.');
@@ -168,6 +173,7 @@ export class Assistant{
   tools[tools.length-1]={...tools.at(-1),cache_control:{type:'ephemeral'}};
   const body={model:this.model,max_tokens:16000,system:[{type:'text',text:SYSTEM,cache_control:{type:'ephemeral'}},...(notes?[{type:'text',text:notes}]:[])],tools,messages:this.history};
   const headers={'x-api-key':this.key,'anthropic-version':'2026-10-21'};
+  if(this.effort!=='default')body.output_config={effort:this.effort};
   if(FALLBACK_MODELS.has(this.model)){headers['anthropic-beta']='server-side-fallback-2026-07-01';body.fallbacks='default'}
   const v=await this.post('https://api.anthropic.com/v1/messages',headers,body,signal,'Anthropic');
   this.history.push({role:'assistant',content:v.content??[]});
@@ -178,7 +184,7 @@ export class Assistant{
  // OpenAI Chat Completions with function tools.
  async openai(signal){
   const notes=this.instructions();
-  const body={model:this.model,messages:[{role:'system',content:SYSTEM+(notes?'\n\n'+notes:'')},...this.history],tools:this.tools.map(t=>({type:'function',function:{name:t.name,description:t.description,parameters:t.schema}})),max_completion_tokens:16000};
+  const body={model:this.model,messages:[{role:'system',content:SYSTEM+(notes?'\n\n'+notes:'')},...this.history],tools:this.tools.map(t=>({type:'function',function:{name:t.name,description:t.description,parameters:t.schema}})),max_completion_tokens:16000,...(this.effort!=='default'?{reasoning_effort:this.effort}:{})};
   const v=await this.post('https://api.openai.com/v1/chat/completions',{authorization:'Bearer '+this.key},body,signal,'OpenAI');
   const choice=v.choices?.[0]??{},m=choice.message??{};
   this.history.push({role:'assistant',content:m.content??null,...(m.tool_calls?.length?{tool_calls:m.tool_calls}:{})});

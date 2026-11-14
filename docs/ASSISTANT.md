@@ -33,6 +33,8 @@ The **Assistant** button in the top bar opens a chat on the desk. Describe a loo
 | Default model | `claude-opus-5-5` | `gpt-5` |
 | Notes | Tools and the system prompt are prompt-cached. Each reply is appended to the history unchanged (thinking blocks included). On models that support it, the server-side refusal fallback is on (`fallbacks: "default"`, beta `server-side-fallback-2026-07-01`). | **Check key** lists the chat models the key can use. |
 
+**Model and reasoning level.** The model is a dropdown filled from the provider's model list (`assistant.models`, loaded when the settings open; the reload button fetches it again). The reasoning level is per provider: **Auto** sends nothing and lets the model decide; Anthropic offers low, medium, high, extra high and max (`output_config.effort`), OpenAI minimal, low, medium and high (`reasoning_effort`). Higher levels think longer, which helps big multi-cue requests but is slower and costs more. A model that does not support a level returns an error in the chat; pick another level or Auto.
+
 The engine has no npm dependencies (it is copied into the desktop app as it is), so both providers are called with Node's built-in `fetch` rather than an SDK. **Check key** (`assistant.models`) confirms the key works and lists the models it can use; any model ID can be typed in.
 
 Limits: 30 model calls per reply, 16,000 output tokens per call, tool results cut at 40,000 characters. A conversation over about 400,000 tokens asks for a new chat.
@@ -43,8 +45,8 @@ Limits: 30 model calls per reply, 16,000 output tokens per call, tool results cu
 |---|---|---|
 | `show.summary` | `lights_show_summary` | Compact read of the whole show for planning. |
 | `assistant.status` | `lights_assistant_status` | Provider, model, which providers have a key (last 4 characters only), allowLive, house rules, busy, last error, token usage, the conversation and the commands each reply ran. |
-| `assistant.configure` | `lights_assistant_configure` | `provider`, `apiKey`, `clearKey`, `model`, `allowLive`, `instructions`. |
-| `assistant.models` | `lights_assistant_models` | Checks the key and lists the models it can use. |
+| `assistant.configure` | `lights_assistant_configure` | `provider`, `apiKey`, `clearKey`, `model`, `effort`, `allowLive`, `instructions`. |
+| `assistant.models` | `lights_assistant_models` | Checks the key and lists the models it can use; the list is kept for the dropdown (`providers.<name>.models` in status). |
 | `assistant.send` | `lights_assistant_send` | Sends a message; returns at once. Poll `assistant.status`. |
 | `assistant.stop` | `lights_assistant_stop` | Stops the reply in progress. Commands it already ran stay done. |
 | `assistant.clear` | `lights_assistant_clear` | New conversation. Saved cues and settings are untouched. |

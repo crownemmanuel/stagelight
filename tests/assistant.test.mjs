@@ -120,6 +120,25 @@ test('assistant.models checks the key and lists chat models',async()=>{
  assert.deepEqual((await e.command('assistant.models')).models,['gpt-5','gpt-5-mini']);
 });
 
+test('the reasoning level is saved per provider and sent the way each API expects',async()=>{
+ const done={content:[{type:'text',text:'ok'}],stop_reason:'end_turn'},oa={choices:[{message:{role:'assistant',content:'ok'},finish_reason:'stop'}]};
+ const dir=tmp(),e=rig({dir,script:[done,done,oa]});
+ await e.command('assistant.configure',{apiKey:'sk-ant-test-0000'});
+ await e.command('assistant.send',{message:'a'});await e.assistant.done;assert.ok(!('output_config' in e.assistant.fetch.sent[0].body),'default lets the model decide');
+ assert.equal((await e.command('assistant.configure',{effort:'xhigh'})).effort,'xhigh');
+ await e.command('assistant.send',{message:'b'});await e.assistant.done;assert.deepEqual(e.assistant.fetch.sent[1].body.output_config,{effort:'xhigh'});
+ await assert.rejects(e.command('assistant.configure',{provider:'openai',effort:'xhigh'}),/minimal, low, medium, high/);
+ await e.command('assistant.configure',{provider:'openai',apiKey:'sk-openai-test-9999',effort:'minimal'});
+ await e.command('assistant.send',{message:'c'});await e.assistant.done;assert.equal(e.assistant.fetch.sent[2].body.reasoning_effort,'minimal');
+ const saved=JSON.parse(fs.readFileSync(path.join(dir,'assistant.json'),'utf8'));assert.deepEqual(saved.efforts,{anthropic:'xhigh',openai:'minimal'});
+});
+
+test('the model list from the provider is kept for the dropdown',async()=>{
+ const e=rig({script:[{data:[{id:'claude-opus-5-5'},{id:'claude-sonnet-5-5'}]}]});
+ await e.command('assistant.configure',{apiKey:'sk-ant-test-0000'});assert.equal(e.assistant.status().providers.anthropic.models,null);
+ await e.command('assistant.models');assert.deepEqual(e.assistant.status().providers.anthropic.models,['claude-opus-5-5','claude-sonnet-5-5']);
+});
+
 test('the performance lock keeps the assistant notes but still lets the operator add a key',async()=>{
  const e=rig();e.locked=true;
  await assert.rejects(e.command('assistant.configure',{instructions:'x'}),/performance lock/);

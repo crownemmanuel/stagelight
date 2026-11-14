@@ -843,3 +843,46 @@ body.locked .build-only,body.locked [data-lib-delete],body.locked #sheetDelete,b
 .as-toggle{display:flex;gap:12px;align-items:flex-start;justify-content:space-between;cursor:pointer}
 .as-toggle small{display:block;margin-top:4px}
 @media(max-width:900px){.assistant-button span:last-child{display:none}}
+.as-effort button{padding:6px 10px}
+#asModel{flex:1;min-width:0}
+/* Responsive desk (2026-11-14). The page is one grid column; minmax(0,1fr) keeps it the window's width, so a bar that
+   cannot shrink no longer widens the whole desk past the window (the right edge was cut off on smaller screens).
+   Below, the top bar and GO bar drop labels in steps so every control stays reachable down to ~900 px and short
+   laptop screens. */
+body{grid-template-columns:minmax(0,1fr)}
+.topbar,.gobar,.top-actions{min-width:0}
+.topbar>*,.top-actions>*,.gobar>*{flex-shrink:0}
+.gobar .now-next{flex-shrink:1}
+@media(max-width:1380px){
+ .topbar{gap:14px;padding:0 14px}.top-actions{gap:8px}
+ #engineStatus{font-size:0;gap:0;padding:8px}#engineStatus i{margin:0}
+ .gobar{gap:12px;padding:10px 14px}
+}
+@media(max-width:1180px) and (min-width:901px){
+ .brand span{display:none}
+ .mode-switch{margin-left:0}.mode-switch button{padding:7px 12px}
+ .lock-pill span:not([data-icon]):not(.hold-fill),.blind-pill span:last-child{display:none}
+ .lock-pill,.blind-pill{padding:8px 10px}
+ .workspace,body[data-mode=build] .workspace,body[data-mode=library] .workspace{grid-template-columns:var(--rail-w,140px) minmax(0,1fr) var(--side-w,300px)}
+ .go-button{height:52px;padding:0 20px;font-size:20px}
+ .master{width:96px}
+ .gobar{gap:10px}
+}
+@media(max-width:1040px) and (min-width:901px){
+ .mode-switch button{font-size:0;gap:0;padding:8px 11px}.mode-switch button [data-icon]{font-size:15px}
+ .assistant-button span:last-child{display:none}.assistant-button{padding:8px 10px}
+ .agent-chip span:last-child{display:none}
+ .output-pill{padding:8px 11px}
+ .workspace,body[data-mode=build] .workspace,body[data-mode=library] .workspace{grid-template-columns:var(--rail-w,120px) minmax(0,1fr) var(--side-w,280px)}
+ .tap-button{min-width:0;padding:8px 10px}
+ .master{width:76px}.master output{display:none}
+}
+/* Short screens (13" laptops, scaled displays): slimmer top bar and GO bar so the stage keeps its room. */
+@media(max-height:760px) and (min-width:901px){
+ body{grid-template-rows:52px minmax(0,1fr) auto}
+ .brand img{width:26px;height:26px}
+ .gobar{padding-top:8px;padding-bottom:8px}
+ .go-button{height:48px}
+ .save-button,.release-button,.blackout{padding:9px 14px}
+}
+@media(max-width:1180px) and (min-width:901px){.rail-tabs button{padding:5px 8px;font-size:10px;letter-spacing:.4px}.rail-head{gap:4px}}
