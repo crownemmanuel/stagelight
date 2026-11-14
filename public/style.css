@@ -886,3 +886,36 @@ body{grid-template-columns:minmax(0,1fr)}
  .save-button,.release-button,.blackout{padding:9px 14px}
 }
 @media(max-width:1180px) and (min-width:901px){.rail-tabs button{padding:5px 8px;font-size:10px;letter-spacing:.4px}.rail-head{gap:4px}}
+/* UX cleanup (2026-11-14): right-click menus, page rename, narrow panels. */
+.ctx-colors{display:flex;flex-wrap:wrap;gap:7px;padding:6px 12px 8px}
+.ctx-colors .dot{width:20px;height:20px;cursor:pointer}
+.new-page-tile{justify-content:center;color:var(--muted);border:1px dashed var(--line2);font-weight:600;font-size:13px;gap:6px}
+.new-page-tile:hover{color:var(--text);background:var(--card)}
+.page-head.show h2{cursor:text;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* Build page header: name and delete on the first row, colours on their own row, so the name is never crushed. */
+.page-head:not(.show){flex-wrap:wrap;row-gap:6px}
+.page-head:not(.show) input{flex:1 1 120px}
+.page-head:not(.show) .page-colors{order:3;flex-basis:100%;padding-left:8px;flex-wrap:wrap}
+/* Quick levels wrap instead of running off the panel. */
+.quick-levels{flex-wrap:wrap}
+.quick-levels .pill{min-width:44px;padding-inline:6px}
+.output-hint{width:max-content}
+/* Narrow side panel: keep the cue name readable. Preview and edit move to the right-click menu (and a click on the row
+   opens the editor in Build), so only GO / pause / stop stay on the row. */
+.side-panel{container-type:inline-size;container-name:side}
+@container side (max-width:360px){
+ .row-actions .eye,.row-actions [data-edit-entry]{display:none}
+ body[data-mode=show] .cue-row,body[data-mode=build] .cue-row{padding-right:56px}
+ .cue-item.live .cue-row,.cue-item.paused .cue-row{padding-right:92px}
+ .cue-row{gap:9px;padding-left:10px}
+ .page-head.show h2{font-size:18px}
+}
+/* Narrow pages rail: the New page tile at the end of the list replaces the + in the header. */
+.pages-rail{container-type:inline-size;container-name:rail}
+@container rail (max-width:180px){
+ #newPage{display:none!important}
+ .rail-tabs{flex:1}.rail-tabs button{flex:1;padding-inline:4px}
+}
+.side-tabs button{white-space:nowrap;min-width:0}
+@container side (max-width:360px){.side-tabs{padding-inline:8px}.side-tabs button{padding:10px 9px;gap:6px;font-size:14px}}
+@container side (max-width:360px){.cue-state{display:none}.cue-item.live .cue-row,.cue-item.paused .cue-row{padding-right:84px}}
