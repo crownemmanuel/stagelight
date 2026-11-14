@@ -15,6 +15,8 @@ const token=crypto.randomBytes(24).toString('hex'),version=JSON.parse(fs.readFil
 const engine=new Engine({dataDir});
 const clients=new Set();let queue=Promise.resolve();
 const execute=(command,args,opts)=>{const run=queue.then(()=>engine.command(command,args,opts));queue=run.catch(()=>{});return run};
+// The built-in assistant runs its commands through the same queue as the desk, one at a time (docs/ASSISTANT.md).
+engine.assistant.exec=(name,args)=>execute(name,args,{lean:true});
 const json=(res,status,body)=>{res.writeHead(status,{'content-type':'application/json','cache-control':'no-store','x-content-type-options':'nosniff'});res.end(JSON.stringify(body))};
 const origins=new Set([`http://127.0.0.1:${port}`,`http://localhost:${port}`]);
 const types={'.html':'text/html','.js':'text/javascript','.mjs':'text/javascript','.css':'text/css','.png':'image/png','.woff2':'font/woff2','.svg':'image/svg+xml','.json':'application/json','.txt':'text/plain','.jpg':'image/jpeg','.jpeg':'image/jpeg','.webp':'image/webp','.gif':'image/gif','.mp4':'video/mp4','.m4v':'video/mp4','.webm':'video/webm','.mov':'video/quicktime'};
@@ -35,7 +37,8 @@ const server=http.createServer(async(req,res)=>{
   if(req.method==='POST'&&url.pathname==='/api/command'){
    if(req.headers['x-lights-token']!==token)return json(res,403,{error:'Missing session token'});
    let body='';for await(const chunk of req){body+=chunk;if(body.length>300000)throw Error('Request too large')}
-   const {command,args={}}=JSON.parse(body);return json(res,200,await execute(command,args));
+   // assistant.* never waits in the command queue (a provider call can take seconds; the queue carries GOs).
+   const {command,args={}}=JSON.parse(body);return json(res,200,typeof command==='string'&&command.startsWith('assistant.')?await engine.command(command,args):await execute(command,args));
   }
   if(req.method==='POST'&&url.pathname==='/api/media'){
    // Raw upload body; the engine validates type and size, then moves it into data/media.

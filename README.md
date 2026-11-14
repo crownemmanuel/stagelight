@@ -73,11 +73,13 @@ StageLight ships with a demo 3D world: a curved church stage with an LED wall. *
 
 Describe what you want. The agent previews effects in the visualizer (`lights_fx_preview`, `lights_preview_cue`, Blind mode), so you see them before anything is live, then saves them as cues on a page (`lights_cue_record`, `lights_page_save`). Custom effects go into the effects library with their own icons.
 
+No MCP client? Press **Assistant** in the top bar, add an Anthropic or OpenAI API key, and ask it in the chat. It builds effects, cues, scenes, pages and masters with the same commands, and the key stays on your Mac ([docs/ASSISTANT.md](docs/ASSISTANT.md)).
+
 When you're ready: arm output (**Output off → Arm physical output**), switch to **Show**, and press **GO** (or Space). To program on two screens, pop the 3D visualizer out into its own window with the button next to *LED wall*.
 
 ## Safety
 
-- Physical output is **off at every start**, and only a person arms it, in the app. Agents are told never to call `lights_output_arm` unless you ask.
+- Physical output is **off at every start**, and only a person arms it, in the app. Agents are told never to call `lights_output_arm` unless you ask. The built-in assistant is never given that command at all.
 - Patching, Art-Net routing and show import are refused while output is armed.
 - Fixtures without a verified profile never transmit.
 - Art-Net has no acknowledgment: StageLight reports what it sent, never that a light responded.
@@ -120,6 +122,7 @@ Agents working on this repository: start with [AGENTS.md](AGENTS.md). Every user
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md): engine, data model, timing
 - [docs/SHOW-MODE.md](docs/SHOW-MODE.md): pages, cue lists, preview, blind, effects, pop-out visualizer
 - [docs/SISTER-APPS.md](docs/SISTER-APPS.md): OSC show control, triggers, announcements, catalog
+- [docs/ASSISTANT.md](docs/ASSISTANT.md): the built-in chat assistant (Anthropic or OpenAI key), its safety rules and commands
 - [docs/RELEASES.md](docs/RELEASES.md): the desktop app, releases and updates
 - [public/help/agent-api.html](public/help/agent-api.html): HTTP, OSC and MCP examples
 - [docs/VERIFICATION.md](docs/VERIFICATION.md): what has been verified on a real rig, and known limits

@@ -61,6 +61,8 @@ export const SLOT_MIDI=object({note:integer(0,127),channel:integer(1,16)},['note
 export const SLOT=object({id,key:KEY,cue:id,action:{enum:MASTER_ACTIONS},fade:number(0,60),label:{type:'string',minLength:1,maxLength:40},color:hex,sound:SLOT_SOUND,midi:SLOT_MIDI},['id','action','fade']);
 export const MASTERS=object({slots:array(SLOT,0,60),desk:object({highlight:KEY,clear:KEY,blackout:KEY,tap:KEY},[])});
 // Optional modules (docs/MIDI-AND-SOUND.md). Off means never loaded: no helper process, no ports, no audio.
+// Built-in assistant notes saved in the show (house rules it follows). Provider, model and API keys are per-Mac, in <data>/assistant.json.
+export const ASSISTANT_SETTINGS=object({instructions:{type:'string',maxLength:4000}},[]);
 export const MODULES=object({sound:object({enabled:bool,device:string},['enabled']),midi:object({enabled:bool,virtualPort:bool},['enabled'])},[]);
 // Controller profiles: a control ID from the model's table (engine/controllers/) mapped to an action. Only changes from
 // the model's default map are stored; none = the control does nothing.
@@ -87,6 +89,13 @@ export const COMMANDS={
  status:cmd('Read runtime, show, output health and current fixture attributes.',object({})),
  'patch.report':cmd('Read-only patch sheet, like a Hog fixture window: every fixture (ID = Hog user number) with profile, channel footprint, Hog universe:address range, Art-Net route, status (output, ready, unrouted, unverified, disabled), groups, and the DMX bytes the engine is building for it this frame. Also per-universe usage, the network path and routing issues. No output.',object({})),
  schema:cmd('Read profiles, effects and every command schema. No output.',object({})),
+ 'show.summary':cmd('Compact read of the whole show for planning: fixture counts by profile, groups (size and fixture profiles), zones, palettes, positions, effects and effect presets, cues (tracks, effects, groups), pages and their entries, scenes, assigned masters, and live state (armed, master, blackout, blind, scene, running cues, programmer effects, selection, how many fixtures are lit). Much smaller than status; use patch.report for per-fixture detail. No output.',object({})),
+ 'assistant.status':cmd('Read the built-in assistant chat on the desk: provider (anthropic|openai), model, which providers have a saved API key (never the key itself, only its last 4 characters), allowLive, the operator notes, busy (a reply is in progress), the last error, token usage and the conversation: messages, and for each reply the commands it ran with their arguments and results. Poll it after assistant.send.',object({})),
+ 'assistant.configure':cmd('Set up the built-in assistant chat. provider: anthropic or openai (changing it starts a new conversation). apiKey: saves the key for that provider on this Mac only (data folder, owner-only file; never in the show, versions or exports); clearKey removes it. model: model ID for that provider (assistant.models lists the ones the key can use). allowLive: let the assistant run commands that change the live rig while output is armed (off by default; it can never arm output). instructions: operator notes saved in the show and given to the assistant as house rules, e.g. intensity limits.',object({provider:{enum:['anthropic','openai']},apiKey:{type:'string',pattern:'^\\s*[!-~]{8,400}\\s*$'},clearKey:bool,model:{type:'string',pattern:'^[a-zA-Z0-9._:/-]{1,100}$'},allowLive:bool,instructions:{type:'string',maxLength:4000}},[]),true),
+ 'assistant.models':cmd('List the model IDs the saved API key can use (default: the current provider). Also checks that the key works. Calls the provider over the internet; no lighting effect.',object({provider:{enum:['anthropic','openai']}},[])),
+ 'assistant.send':cmd('Send a chat message to the built-in assistant, as if typed on the desk. It replies in the background using the same commands as these tools (it can never arm output, and live commands are refused while armed unless allowLive). Returns at once; read progress and the reply with assistant.status. Refused while a reply is in progress.',object({message:{type:'string',minLength:1,maxLength:8000}}),true),
+ 'assistant.stop':cmd('Stop the assistant reply in progress. Commands it already ran stay done.',object({}),true),
+ 'assistant.clear':cmd('Start a new assistant conversation: forgets the messages. Saved cues, scenes and settings are untouched. Refused while a reply is in progress.',object({}),true),
  'look.capture':cmd('Save current fixture attributes as a reusable still cue. Preserves individual fixture colors and poses; master intensity is applied at playback. Optional page appends the cue to that page cue list with the given fade.',object({id,name:string,page:id,fade:number(0,60)},['id','name']),true),
  'cue.save':cmd('Create or replace a cue in the local library. Playing cues are snapshots; edits do not change active playback.',object({cue:CUE}),true),
  'cue.delete':cmd('Delete a saved cue. Does not alter an already playing snapshot.',object({id}),true),
@@ -229,6 +238,7 @@ export function validateShow(s){
  const cueIds=new Set(s.cues.map(c=>c.id));
  if(s.scenes){for(const sc of s.scenes){validate(SCENE,sc,'scene');for(const e of sc.look){if(!ids.has(e.id))throw Error('Unknown fixture in scene '+sc.name);validateWheelAttributes(s.fixtures.find(f=>f.id===e.id),e.values)}}if(new Set(s.scenes.map(x=>x.id)).size!==s.scenes.length)throw Error('Duplicate scene ID')}
  if(s.settings.modules)validate(MODULES,s.settings.modules,'settings.modules');
+ if(s.settings.assistant)validate(ASSISTANT_SETTINGS,s.settings.assistant,'settings.assistant');
  for(const c of s.controllers??[]){validate(CONTROLLER,c,'controller');if(!c.map||typeof c.map!=='object'||Array.isArray(c.map)||Object.keys(c.map).length>300)throw Error('A controller map is an object of control IDs');
   for(const [k,a] of Object.entries(c.map)){if(!/^[a-z0-9-]{1,40}$/.test(k))throw Error('Unknown control '+k);validate(CONTROLLER_ACTION,a,'controller '+c.id+'.'+k)}}
  if(new Set((s.controllers??[]).map(c=>c.id)).size!==(s.controllers??[]).length)throw Error('Duplicate controller ID');

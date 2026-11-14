@@ -9,6 +9,8 @@ import {visibleFixtures,hiddenFixtureIds} from './visibility.js';
 import {icon,ICONS} from './icons.js?v=ui-2';
 import {goboIcon,goboName,GOBOS} from './gobos.js?v=ui-2';
 import {keyOf,keyLabel,reservedReason} from './keys.js';
+import {mountAssistant} from './assistant.js?v=ui-2';
+let assistant=null;
 const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const store={get(k,d){try{return localStorage.getItem('lights.'+k)??d}catch{return d}},set(k,v){try{localStorage.setItem('lights.'+k,v)}catch{}}};
@@ -1076,7 +1078,7 @@ function armDialog(){if(runtime.output.armed){quiet(command('output.disarm'));re
 // ── 10 Hz paint: readback only, no structural redraws ──
 function paint(r){
  paintOutputHint(r);paintOutputState();paintRunning(r);
- if(!r)return;runtime=r;paintAgentStatus(r);paintMasters(r);paintLibrary(r);if(show){paintScene(r);paintTempo(r);paintLock(r);paintResume(r);paintHits(r)}
+ if(!r)return;runtime=r;paintAgentStatus(r);assistant?.paint(r);paintMasters(r);paintLibrary(r);if(show){paintScene(r);paintTempo(r);paintLock(r);paintResume(r);paintHits(r)}
  if(show&&r.selection&&r.selection.revision>selectionRevision){const first=!selectionRevision;selectionRevision=r.selection.revision;if(!first||r.selection.ids.length)applySelection(r.selection.ids,r.selection.group)}$('#engineStatus').innerHTML='<i></i>Engine ready';document.body.classList.toggle('live',r.output.armed);
  setText($('#outputButton span'),r.output.armed?'LIVE':'Output off');setText($('.preview-label'),stage?.mode==='reference'?'Reference render · not live lighting':r.output.armed?'Live view · output on':'Live view · output off');drawPreviewBanner(r);
  stage?.setLedPlaying(!r.output.armed);
@@ -1188,6 +1190,7 @@ addEventListener('blur',releaseAllMasters);document.addEventListener('visibility
 async function start(){
  fillIcons();document.body.dataset.mode=mode;$$('.mode-switch [data-mode]').forEach(b=>b.setAttribute('aria-selected',String(b.dataset.mode===mode)));
  try{token=(await fetch('/api/session').then(r=>r.json())).token;schema=await fetch('/api/schema').then(r=>r.json());await refresh();
+  assistant=mountAssistant({command,esc,icon,fillIcons,toast,store});
   stage=new Stage($('#viewport'),show.fixtures,selectFixture);stage.select(selected);syncLedWall();stage.update(runtime.frames);applyStageView();
   $$('[data-stage-view]').forEach(b=>b.onclick=()=>{if(b.dataset.stageView==='stage'&&visOut()){visWin.focus();return toast('The visualizer is in its own window. Use the dock button to bring it back.')}stageView=b.dataset.stageView;store.set('stageView',stageView);applyStageView()});
   $('#popoutButton').onclick=popOutVisualizer;

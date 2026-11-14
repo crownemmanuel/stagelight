@@ -12,6 +12,7 @@ import {COMMANDS,SHOW_EDITS,validate,validateShow,validateWheelAttributes} from 
 import {Versions,LiveState} from './safety.mjs';
 import {render,compose,applyOverrides,finish,blend,blendState,encode,layerEffect,trackFixtures} from './render.mjs';
 import {Output,validateNetwork,checkConnection} from './output.mjs';
+import {Assistant} from './assistant.mjs';
 const copy=x=>structuredClone(x);
 // Master slots and their keys (show.masters). A key is on one slot or one desk shortcut at most.
 const DESK_KEYS={highlight:'Highlight',clear:'Clear',blackout:'Blackout',tap:'Tap tempo'};
@@ -45,6 +46,8 @@ export class Engine{
   // Show safety (docs/SHOW-SAFETY.md): the lock survives a restart; an unclean live-state file becomes an offer to resume.
   this.versions=new Versions(dataDir,()=>this.clock());this.live=new LiveState(dataDir);const prev=this.live.read();this.locked=!!prev?.locked;
   this.resume=prev&&!prev.clean&&(prev.armed||prev.scene||prev.stack)?prev:null;if(this.resume)this.log('The engine restarted unexpectedly during a show: offering to resume.');
+  // The built-in assistant (docs/ASSISTANT.md). Its key lives in <data>/assistant.json, never in the show.
+  this.assistant=new Assistant({dir:dataDir,engine:this});
  }
  save(){if(!this.dir)return;const f=path.join(this.dir,'show.json');fs.writeFileSync(f+'.tmp',JSON.stringify(this.show,null,2));fs.renameSync(f+'.tmp',f)}
  // Audit log is append-only and asynchronous so a GO never waits on the disk; rotates at ~2 MB.
@@ -388,8 +391,38 @@ export class Engine{
  }
  // Agents count as connected while their MCP server keeps saying hello (every 10 s).
  connectedAgents(){const now=this.clock();for(const [k,a] of this.agents)if(now-a.lastSeen>30)this.agents.delete(k);return [...this.agents.values()].map(a=>({client:a.client,version:a.version,connectedFor:Math.round(now-a.connectedAt)}))}
- runtime(){return {agents:this.connectedAgents(),selection:copy(this.selection),lampCommands:Object.fromEntries([...this.lampCommands].map(([id,p])=>[id,{action:p.action,remaining:Math.max(0,p.until-this.clock())}])),revision:this.revision,running:this.runningStatus(),highlight:this.highlight,tempo:this.tempoStatus(),locked:this.locked,resume:this.resumeStatus(),...(this.mods?.live()??{}),scene:this.scene?{id:this.scene.id,name:this.scene.name}:null,masters:this.mastersStatus(),playback:this.playback?{id:this.playback.cue.id,name:this.playback.cue.name,duration:this.playback.cue.duration,loop:this.playback.cue.loop,hold:!!this.playback.cue.hold,paused:this.playback.paused,elapsed:Math.min(this.elapsed()% (this.playback.cue.loop?this.playback.cue.duration:Infinity),this.playback.cue.duration)}:null,stack:this.stackStatus(),net:{in:this.net.count.in,out:this.net.count.out,rejected:this.net.count.rejected,listening:!!this.net.listener.listening,last:this.net.in[0]?.address??null},preview:this.previewStatus(),fx:this.fx.map(x=>this.fxSummary(x)),fxPreview:this.fxSummary(this.fxPreview),blind:{enabled:this.blind,fixtures:Object.keys(this.blindOverrides),overrides:this.blindOverrides,release:this.blindRelease?{fixtures:Object.keys(this.blindRelease.frames),progress:Math.min(1,(this.clock()-this.blindRelease.start)/Math.max(.001,this.blindRelease.duration))}:null},previewFrames:this.previewFrames,transition:this.transition?{from:this.transition.from.cue?.id??null,duration:this.transition.duration,progress:Math.min(1,(this.clock()-this.transition.start)/Math.max(.001,this.transition.duration))}:null,release:this.release?{fixtures:Object.keys(this.release.frames),progress:Math.min(1,(this.clock()-this.release.start)/Math.max(.001,this.release.duration))}:null,master:this.master,blackout:this.blackout,overrides:this.overrides,frames:this.frames,output:this.output.status(),tickCount:this.tickCount,slowFrames:this.dropped,logs:this.logs.slice(-15)}}
+ runtime(){return {agents:this.connectedAgents(),assistant:this.assistant.live(),selection:copy(this.selection),lampCommands:Object.fromEntries([...this.lampCommands].map(([id,p])=>[id,{action:p.action,remaining:Math.max(0,p.until-this.clock())}])),revision:this.revision,running:this.runningStatus(),highlight:this.highlight,tempo:this.tempoStatus(),locked:this.locked,resume:this.resumeStatus(),...(this.mods?.live()??{}),scene:this.scene?{id:this.scene.id,name:this.scene.name}:null,masters:this.mastersStatus(),playback:this.playback?{id:this.playback.cue.id,name:this.playback.cue.name,duration:this.playback.cue.duration,loop:this.playback.cue.loop,hold:!!this.playback.cue.hold,paused:this.playback.paused,elapsed:Math.min(this.elapsed()% (this.playback.cue.loop?this.playback.cue.duration:Infinity),this.playback.cue.duration)}:null,stack:this.stackStatus(),net:{in:this.net.count.in,out:this.net.count.out,rejected:this.net.count.rejected,listening:!!this.net.listener.listening,last:this.net.in[0]?.address??null},preview:this.previewStatus(),fx:this.fx.map(x=>this.fxSummary(x)),fxPreview:this.fxSummary(this.fxPreview),blind:{enabled:this.blind,fixtures:Object.keys(this.blindOverrides),overrides:this.blindOverrides,release:this.blindRelease?{fixtures:Object.keys(this.blindRelease.frames),progress:Math.min(1,(this.clock()-this.blindRelease.start)/Math.max(.001,this.blindRelease.duration))}:null},previewFrames:this.previewFrames,transition:this.transition?{from:this.transition.from.cue?.id??null,duration:this.transition.duration,progress:Math.min(1,(this.clock()-this.transition.start)/Math.max(.001,this.transition.duration))}:null,release:this.release?{fixtures:Object.keys(this.release.frames),progress:Math.min(1,(this.clock()-this.release.start)/Math.max(.001,this.release.duration))}:null,master:this.master,blackout:this.blackout,overrides:this.overrides,frames:this.frames,output:this.output.status(),tickCount:this.tickCount,slowFrames:this.dropped,logs:this.logs.slice(-15)}}
  snapshot(){return {show:copy(this.show),runtime:this.runtime()}}
+ // A compact read of the whole show for planning (agents and the built-in assistant): far smaller than status.
+ showSummary(){
+  const s=this.show,idx=fixtureIndex(s),on=s.fixtures.filter(f=>f.enabled),count=list=>list.reduce((m,k)=>(m[k]=(m[k]??0)+1,m),{});
+  return {name:s.name,
+   fixtures:{total:s.fixtures.length,enabled:on.length,profiles:count(on.map(f=>f.profile)),movingProfiles:MOVING},
+   groups:s.groups.map(g=>({id:g.id,name:g.name,count:g.fixtures.length,profiles:[...new Set(g.fixtures.map(id=>idx.get(id)?.profile).filter(Boolean))]})),
+   zones:(s.zones??[]).map(z=>({id:z.id,name:z.name,role:z.role,groups:z.groups??[]})),
+   palettes:s.palettes.map(p=>({id:p.id,name:p.name,color:p.color})),
+   positions:(s.points??[]).map(p=>({id:p.id,name:p.name,fixtures:Object.keys(p.positions??{}).length})),
+   effects:Object.fromEntries(Object.entries(EFFECTS).map(([k,v])=>[k,{name:v.name,layer:v.layer??null,description:v.description}])),
+   presets:Object.entries(this.allPresets()).map(([id,p])=>({id,name:p.name,effect:p.effect,category:p.category,custom:p.custom})),
+   cues:s.cues.map(c=>({id:c.id,name:c.name,duration:c.duration,loop:c.loop,...(c.hold?{hold:true}:{}),...(c.bpm?{bpm:c.bpm}:{}),tracks:c.tracks.length,effects:[...new Set(c.tracks.map(t=>t.effect))],groups:[...new Set(c.tracks.map(t=>t.group).filter(Boolean))],look:c.look?.length??0})),
+   pages:s.pages.map(p=>({id:p.id,name:p.name,cues:p.cues.map(e=>({id:e.id,cue:e.cue,...(e.label?{label:e.label}:{}),fade:e.fade,follow:e.follow}))})),
+   scenes:(s.scenes??[]).map(x=>({id:x.id,name:x.name,fixtures:x.look.length})),
+   masters:{assigned:(s.masters?.slots??[]).map((m,i)=>({n:i+1,id:m.id,key:m.key??null,cue:m.cue??null,action:m.action,label:m.label??null})).filter(m=>m.cue),slots:s.masters?.slots?.length??0},
+   live:{armed:!!this.output.armed,master:this.master,blackout:this.blackout,blind:!!this.blind,highlight:this.highlight,locked:this.locked,scene:this.scene?{id:this.scene.id,name:this.scene.name}:null,running:this.runningStatus(),fx:this.fx.map(f=>this.fxSummary(f)),selection:{group:this.selection.group,count:this.selection.ids.length},tempo:this.tempo.bpm,lit:this.frames.filter(f=>f.intensity>.01).length}};
+ }
+ assistantCommand(name,args){
+  const a=this.assistant;
+  switch(name){
+   case 'assistant.status':return a.status();
+   case 'assistant.configure':{
+    if(args.instructions!==undefined){if(this.locked)throw Error('The performance lock is on: unlock it to change the show.');this.update(s=>{s.settings.assistant={...s.settings.assistant,instructions:args.instructions}})}
+    return a.configure(args);}
+   case 'assistant.models':return a.models(args.provider);
+   case 'assistant.send':return a.send(args.message);
+   case 'assistant.stop':return a.stop();
+   case 'assistant.clear':return a.clear();
+  }
+ }
  update(fn){const next=copy(this.show);fn(next);validateShow(next);this.show=next;this.revision++;this.save();this.versions.edited(this.show)}
  appendEntry(s,pageId,cue,fade=2,after){const page=s.pages.find(p=>p.id===pageId);if(!page)throw Error('Unknown page');const id=shortId('entry'),at=after?page.cues.findIndex(e=>e.id===after):-1;page.cues.splice(at<0?page.cues.length:at+1,0,{id,cue,fade,follow:'manual'});return id}
  // What is seen right now (blind view while blind), with master removed, as look entries. Highlight is never recorded.
@@ -426,6 +459,8 @@ export class Engine{
   // Sound trigger tuning (channel, band, sensitivity, hold, gap) is a live adjustment like a fader, so it stays open.
   const soundTuning=name==='masters.assign'&&Object.keys(args).every(k=>['slot','sound','clearSound'].includes(k));
   if(this.locked&&SHOW_EDITS.has(name)&&!soundTuning)throw Error('The performance lock is on: unlock it to change the show.');
+  if(name==='show.summary')return this.showSummary();
+  if(name.startsWith('assistant.'))return this.assistantCommand(name,args);
   if(name==='show.versions')return {versions:this.versions.list()};if(name==='show.check')return this.showCheck(args);if(name==='modules.status')return this.modulesStatus();
   if(['sound.status','midi.status'].includes(name)){const m=this.mods?.[name.split('.')[0]];if(!m)throw Error(this.moduleOff(name.split('.')[0]));return m.status()}
   if(name==='agent.hello'){const known=this.agents.get(args.session);this.agents.set(args.session,{session:args.session,client:args.client,version:args.version??'',connectedAt:known?.connectedAt??this.clock(),lastSeen:this.clock()});if(!known)this.log(`Agent connected · ${args.client}${args.version?' '+args.version:''}`);return {ok:true}}
@@ -691,5 +726,5 @@ export class Engine{
   return {ok:!rows.some(r=>r.state==='fail'),rows,at:new Date().toISOString()};
  }
  start(){this.live.write(this.liveSnapshot());this.syncModules().catch(e=>this.log('Modules: '+e.message));this.timer=setInterval(()=>{try{this.tick()}catch(e){this.log('Engine error: '+e.message);this.output.close()}},1000/30)}
- async close(){clearInterval(this.timer);this.live.close(this.liveSnapshot());await this.mods?.close();this.mods=null;await this.disarm();const audit=this.audit;this.audit=null;await new Promise(r=>audit?audit.end(r):r())}
+ async close(){clearInterval(this.timer);await this.assistant.close();this.live.close(this.liveSnapshot());await this.mods?.close();this.mods=null;await this.disarm();const audit=this.audit;this.audit=null;await new Promise(r=>audit?audit.end(r):r())}
 }
