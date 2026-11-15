@@ -31,6 +31,15 @@ Sound triggers and MIDI are **modules**, off by default. Switch them in Settings
   - It speaks newline-delimited JSON on stdin/stdout. The full protocol is at the top of `src-tauri/io/src/main.rs`.
   - The desktop app bundles it next to its Node. A dev build uses `src-tauri/target/{debug,release}/stagelight-io`, and `LIGHTS_IO_BIN` overrides both; the tests point it at `tests/fixtures/fake-io.mjs`.
   - Without the helper, the module reports "helper not installed" and nothing else changes.
+  - **When something fails (2026-11-14).** Tested in `tests/modules-resilience.test.mjs` with a misbehaving fake helper (`tests/fixtures/fake-io-flaky.mjs`).
+    - *Helper exits.* It is started again after 1, 2, 5, 10, then every 30 s. The count starts over once it has run for a minute. Each restart is logged ("The native helper stopped (code)", "Restarting the native helper in 1 s"). `modules.status` → `helper.restarts` and the pre-show check show the count.
+    - *Helper stops answering.* After 15 s with no output the engine asks for the device list. With no answer within 10 s, it kills the helper and restarts it ("The native helper stopped answering"). This check runs every 5 s, not per frame.
+    - *After a restart.* The helper's first device list makes the modules reopen everything: the sound input with its triggers (and the meter, if it was on), the virtual "StageLight" port, and the APC40. The APC40 gets its introduction and every LED again. Shift and fader pickup start over.
+    - *Sound card unplugged, or Dante stopped.* When the chosen device leaves the device list, its stream is closed and the sound check says "not connected" ("Sound: “…” is not connected; it opens again when it is back"). When it comes back, a fresh stream opens ("… is back"). An "Audio input" error from CoreAudio while the device is still listed closes the input and opens it again 2 s later, at most every 10 s.
+    - *APC40 unplugged.* It is closed, and a held Shift is forgotten. Plugged back in, it reconnects with its LEDs. As before, the helper finds it within about 2 s.
+    - *Follow cues.* A cue that a follow trigger is holding up lets go, as after 2 s of silence, in four cases: the helper stops, the input is lost, levels stop arriving for 2 s, or sound is switched off. An engine shutdown leaves it as it is (the last look holds).
+    - *Bad helper output.* Lines that are not JSON objects, or that have the wrong shapes, are dropped. Only finite dBFS numbers and whole MIDI bytes are used. Nothing throws inside the stream handler, and the same helper message is logged at most once per 10 s.
+    - *Metronome.* The Metronome LED blink is kept to 20–300 BPM, so a wild tempo cannot run a fast timer.
   - **Hot-plug (2026-10-30).** The helper rescans every 2 s, but CoreMIDI only updates a process's device list through the run loop that was current when the process made its first MIDI client. The helper therefore makes that first client on its own thread running `CFRunLoopRun`. Before this fix, a running helper never saw an APC40 plugged in after it started, and the desk said "not connected" even though macOS had found the controller.
 
 ## Sound triggers
@@ -108,6 +117,9 @@ Default map:
 | Track select 1–8 | press the fader bank's master |
 | Clip stop 1–8 | release the fader bank's master |
 | Master fader | grand master |
+| Solo 1–8 | kill the fader bank master's lights, for masters with **Solo kills its lights** ticked: off over everything until pressed again, LED lit while killed (docs/KILL.md, 2026-11-01). |
+| Record Arm 1–8 | the fader bank master's sound trigger on/off, same as the Activators. Its red LED is lit while that master's trigger is on (operator request 2026-10-31). |
+| Device knobs 1–3 | intensity, pan and tilt of the desk selection (pan and tilt only on moving heads). Each knob picks up from the first selected fixture's value (the programmer value, before the grand master) and picks up again after the selection changes, so nothing jumps. 128 steps, so pan moves about 4° a step on a 540° head. Added 2026-10-31. |
 | Scene launch 1–5 | scenes 1–5 (press the active one again to release it) |
 | Stop all clips | Stop: every cue, back to the scene |
 | Play / Stop | GO / Back |

@@ -28,14 +28,16 @@ test('tap tempo scales auto-follow waits on a page',async()=>{
  await e.command('tempo.set',{bpm:240});await e.command('page.go',{id:'song'});at(1.9);assert.equal(e.runtime().stack.entry,'e1');at(2.05);assert.equal(e.runtime().stack.entry,'e2','4 s of cue at double tempo is 2 s');
 });
 
-test('a master level scales its own cue; raising its fader from zero starts it and zero releases only what the fader started',async()=>{
+test('a master level scales its own cue; raising its fader from zero starts it and zero releases what that master started',async()=>{
  const {e,at,frame}=rig();await e.command('master.set',{value:1});await e.command('cue.save',{cue:look('c301',['301'])});await e.command('cue.save',{cue:look('c401',['401'])});
  await e.command('masters.assign',{slot:'m1',cue:'c301',action:'toggle'});await e.command('cue.play',{id:'c401'});
  await e.command('masters.level',{slot:'m1',level:.5});at(.1);assert.equal(frame('301').intensity,.5,'fader up from zero starts the cue at its level');assert.equal(frame('401').intensity,1,'other cues are untouched');
  await e.command('masters.level',{slot:'m1',level:.25});at(.2);assert.equal(frame('301').intensity,.25);assert.deepEqual(e.runtime().masters.levels,{m1:.25});
  await e.command('masters.level',{slot:'m1',level:0});at(.3);assert.equal(frame('301').intensity,0);assert.ok(!e.running().some(r=>r.cue.id==='c301'),'zero releases what the fader started');
- await e.command('masters.trigger',{slot:'m1',down:true});await e.command('masters.level',{slot:'m1',level:0});at(.4);assert.ok(e.running().some(r=>r.cue.id==='c301'),'a cue the key started stays at level 0');
- await e.command('masters.level',{slot:'m1',level:1});at(.5);assert.equal(frame('301').intensity,1);assert.deepEqual(e.runtime().masters.levels,{});
+ // Operator 2026-11-01: fader to zero releases the cue the key started too; the key at level zero comes up at full.
+ await e.command('masters.trigger',{slot:'m1',down:true});at(.35);assert.equal(frame('301').intensity,1,'key at fader zero: full');assert.deepEqual(e.runtime().masters.levels,{});
+ await e.command('masters.level',{slot:'m1',level:0});at(.4);assert.ok(!e.running().some(r=>r.cue.id==='c301'),'fader down releases what the key started');
+ assert.equal(frame('401').intensity,1,'a cue started elsewhere is untouched');
 });
 
 test('a held flash plays at full and on top, whatever its fader says, and lets go back to the fader',async()=>{
@@ -113,6 +115,7 @@ test('sound module: the kick channel flashes its master for the hold, extends on
  await e.command('sound.test',{slot:'m1'});assert.deepEqual(e.runtime().masters.held,['m1']);await wait(80);
  const check=(await e.command('show.check',{network:false})).rows.find(r=>r.id==='sound');assert.equal(check.state,'pass');
  await e.command('masters.assign',{slot:'m1',sound:{channel:3,band:'kick',sensitivity:.8,holdMs:60,gapMs:50,enabled:false}});assert.deepEqual(e.mods.sound.triggers(),[],'a switched-off trigger stops listening');assert.equal(e.show.masters.slots[0].sound.channel,3,'and keeps its settings');
+ e.mods.sound.configure();assert.deepEqual(sent.findLast(m=>m.op==='audio.open').triggers.map(t=>[t.id,t.channel]),[['m1',3]],'but its channel is still metered, so the panel shows its audio while it is off');
  const child=io.child;await e.command('modules.set',{sound:{enabled:false}});assert.equal(e.mods,null);await until(()=>child.exitCode!==null);
 });
 
@@ -129,6 +132,7 @@ test('sound follow mode: the master level rides the channel, starts the cue, sta
  lvl(-27);at(.5);assert.equal(frame('401').intensity,.25,'and comes straight back');
  lvl(-60);await wait(2100);lvl(-60);at(.6);assert.ok(!e.running().some(r=>r.cue.id==='pad'),'2 s of silence releases it');
  await e.command('sound.test',{slot:'m2'});at(.7);assert.equal(frame('401').intensity,1,'test swell');
+ lvl(-9);at(.75);assert.ok(e.running().some(r=>r.cue.id==='pad'));await e.command('masters.sound',{slot:'m2',enabled:false});assert.ok(!e.running().some(r=>r.cue.id==='pad'),'switching the trigger off while it is up lets go of its cue');
  assert.ok(!e.logs.some(l=>/masters.level/.test(l.message)),'level updates are not logged');await e.command('modules.set',{sound:{enabled:false}});
 });
 
@@ -141,6 +145,16 @@ test('a sound trigger switches on and off live: masters.sound, while locked, and
  const io=e.mods.io,sent=[];const send=io.send.bind(io);io.send=m=>{sent.push(m);send(m)};
  e.mods.midi.input([0x90,0x32,127]);e.mods.midi.input([0x80,0x32,127]);await e.mods.midi.queue;assert.equal(e.show.masters.slots[0].sound.enabled,true,'Activator 1 switches it back on, still locked');
  assert.ok(sent.some(m=>m.port==='apc'&&m.bytes[0]===0x90&&m.bytes[1]===0x32&&m.bytes[2]===1),'Activator 1 lights while the trigger is on');
+ // Record Arm 1 (note 0x30, red LED) does the same: off, then on again, lit red while on.
+ e.mods.midi.input([0x90,0x30,127]);e.mods.midi.input([0x80,0x30,127]);await e.mods.midi.queue;assert.equal(e.show.masters.slots[0].sound.enabled,false,'Record Arm 1 switches it off');
+ e.mods.midi.input([0x90,0x30,127]);e.mods.midi.input([0x80,0x30,127]);await e.mods.midi.queue;assert.equal(e.show.masters.slots[0].sound.enabled,true,'Record Arm 1 switches it back on');
+ assert.ok(sent.some(m=>m.port==='apc'&&m.bytes[0]===0x90&&m.bytes[1]===0x30&&m.bytes[2]===1),'Record Arm 1 lights red while the trigger is on');
+ // Solo 1 (note 0x31) kills master 1's lights only when the master has "Solo kills"; lit blue while killed.
+ e.mods.midi.input([0x90,0x31,127]);e.mods.midi.input([0x80,0x31,127]);await e.mods.midi.queue;assert.deepEqual(e.runtime().kills,[],'no Solo kills without the setting');
+ await e.command('performance.lock',{enabled:false});await e.command('masters.assign',{slot:'m1',soloKill:true});
+ e.mods.midi.input([0x90,0x31,127]);e.mods.midi.input([0x80,0x31,127]);await e.mods.midi.queue;assert.equal(e.runtime().kills[0]?.slot,'m1','Solo 1 kills master 1');
+ assert.ok(sent.some(m=>m.port==='apc'&&m.bytes[0]===0x90&&m.bytes[1]===0x31&&m.bytes[2]===1),'Solo 1 lights while killed');
+ e.mods.midi.input([0x90,0x31,127]);e.mods.midi.input([0x80,0x31,127]);await e.mods.midi.queue;assert.deepEqual(e.runtime().kills,[],'pressed again: back');
  await e.command('masters.sound',{slot:'m1',enabled:false});io.receive(JSON.stringify({ev:'hit',id:'m1'}));at(.1);assert.equal(frame('401').intensity,0,'a hit already on its way while off is ignored');
  await e.command('masters.sound',{slot:'m1',enabled:true});assert.deepEqual(e.mods.sound.triggers().map(t=>t.id),['m1']);await e.mods.close();e.mods=null;
 });
@@ -171,6 +185,13 @@ test('APC40 mkII: connects in Ableton Live mode, pads and faders drive masters, 
  // Master fader is the grand master; the scene button GOes the scene and its LED is the scene's blue.
  feed([0xB0,14,127]);feed([0xB0,14,64]);await flush();assert.ok(Math.abs(e.master-64/127)<.01);
  feed([0x90,0x52,127]);feed([0x80,0x52,127]);await flush();assert.equal(e.runtime().scene.id,'blue');
+ // Device knobs 1-3 (CC 16-18): intensity, pan, tilt of the desk selection, picked up from the first fixture's value.
+ await e.command('master.set',{value:1});await e.command('selection.set',{ids:['301','401']});await e.command('fixture.set',{ids:['301','401'],values:{intensity:.5}});at(.31);
+ feed([0xB0,16,127]);await flush();at(.32);assert.equal(frame('301').intensity,.5,'no jump before pickup');
+ feed([0xB0,16,64]);feed([0xB0,16,32]);await flush();at(.33);assert.ok(Math.abs(frame('401').intensity-32/127)<.01,'knob 1 = intensity of the selection');
+ const pan0=frame('301').pan;feed([0xB0,17,Math.round(pan0*127)]);feed([0xB0,17,100]);await flush();at(.34);assert.ok(Math.abs(frame('301').pan-100/127)<.01,'knob 2 = pan');assert.equal(e.overrides['401'].pan,undefined,'pan only on moving heads');
+ const tilt0=frame('301').tilt;feed([0xB0,18,Math.round(tilt0*127)]);feed([0xB0,18,20]);await flush();at(.35);assert.ok(Math.abs(frame('301').tilt-20/127)<.01,'knob 3 = tilt');
+ await e.command('fixture.set',{ids:['302'],values:{pan:.3}});await e.command('selection.set',{ids:['302']});feed([0xB0,17,110]);await flush();at(.36);assert.equal(frame('302').pan,.3,'a new selection picks up again: no jump to the knob');
  const blue=APC.nearestColor('#0000ff');assert.ok([45,67].includes(blue));assert.ok(sent.some(m=>m.op==='midi.send'&&m.port==='apc'&&m.bytes[1]===0x52&&m.bytes[2]===blue),'scene LED in the scene colour');
  // Pad 1 LED is master 1's red when idle (dim) — and repeating a paint sends nothing new.
  const n=sent.length;midi.changed();assert.equal(sent.length,n,'unchanged LEDs are not resent');

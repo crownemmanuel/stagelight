@@ -8,14 +8,57 @@ import {fileURLToPath} from 'node:url';
 import {Engine,MEDIA_TYPES} from './engine/engine.mjs';
 import {decodePacket,encodeOSC} from './engine/osc.mjs';
 import {routeOSC} from './engine/osc-routes.mjs';
+import {openShow} from './engine/safety.mjs';
+import {migrate} from './engine/model.mjs';
+import {validateShow} from './engine/spec.mjs';
 import {performance} from 'node:perf_hooks';
 const root=path.dirname(fileURLToPath(import.meta.url));
 const port=Number(process.env.LIGHTS_PORT??1460);
 const dataDir=process.env.LIGHTS_DATA_DIR??path.join(root,'data');
 const token=crypto.randomBytes(24).toString('hex'),version=JSON.parse(fs.readFileSync(path.join(root,'package.json'),'utf8')).version;
-const engine=new Engine({dataDir});
+// Fingerprint of the desk and engine code this server loaded: an open desk reloads when it reconnects to different code.
+const build=(()=>{const h=crypto.createHash('sha1');for(const dir of ['public','engine'])for(const f of fs.readdirSync(path.join(root,dir)).filter(f=>/\.(m?js|html|css)$/.test(f)).sort())h.update(f).update(fs.readFileSync(path.join(root,dir,f)));return h.digest('hex').slice(0,12)})();
+// Last-resort guards (docs/SHOW-SAFETY.md): a stray rejection or exception is written to the engine log and stderr and
+// the engine keeps running, so the rig keeps its look. Rate-limited: the same error at most once per 10 s and at most 20
+// reports a minute, with a count of what was held back, so a repeating error cannot flood the audit log or engine.log.
+let engine=null;
+const guard={seen:new Map(),window:0,count:0,held:0};
+function report(kind,err){
+ const now=Date.now(),msg=String(err?.stack??err?.message??err).split('\n').slice(0,4).join(' | ').slice(0,400),key=kind+msg;
+ if(now-guard.window>60000){guard.window=now;guard.count=0}
+ const last=guard.seen.get(key);if((last&&now-last<10000)||guard.count>=20){guard.held++;return}
+ if(guard.seen.size>500)guard.seen.clear();guard.seen.set(key,now);guard.count++;
+ const line=`${kind}: ${msg}${guard.held?` (${guard.held} similar reports held back)`:''}`;guard.held=0;
+ try{console.error(new Date().toISOString()+' '+line)}catch{}try{engine?.log('Engine kept running after '+line)}catch{}
+}
+process.on('unhandledRejection',e=>report('Unhandled rejection',e));
+process.on('uncaughtException',e=>report('Uncaught exception',e));
+// Startup: an unreadable or invalid show.json is moved aside and the newest show version that loads takes its place
+// (engine/safety.mjs openShow). If none loads, exit naming the bad file rather than start on an empty show.
+try{
+ const r=openShow({dataDir,make:()=>new Engine({dataDir}),check:raw=>validateShow(migrate(raw)),log:m=>console.error(m)});engine=r.engine;
+ if(r.recovered){const m=`Startup: show.json could not be read (${r.recovered.why}). It was kept as ${path.basename(r.recovered.aside)} and the show was restored from version ${r.recovered.version}. Check the show before arming.`;console.error(m);engine.log(m)}
+}catch(e){console.error(e.message);process.exit(1)}
+// Commands run one at a time, in order. A command that has not settled after QUEUE_WAIT (a network check that never
+// returns, say) stops holding up the rest: it is logged and the next command runs, so GO never freezes behind it.
+const QUEUE_WAIT=Number(process.env.LIGHTS_QUEUE_WAIT_MS)||20000;
 const clients=new Set();let queue=Promise.resolve();
-const execute=(command,args,opts)=>{const run=queue.then(()=>engine.command(command,args,opts));queue=run.catch(()=>{});return run};
+const execute=(command,args,opts)=>{let release;const gate=new Promise(r=>release=r);
+ const run=queue.then(()=>{const t=setTimeout(()=>{engine.log(`${command} is still running after ${QUEUE_WAIT/1000} s: the commands after it no longer wait for it`);release()},QUEUE_WAIT);t.unref?.();
+  const p=Promise.resolve().then(()=>engine.command(command,args,opts));p.catch(()=>{}).finally(()=>{clearTimeout(t);release()});return p});
+ queue=gate;return run};
+// Command bodies (a whole show for show.import) up to 32 MB, counted in bytes; above that a clear 413.
+const MAX_BODY=32*1024*1024;
+const tooLarge=()=>Object.assign(Error(`Request too large: the limit is ${MAX_BODY/1024/1024} MB`),{status:413});
+// An over-limit body is read to its end and dropped, so the sender always gets the answer instead of a reset
+// connection; only past four times the limit is the connection cut.
+async function readBody(req){
+ const declared=Number(req.headers['content-length']);if(declared>MAX_BODY*4){req.destroy();throw tooLarge()}
+ const chunks=[];let size=0;for await(const chunk of req){size+=chunk.length;if(size>MAX_BODY*4){req.destroy();throw tooLarge()}if(size<=MAX_BODY)chunks.push(chunk)}
+ if(size>MAX_BODY)throw tooLarge();return Buffer.concat(chunks,size).toString('utf8');
+}
+// A file stream that fails part-way (file removed, disk error) ends that response, never the engine.
+const pipeFile=(stream,res)=>{stream.on('error',()=>res.destroy());stream.pipe(res)};
 const json=(res,status,body)=>{res.writeHead(status,{'content-type':'application/json','cache-control':'no-store','x-content-type-options':'nosniff'});res.end(JSON.stringify(body))};
 const origins=new Set([`http://127.0.0.1:${port}`,`http://localhost:${port}`]);
 const types={'.html':'text/html','.js':'text/javascript','.mjs':'text/javascript','.css':'text/css','.png':'image/png','.woff2':'font/woff2','.svg':'image/svg+xml','.json':'application/json','.txt':'text/plain','.jpg':'image/jpeg','.jpeg':'image/jpeg','.webp':'image/webp','.gif':'image/gif','.mp4':'video/mp4','.m4v':'video/mp4','.webm':'video/webm','.mov':'video/quicktime'};
@@ -24,19 +67,19 @@ const server=http.createServer(async(req,res)=>{
   if(![`localhost:${port}`,`127.0.0.1:${port}`].includes(req.headers.host))return json(res,403,{error:'Local host only'});
   if(req.headers.origin&&!origins.has(req.headers.origin))return json(res,403,{error:'Cross-origin request refused'});
   const url=new URL(req.url,`http://127.0.0.1:${port}`);
-  if(req.method==='GET'&&url.pathname==='/api/session')return json(res,200,{token,version});
+  if(req.method==='GET'&&url.pathname==='/api/session')return json(res,200,{token,version,build});
   // Exact values for the Connect an agent dialog: this Mac's Node, this folder's MCP server, this engine's URL.
   if(req.method==='GET'&&url.pathname==='/api/connect')return json(res,200,{node:['/opt/homebrew/bin/node','/usr/local/bin/node'].find(p=>fs.existsSync(p))??process.execPath,server:path.join(root,'mcp','server.mjs'),url:`http://127.0.0.1:${port}`,name:'stagelight'});
   if(req.method==='GET'&&url.pathname==='/api/state')return json(res,200,engine.snapshot());
   if(req.method==='GET'&&url.pathname==='/api/schema')return json(res,200,await engine.command('schema'));
   if(req.method==='GET'&&url.pathname==='/api/show'){res.setHeader('content-disposition','attachment; filename="stagelight-show.json"');return json(res,200,engine.show)}
   if(req.method==='GET'&&url.pathname==='/api/events'){
-   res.writeHead(200,{'content-type':'text/event-stream','cache-control':'no-cache','connection':'keep-alive'});res.write('data: '+JSON.stringify(engine.runtime())+'\n\n');clients.add(res);req.on('close',()=>clients.delete(res));return;
+   res.writeHead(200,{'content-type':'text/event-stream','cache-control':'no-cache','connection':'keep-alive'});res.on('error',()=>clients.delete(res));res.write('data: '+JSON.stringify(engine.runtime())+'\n\n');clients.add(res);req.on('close',()=>clients.delete(res));return;
   }
   if(req.method==='POST'&&url.pathname==='/api/command'){
    if(req.headers['x-lights-token']!==token)return json(res,403,{error:'Missing session token'});
-   let body='';for await(const chunk of req){body+=chunk;if(body.length>300000)throw Error('Request too large')}
-   const {command,args={}}=JSON.parse(body);return json(res,200,await execute(command,args));
+   const body=await readBody(req);let parsed;try{parsed=JSON.parse(body)}catch{return json(res,400,{error:'The request body is not valid JSON'})}
+   const {command,args={}}=parsed??{};return json(res,200,await execute(command,args));
   }
   if(req.method==='POST'&&url.pathname==='/api/choose-folder'){
    // The Finder's folder picker for Save / Open show. Outside the command queue: it waits on the operator, never on the engine.
@@ -57,7 +100,7 @@ const server=http.createServer(async(req,res)=>{
    if(Number(req.headers['content-length'])>500e6)return json(res,413,{error:'Media file exceeds 500 MB'});
    const dir=path.join(dataDir,'media');fs.mkdirSync(dir,{recursive:true});const tmp=path.join(dir,'.incoming-'+crypto.randomBytes(6).toString('hex')+ext);
    try{let size=0;const file=fs.createWriteStream(tmp);for await(const chunk of req){size+=chunk.length;if(size>500e6)throw Error('Media file exceeds 500 MB');if(!file.write(chunk))await new Promise(r=>file.once('drain',r))}await new Promise((r,j)=>file.end(e=>e?j(e):r()));
-    const run=queue.then(()=>{const id=engine.addMedia(tmp,name,{move:true});engine.log('media.upload · '+name);return {ok:true,created:{media:id},runtime:engine.runtime()}});queue=run.catch(()=>{});return json(res,200,await run)}
+    let release;const gate=new Promise(r=>release=r);const run=queue.then(()=>{try{const id=engine.addMedia(tmp,name,{move:true});engine.log('media.upload · '+name);return {ok:true,created:{media:id},runtime:engine.runtime()}}finally{release()}});queue=gate;return json(res,200,await run)}
    finally{fs.rmSync(tmp,{force:true})}
   }
   if(req.method!=='GET')return json(res,405,{error:'Method not allowed'});
@@ -66,19 +109,25 @@ const server=http.createServer(async(req,res)=>{
    if(file.startsWith('.')||!MEDIA_TYPES[path.extname(file).toLowerCase()]||!fs.existsSync(p))return json(res,404,{error:'Not found'});
    // Byte ranges: WebKit will not play video without them.
    const size=fs.statSync(p).size,range=/^bytes=(\d*)-(\d*)$/.exec(req.headers.range??''),headers={'content-type':types[path.extname(p).toLowerCase()],'accept-ranges':'bytes','cache-control':'no-store','x-content-type-options':'nosniff'};
-   if(range){let start=range[1]?+range[1]:size-+range[2],end=range[1]&&range[2]?Math.min(+range[2],size-1):size-1;if(!range[1])start=Math.max(0,start);if(start>end||start>=size){res.writeHead(416,{'content-range':`bytes */${size}`});return res.end()}res.writeHead(206,{...headers,'content-range':`bytes ${start}-${end}/${size}`,'content-length':end-start+1});return fs.createReadStream(p,{start,end}).pipe(res)}
-   res.writeHead(200,{...headers,'content-length':size});return fs.createReadStream(p).pipe(res);
+   if(range){let start=range[1]?+range[1]:size-+range[2],end=range[1]&&range[2]?Math.min(+range[2],size-1):size-1;if(!range[1])start=Math.max(0,start);if(start>end||start>=size){res.writeHead(416,{'content-range':`bytes */${size}`});return res.end()}res.writeHead(206,{...headers,'content-range':`bytes ${start}-${end}/${size}`,'content-length':end-start+1});return pipeFile(fs.createReadStream(p,{start,end}),res)}
+   res.writeHead(200,{...headers,'content-length':size});return pipeFile(fs.createReadStream(p),res);
   }
   const p=path.resolve(root,'public','.'+decodeURIComponent(url.pathname==='/'?'/index.html':url.pathname));
   if(!p.startsWith(path.join(root,'public')+path.sep))return json(res,403,{error:'Invalid path'});
   if(!fs.existsSync(p)||!fs.statSync(p).isFile())return json(res,404,{error:'Not found'});
-  res.writeHead(200,{'cache-control':'no-store','content-type':types[path.extname(p)]??'application/octet-stream','x-content-type-options':'nosniff','content-security-policy':"default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; object-src 'none'; frame-ancestors 'none'"});fs.createReadStream(p).pipe(res);
- }catch(e){json(res,400,{error:e.message})}
+  res.writeHead(200,{'cache-control':'no-store','content-type':types[path.extname(p)]??'application/octet-stream','x-content-type-options':'nosniff','content-security-policy':"default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; object-src 'none'; frame-ancestors 'none'"});pipeFile(fs.createReadStream(p),res);
+ }catch(e){
+  if(res.headersSent){res.destroy();return}
+  if(e.status===413)return json(res,413,{error:e.message});
+  json(res,400,{error:e.message});
+ }
 });
 // Show-control network: one UDP socket receives triggers and sends to targets, so replies come from our listen port.
 // Loopback by default; LAN mode only accepts allowlisted IPs. Everything runs through the same engine commands.
 let osc=null;const loopback=a=>a==='127.0.0.1'||a==='::1'||a==='::ffff:127.0.0.1';
-const reply=(address,args,rinfo,port)=>{try{osc?.send(encodeOSC(address,args),port??rinfo.port,rinfo.address)}catch{}};
+// With a callback, a failed reply (host unreachable) is dropped instead of reaching the socket's error handler,
+// which would wrongly report the listener as down.
+const reply=(address,args,rinfo,port)=>{try{osc?.send(encodeOSC(address,args),port??rinfo.port,rinfo.address,()=>{})}catch{}};
 function legacy(address,args){switch(address){
  case '/lights/cue/play':if(args.length!==2)throw Error('cue/play requires cue ID and unique execution ID');return {command:'cue.play',args:{id:args[0],requestId:args[1]}};
  case '/lights/stop':return {command:'cue.stop',args:{fade:typeof args[0]==='number'?args[0]:1.5}};
@@ -92,7 +141,7 @@ async function onOSC(msg,rinfo){
  for(const {address,args} of messages){
   const t0=performance.now(),row={at:new Date().toISOString(),from:`${rinfo.address}:${rinfo.port}`,address,args:args.slice(0,6).map(a=>typeof a==='string'?a.slice(0,60):a)};
   try{
-   if(address==='/lights/ping'){reply('/lights/hello',['0.1.0',engine.output.armed?1:0],rinfo);row.ok=true;row.result='hello';continue}
+   if(address==='/lights/ping'){reply('/lights/hello',[version,engine.output.armed?1:0],rinfo);row.ok=true;row.result='hello';continue}
    const route=address.startsWith('/stagelight/')||address==='/stagelight'?routeOSC(address,args,engine.show,{stack:engine.stack,output:{armed:engine.output.armed},revision:engine.revision}):legacy(address,args);
    if(route.reply){reply(...route.reply,rinfo,route.replyPort);row.ok=true;row.result='hello';continue}
    if(route.replies){for(const r of route.replies)reply(...r,rinfo,route.replyPort);row.ok=true;row.result=`${address.split('/')[2]} · ${route.replies.length} messages`;continue}
@@ -109,7 +158,7 @@ async function onOSC(msg,rinfo){
 function listenOSC(cfg){
  const portToUse=Number(process.env.LIGHTS_OSC_PORT??cfg?.port??1461),host=cfg?.bind==='lan'?'0.0.0.0':'127.0.0.1';
  try{osc?.close()}catch{}const socket=dgram.createSocket('udp4');osc=socket;engine.net.listener={listening:false,address:host,port:portToUse};
- socket.on('message',(m,r)=>{onOSC(m,r)});socket.on('error',e=>{engine.net.listener={listening:false,address:host,port:portToUse,error:e.message};engine.log('OSC unavailable: '+e.message)});
+ socket.on('message',(m,r)=>{onOSC(m,r).catch(e=>report('OSC',e))});socket.on('error',e=>{engine.net.listener={listening:false,address:host,port:portToUse,error:e.message};engine.log('OSC unavailable: '+e.message)});
  socket.bind(portToUse,host,()=>{engine.net.listener={listening:true,address:host,port:portToUse}});
 }
 engine.onNetworkChange=cfg=>listenOSC(cfg);
@@ -121,12 +170,12 @@ engine.sendHook=async(target,packet)=>{
  let body=null;try{const t=await r.text();body=t&&t.length<200000?JSON.parse(t):null}catch{}
  if(!r.ok)throw Error('HTTP '+r.status+(typeof body?.summary==='string'?' · '+body.summary.slice(0,200):''));return body;
 };
-server.on('error',e=>{console.error(e.message);process.exitCode=1;osc?.close();clearInterval(streamTimer);engine.close()});
+server.on('error',e=>{console.error(e.message);process.exitCode=1;try{osc?.close()}catch{}clearInterval(streamTimer);Promise.resolve().then(()=>engine.close()).catch(err=>console.error(err.message)).finally(()=>process.exit(1))});
 server.listen(port,'127.0.0.1',()=>{engine.start();console.log(`LIGHTS_READY http://127.0.0.1:${port} · preview only · data ${dataDir}`)});
 listenOSC(engine.show.settings.osc);
 // 10 Hz runtime stream. A settled look repeats the same payload, so unchanged frames are not re-sent: idle desks then parse and paint nothing.
 // The tick counter alone does not count as a change; it is read from the diagnostics dialog when something else moves.
-let lastStream='';const streamTimer=setInterval(()=>{if(!clients.size)return;const runtime=engine.runtime(),key=JSON.stringify(runtime,(k,v)=>k==='tickCount'?undefined:v);if(key===lastStream)return;lastStream=key;const data='data: '+JSON.stringify(runtime)+'\n\n';for(const client of clients){if(client.writableLength>500000){client.end();clients.delete(client)}else client.write(data)}},100);
+let lastStream='';const streamTimer=setInterval(()=>{try{if(!clients.size)return;const runtime=engine.runtime(),key=JSON.stringify(runtime,(k,v)=>k==='tickCount'?undefined:v);if(key===lastStream)return;lastStream=key;const data='data: '+JSON.stringify(runtime)+'\n\n';for(const client of clients){if(client.destroyed||client.writableLength>500000){client.end();clients.delete(client)}else client.write(data)}}catch(e){report('Runtime stream',e)}},100);
 let quitting=false;
-async function shutdown(){if(quitting)return;quitting=true;clearInterval(streamTimer);await engine.close();for(const c of clients)c.end();osc?.close();server.close(()=>process.exit(0));setTimeout(()=>process.exit(0),2000).unref()}
+async function shutdown(){if(quitting)return;quitting=true;clearInterval(streamTimer);setTimeout(()=>process.exit(0),3000).unref();try{await engine.close()}catch(e){console.error('Shutdown: '+e.message)}for(const c of clients)c.end();try{osc?.close()}catch{}server.close(()=>process.exit(0));setTimeout(()=>process.exit(0),2000).unref()}
 process.on('SIGINT',shutdown);process.on('SIGTERM',shutdown);

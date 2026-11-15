@@ -10,25 +10,42 @@ import {visibleFixtures,hiddenFixtureIds} from './visibility.js';
 import {icon,ICONS} from './icons.js?v=ui-2';
 import {goboIcon,goboName,GOBOS} from './gobos.js?v=ui-2';
 import {keyOf,keyLabel,reservedReason} from './keys.js';
+import {fmtSeconds,cueTime,isTyping,createMessageLog,entryByNumber,shortcutRows,presetLayer,argControls,argLabel,outputBar,undoText} from './desk-ux.js';
 const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const store={get(k,d){try{return localStorage.getItem('lights.'+k)??d}catch{return d}},set(k,v){try{localStorage.setItem('lights.'+k,v)}catch{}}};
 const MOVERS=['rogue','mh7','beam200','beam7r'],WHEEL=['beam200','beam7r'];
 const PAGE_COLORS=['#8bc9d0','#eac28a','#c99ae8','#7fc79a','#ee8f8f','#7da6f0','#f0b46b','#d8d8d8'];
 // UI state. Engine state (show, runtime) is read back; nothing here is authoritative.
-let show,runtime,schema,token,stage,toastTimer,rev=0;
+// build: the engine's code fingerprint from /api/session; reconnecting to a different one reloads the desk.
+let show,runtime,schema,token,build,stage,toastTimer,rev=0;
 let mode=store.get('mode','show'),pageId=store.get('page',null),standby=null,selected=[],group=null;
 let railTab=store.get('railTab','pages'),pane=store.get('bottomPane',store.get('fixtureChips','shown')==='hidden'?'none':'fixtures'),sceneKey='';
 let fxMode=store.get('fxMode','preview'),ovTab='props',stageView=store.get('stageView','stage'),viewSource='live',selectionRevision=0,side='cues',progTab='look',editingEntry=null,ledOpen=false,positionMode='joystick',joystickSpeed=.1,destroyJoystick=null,aligning=null,liveKey='';
 const format=t=>`${Math.floor(t/60)}:${String(Math.floor(t%60)).padStart(2,'0')}`;
 const hexOf=c=>'#'+c.map(x=>Math.round(x*255).toString(16).padStart(2,'0')).join('');
 function fillIcons(root=document){for(const el of root.querySelectorAll('[data-icon]'))if(!el.firstElementChild||el.firstElementChild.tagName!=='svg')el.insertAdjacentHTML('afterbegin',icon(el.dataset.icon))}
-function toast(text){$('#toast').textContent=text;$('#toast').hidden=false;clearTimeout(toastTimer);toastTimer=setTimeout(()=>$('#toast').hidden=true,5000)}
+// Every toast also goes into the message log (☰ → Messages), so a failure that flashed by can still be read. Errors stay
+// up longer and are red.
+const messages=createMessageLog();
+function toast(text,kind='info',action=null){messages.push(text,kind);const t=$('#toast');t.textContent=text;if(action){const b=document.createElement('button');b.className='toast-action';b.textContent=action.label;b.onclick=()=>{t.hidden=true;action.run()};t.append(b)}t.classList.toggle('error',kind==='error');t.classList.toggle('has-action',!!action);t.hidden=false;clearTimeout(toastTimer);toastTimer=setTimeout(()=>t.hidden=true,action?8000:kind==='error'?8000:5000);paintMessages()}
+// Show undo (show.undo / runtime.showUndo): one step back to before the last show edit; pressing it again redoes.
+function showUndo(){const u=undoText(runtime?.showUndo?.label);if(!u)return toast('No show edit to undo.');quiet(command('show.undo',{}).then(()=>toast(u.redo?`Redone: ${u.words}.`:`Undone: ${u.words}.`,'info',{label:u.redo?'Undo':'Redo',run:showUndo})))}
+const undoToast=text=>toast(text,'info',{label:'Undo',run:showUndo});
+// Programmer undo (override.undo / runtime.programmerUndo): the last manual change, a whole slider drag or a Clear.
+function programmerUndo(){if(!runtime?.programmerUndo?.available)return toast('Nothing to undo in the programmer.');quiet(command('override.undo',{}).then(()=>{toast(runtime?.blind?.enabled?'Undid the last blind change.':'Undid the last manual change.');drawSide()}))}
+// A red dot on ☰ means an error arrived since the log was last opened.
+let seenErrors=0;
+function paintMessages(){const n=messages.errors(),b=$('[data-menu=messages] small');if(b)setText(b,n?`${n} error${n===1?'':'s'}`:'');$('#menuButton')?.classList.toggle('alert',n>seenErrors)}
 function setText(el,value){if(el&&el.textContent!==value)el.textContent=value}
-async function command(name,args={}){try{const r=await fetch('/api/command',{method:'POST',headers:{'content-type':'application/json','x-lights-token':token},body:JSON.stringify({command:name,args})});const v=await r.json();if(!r.ok)throw Error(v.error);if(v.runtime){if(v.runtime.revision!==rev)await refresh();else paint(v.runtime)}return v}catch(e){toast(e.message);throw e}}
+// timeout (ms) is for presses that must never hang: a master let-go waiting behind a stuck request would leave a flash on.
+async function command(name,args={},{timeout}={}){const ctl=timeout?new AbortController():null,timer=ctl&&setTimeout(()=>ctl.abort(),timeout);try{const r=await fetch('/api/command',{method:'POST',headers:{'content-type':'application/json','x-lights-token':token},body:JSON.stringify({command:name,args}),...(ctl?{signal:ctl.signal}:{})});const v=await r.json();if(!r.ok)throw Error(v.error);if(v.runtime){if(v.runtime.revision!==rev)await refresh().catch(()=>{});else paint(v.runtime)}return v}catch(e){const msg=e.name==='AbortError'?`The engine did not answer ${name} in time.`:e.message;toast(msg,'error');throw Error(msg)}finally{clearTimeout(timer)}}
 const quiet=p=>p.catch(()=>{});
-async function refresh(){const v=await fetch('/api/state').then(r=>r.json());show=v.show;runtime=v.runtime;rev=runtime.revision;if(!show.pages.some(p=>p.id===pageId))pageId=runtime.stack?.page??show.pages[0]?.id??null;selected=selected.filter(id=>show.fixtures.some(f=>f.id===id));if(stage){stage.setFixtures(visibleFixtures(show));syncLedWall()}drawAll();paint(runtime)}
-function drawAll(){drawPages();drawGroups();drawChips();drawMasters();applyPane();if(mode==='library'){if(libCue&&!show.cues.some(c=>c.id===libCue))libCue=null;$('#libraryView').innerHTML='';applyStageView()}drawSide();drawSelectionBar();drawLedTray();paintShowFile(runtime)}
+// One refresh at a time: frames that arrive while it loads do not start more (each would redraw the whole desk).
+// A standby or open entry that is no longer on the page is dropped, so GO is never left disabled by a deleted cue.
+let refreshing=null;
+function refresh(){return refreshing??=(async()=>{try{const v=await fetch('/api/state').then(r=>r.json());show=v.show;runtime=v.runtime;rev=runtime.revision;if(!show.pages.some(p=>p.id===pageId))pageId=runtime.stack?.page??show.pages[0]?.id??null;const pg=page();if(standby&&!pg?.cues.some(e=>e.id===standby))standby=null;if(editingEntry&&!pg?.cues.some(e=>e.id===editingEntry))editingEntry=null;if(group&&group!=='all'&&!show.groups.some(g=>g.id===group))group=null;selected=selected.filter(id=>show.fixtures.some(f=>f.id===id));if(stage){stage.setFixtures(visibleFixtures(show));syncLedWall()}drawAll();paint(runtime)}finally{refreshing=null}})()}
+function drawAll(){drawPages();drawGroups();drawChips();drawMasters();applyPane();paintShortcutTitles();if(mode==='library'){if(libCue&&!show.cues.some(c=>c.id===libCue))libCue=null;$('#libraryView').innerHTML='';applyStageView()}drawSide();drawSelectionBar();drawLedTray();paintShowFile(runtime)}
 // Fixture lookup indexed per show object: paint() asks for hundreds of fixtures ten times a second.
 let fixtureIndex=null,fixtureIndexFor=null;const fixture=id=>{if(fixtureIndexFor!==show?.fixtures){fixtureIndexFor=show?.fixtures;fixtureIndex=new Map((show?.fixtures??[]).map(f=>[f.id,f]))}return fixtureIndex.get(id)};
 // Styles cost layout and paint even when unchanged, so each live dot remembers what it last showed.
@@ -46,7 +63,7 @@ function setMode(m){if(m==='library'&&mode!=='library')libPeek=false;mode=m;stor
 
 // ── Pages rail ──
 function drawPages(){
- drawRailTabs();if(railTab==='scenes')return drawScenes();
+ pagesRunKey=null;drawRailTabs();if(railTab==='scenes')return drawScenes();
  $('#pageList').innerHTML=show.pages.map(p=>`<button class="page-tile ${p.id===pageId?'selected':''}" data-page="${esc(p.id)}" style="--page:${esc(p.color??'#8bc9d0')}"><i></i><span><strong>${esc(p.name)}</strong><small>${p.cues.length} cue${p.cues.length===1?'':'s'}</small></span><b class="live-dot" title="Running"></b></button>`).join('')||`<p class="empty">No pages yet.${mode==='build'?'':' Switch to Build to create one.'}</p>`;
  $$('[data-page]').forEach(b=>b.onclick=()=>{pageId=b.dataset.page;store.set('page',pageId);standby=null;editingEntry=null;if(mode==='build')side='cues';else if(side!=='override')side='cues';drawPages();drawSide();paint(runtime)});
 }
@@ -74,7 +91,7 @@ function openSceneMenu(id,x,y){
  $('#ctxMenu').innerHTML=`<div class="ctx-title">${esc(sc.name)}</div>`+(active?item('release','close','Release scene'):item('go','scene','Make it the active scene'))+item('update','record','Update from the current look')+item('edit','edit','Rename or recolour…')+'<hr>'+item('delete','trash','Delete scene',true);
  showCtxMenu(x,y);
  const run={go:()=>quiet(command('scene.go',{id})),release:()=>quiet(command('scene.release',{})),update:()=>quiet(command('scene.capture',{id,name:sc.name}).then(()=>toast(`“${sc.name}” updated from the current look.`))),edit:()=>sceneDialog(sc),
-  delete:()=>confirmDialog(`Delete “${sc.name}”?`,active?'It is the active scene, so the rig fades out of it first. Cues are unchanged.':'The scene is removed. Cues are unchanged.','Delete scene',()=>command('scene.delete',{id}))};
+  delete:()=>confirmDialog(`Delete “${sc.name}”?`,active?'It is the active scene, so the rig fades out of it first. Cues are unchanged.':'The scene is removed. Cues are unchanged.','Delete scene',()=>command('scene.delete',{id}).then(()=>undoToast(`Deleted scene “${sc.name}”.`)))};
  $$('[data-ctx]').forEach(b=>b.onclick=()=>{closeMenu();run[b.dataset.ctx]()});
 }
 
@@ -119,14 +136,19 @@ function drawGroupGrid(){
  if(!show||$('#groupGrid').hidden)return;const parked=parkedSet();if(gridParent&&!show.groups.some(g=>g.id===gridParent&&g.children))gridParent=null;const inside=gridParent&&show.groups.find(g=>g.id===gridParent);
  const tiles=inside?[inside,...childGroups(inside)]:[{id:'all',name:'Every patched fixture',fixtures:show.fixtures.filter(f=>f.enabled).map(f=>f.id)},...sortedGroups().filter(g=>!parentOf(g.id))];
  const crumbs=[];for(let p=inside;p;p=parentOf(p.id))crumbs.unshift(p);
- $('#groupGrid').innerHTML=`${inside?`<nav class="grid-crumbs"><button data-grid-up="">${icon('chevron-left')}All groups</button>${crumbs.map(p=>`<span>›</span><button data-grid-up="${esc(p.id)}" ${p===inside?'class="here"':''}>${esc(p.name)}</button>`).join('')}</nav>`:''}<div class="tile-grid">${tiles.map(g=>`<button class="group-tile ${g.id===group?'active':''} ${g.color?'tinted':''}" data-tile="${esc(g.id)}" ${g.color?`style="--g:${esc(g.color)}"`:''} title="Click to select · Shift-click to add"><div class="tile-head"><strong>${esc(g.id==='all'?'All':g===inside?'All '+shortGroup(g).toLowerCase():inside?childLabel(g,inside):shortGroup(g))}</strong><span>${g.fixtures.length}</span></div>${g.children&&g!==inside?`<span role="button" tabindex="0" class="tile-open" data-tile-open="${esc(g.id)}" title="Open: its ${g.children.length} groups">${icon('group')}${g.children.length} groups ${icon('chevron-right')}</span>`:''}<small>${esc(g.name)}</small><div class="tile-dots">${g.fixtures.slice(0,32).map(id=>`<i data-tile-dot="${esc(id)}" ${parked.has(id)?'class="parked"':''}></i>`).join('')}${g.fixtures.length>32?`<em>+${g.fixtures.length-32}</em>`:''}</div><div class="tile-foot"><div class="tile-level"><i data-tile-level="${esc(g.id)}"></i></div><b data-tile-pct="${esc(g.id)}">0%</b></div></button>`).join('')}<button class="group-tile new-tile" id="newGroupTile"><span>${icon('plus')}</span><strong>New group</strong><small>${selected.length?`From the ${selected.length} selected, or pick fixtures`:'Pick fixtures'}</small></button></div>`;
+ $('#groupGrid').innerHTML=`${inside?`<nav class="grid-crumbs"><button data-grid-up="">${icon('chevron-left')}All groups</button>${crumbs.map(p=>`<span>›</span><button data-grid-up="${esc(p.id)}" ${p===inside?'class="here"':''}>${esc(p.name)}</button>`).join('')}</nav>`:''}<div class="tile-grid">${tiles.map(g=>`<button class="group-tile ${g.id===group?'active':''} ${g.color?'tinted':''}" data-tile="${esc(g.id)}" ${g.color?`style="--g:${esc(g.color)}"`:''} title="Click to select · Shift-click to add"><div class="tile-head"><strong>${esc(g.id==='all'?'All':g===inside?'All '+shortGroup(g).toLowerCase():inside?childLabel(g,inside):shortGroup(g))}</strong><span>${g.fixtures.length}</span></div>${g.children&&g!==inside?`<span role="button" tabindex="0" class="tile-open" data-tile-open="${esc(g.id)}" title="Open: its ${g.children.length} groups">${icon('group')}${g.children.length} groups ${icon('chevron-right')}</span>`:''}<small>${esc(g.name)}</small><div class="tile-dots">${g.fixtures.slice(0,32).map(id=>`<i data-tile-dot="${esc(id)}" ${parked.has(id)?'class="parked"':''}></i>`).join('')}${g.fixtures.length>32?`<em>+${g.fixtures.length-32}</em>`:''}</div><div class="tile-foot"><div class="tile-level"><i data-tile-level="${esc(g.id)}"></i></div><b data-tile-pct="${esc(g.id)}">0%</b>${g.id==='all'?'':`<span role="button" tabindex="0" class="tile-kill" data-tile-kill="${esc(g.id)}" title="Kill: turns this group off over every cue, scene and master until you press it again">Kill</span>`}</div></button>`).join('')}<button class="group-tile new-tile" id="newGroupTile"><span>${icon('plus')}</span><strong>New group</strong><small>${selected.length?`From the ${selected.length} selected, or pick fixtures`:'Pick fixtures'}</small></button></div>`;
  $$('[data-tile-open]').forEach(b=>b.onclick=e=>{e.stopPropagation();gridParent=b.dataset.tileOpen;store.set('gridParent',gridParent);drawGroupGrid()});
  $$('[data-grid-up]').forEach(b=>b.onclick=e=>{e.stopPropagation();gridParent=b.dataset.gridUp||null;store.set('gridParent',gridParent??'');drawGroupGrid()});
  $('#newGroupTile').onclick=()=>groupEditor(null);$$('[data-tile]').forEach(b=>bindGroupMenu(b,b.dataset.tile));
+ $$('[data-tile-kill]').forEach(b=>b.onclick=e=>{e.stopPropagation();const g=show.groups.find(x=>x.id===b.dataset.tileKill);quiet(command('kill.set',{group:g.id}).then(r=>{paintKills();toast(r.created.killed?`${shortGroup(g)} killed: off over everything until you press Kill again.`:`${shortGroup(g)} is back.`)}))});
+ paintKills();
  $$('[data-tile]').forEach(b=>b.onclick=e=>{if(b.dataset.longPress){delete b.dataset.longPress;return}const id=b.dataset.tile;if(!e.shiftKey)return selectGroup(id);const ids=[...new Set([...selected,...idsForGroup(id)])];applySelection(ids);quiet(command('selection.set',{ids}))});
  liveKey='';paint(runtime);
 }
+// Killed groups: their tile turns red and its Kill button reads Killed (runtime.kills, from the desk, APC40 or MCP).
+function paintKills(){const on=new Set((runtime?.kills??[]).filter(k=>k.group).map(k=>k.group));for(const el of $$('[data-group]'))if(el.classList.contains('killed')!==on.has(el.dataset.group))el.classList.toggle('killed',on.has(el.dataset.group));for(const el of $$('[data-tile-kill]')){const k=on.has(el.dataset.tileKill);if(el.classList.contains('on')===k)continue;el.classList.toggle('on',k);el.closest('.group-tile')?.classList.toggle('killed',k);setText(el,k?'Killed':'Kill')}}
 function paintGroupGrid(frames){
+ paintKills();
  const byId=new Map(frames.map(f=>[f.id,f]));
  for(const el of $$('[data-tile-dot]')){const f=byId.get(el.dataset.tileDot);if(!f)continue;const fx=fixture(f.id),shown=hexOf(outputRGB(fx?.profile,f.color,f.white,fx,f)),sig=shown+'|'+f.intensity.toFixed(3);if(el.dataset.sig===sig)continue;el.dataset.sig=sig;el.style.background=f.intensity>.01?shown:'';el.style.opacity=.35+.65*f.intensity;el.style.boxShadow=f.intensity>.1?`0 0 8px ${shown}90`:'none'}
  for(const el of $$('[data-tile-level]')){const id=el.dataset.tileLevel,ids=idsForGroup(id).filter(x=>fixture(x)?.enabled),avg=ids.length?ids.reduce((n,x)=>n+(byId.get(x)?.intensity??0),0)/ids.length:0,pct=Math.round(avg*100)+'%';if(el.dataset.pct===pct)continue;el.dataset.pct=pct;el.style.width=pct;setText($(`[data-tile-pct="${CSS.escape(id)}"]`),pct)}
@@ -137,7 +159,7 @@ function drawGroups(){
  const pill=(g,depth,up)=>{const kids=childGroups(g),open=kids.length&&openGroups.has(g.id);return `<button class="pill ${g.id===group?'active':''} ${g.color?'tinted':''} ${depth?'child':''} ${kids.length?'parent':''}" data-group="${esc(g.id)}" title="${esc(g.name)}${kids.length?` · ${kids.length} groups inside`:''}" ${g.color?`style="--g:${esc(g.color)}"`:''}>${esc(up?childLabel(g,up):shortGroup(g))}<span>${g.fixtures.length}</span>${kids.length?`<i class="pill-open ${open?'open':''}" data-open-group="${esc(g.id)}" role="button" aria-label="${open?'Close':'Open'} ${esc(g.name)}" title="${open?'Close':'Open'}: its groups">${icon('chevron-right')}</i>`:''}</button>${open?`<span class="pill-children">${kids.map(k=>pill(k,depth+1,g)).join('')}</span>`:''}`};
  const pills=sortedGroups().filter(g=>!parentOf(g.id)).map(g=>pill(g,0)).join('');
  $('#groupPills').innerHTML=`<button class="pill ${group==='all'?'active':''}" data-group="all"><span class="pill-icon" data-icon="group"></span>All</button>${pills}<button class="pill ghost build-only" id="groupsManage" title="New group" data-icon="plus"></button>`;
- fillIcons($('#groupPills'));applyDrawer();drawGroupGrid();$$('[data-open-group]').forEach(i=>i.onclick=e=>{e.stopPropagation();toggleOpen(i.dataset.openGroup)});$$('[data-group]').forEach(b=>{b.onclick=()=>{if(b.dataset.longPress){delete b.dataset.longPress;return}selectGroup(b.dataset.group)};bindGroupMenu(b,b.dataset.group)});$('#groupsManage').onclick=()=>groupEditor(null);
+ fillIcons($('#groupPills'));paintKills();applyDrawer();drawGroupGrid();$$('[data-open-group]').forEach(i=>i.onclick=e=>{e.stopPropagation();toggleOpen(i.dataset.openGroup)});$$('[data-group]').forEach(b=>{b.onclick=()=>{if(b.dataset.longPress){delete b.dataset.longPress;return}selectGroup(b.dataset.group)};bindGroupMenu(b,b.dataset.group)});$('#groupsManage').onclick=()=>groupEditor(null);
 }
 // The group pills and the LED wall sit in a drawer over the stage, closed by default to keep the view clean. Closed, its
 // button names the selected group. Open or closed is a per-viewer convenience in browser storage.
@@ -185,25 +207,55 @@ function drawSelectionBar(){
 function openGroupMenu(id,x,y){
  const g=show.groups.find(g=>g.id===id),sel=selected.length,item=(act,ic,label,dis=false,danger=false)=>`<button role="menuitem" data-ctx="${act}" ${dis?'disabled':''} class="${danger?'danger':''}"><span data-icon="${ic}"></span>${label}</button>`;
  const inGroup=g?selected.filter(x=>g.fixtures.includes(x)).length:0,finding=!!runtime?.find?.active&&selected.length>0,members={fixtures:finding?selected:idsForGroup(id)},pAll=parkedAll(members),pSome=parkedSome(members),findOn=runtime?.find?.active&&(runtime.find.group??'all')===id;
- $('#ctxMenu').innerHTML=`<div class="ctx-title">${esc(g?g.name:'All fixtures')}</div>`+item('select','target','Select')+item('add-select','plus','Add to selection')+'<hr>'+item('find','search',findOn?'Stop finding':'Find · one at a time (← →)')+(finding?item('park','lock',`${pAll?'Unpark':'Park'} selected · ${selected.length===1?esc(selected[0]):selected.length+' fixtures'}`):item('park','lock',pAll?'Unpark':pSome?'Park all (some parked)':'Park · hold this look'))+(g?item('color','palette','Change color…'):'')+'<hr>'+
+ $('#ctxMenu').innerHTML=`<div class="ctx-title">${esc(g?g.name:'All fixtures')}</div>`+(g?item('kill','close',runtime?.kills?.some(k=>k.group===id)?'Bring back (unkill)':'Kill · off over everything',false,!runtime?.kills?.some(k=>k.group===id))+'<hr>':'')+item('select','target','Select')+item('add-select','plus','Add to selection')+'<hr>'+item('find','search',findOn?'Stop finding':'Find · one at a time (← →)')+(finding?item('park','lock',`${pAll?'Unpark':'Park'} selected · ${selected.length===1?esc(selected[0]):selected.length+' fixtures'}`):item('park','lock',pAll?'Unpark':pSome?'Park all (some parked)':'Park · hold this look'))+(g?item('color','palette','Change color…'):'')+(g?item('copylook','copy',sel?`Copy look from selection · ${sel} → ${esc(g.name)}`:'Copy look from selection (select fixtures first)',!sel):'')+'<hr>'+
   (g?(g.children?item('open','chevron-right',openGroups.has(id)?'Close · hide its groups':`Open · its ${g.children.length} groups`):'')+item('nest','group',parentOf(id)?`Move to another group… (in ${esc(parentOf(id).name)})`:'Move into a group…')+(parentOf(id)?item('unnest','close',`Take out of ${esc(parentOf(id).name)}`):'')+item('parent','plus','New parent group with this…')+'<hr>'+
    (g.children?'':item('add','plus',`Add ${sel} selected to group`,!sel||inGroup===sel)+item('remove','close',`Remove ${inGroup} selected from group`,!inGroup||inGroup===g.fixtures.length))+item('replace','group',`Set group to the ${sel} selected`,!sel)+'<hr>'+item('rename','edit','Rename…')+item('edit','sliders','Edit fixtures…')+'<hr>'+item('delete','trash','Delete group',false,true)+item('purge','trash',`Remove its ${g.fixtures.length} fixtures from the show…`,false,true)
    :item('new','plus',`New group from ${sel} selected`,!sel));
  showCtxMenu(x,y);
  const run={open:()=>toggleOpen(id),nest:()=>nestDialog(g),unnest:()=>quiet(command('group.nest',{id})),parent:()=>newParentDialog(g),
-  find:()=>quiet(command(findOn?'find.stop':'find.start',findOn?{}:{group:id})),park:()=>{const who=finding?(selected.length===1?'fixture '+selected[0]:selected.length+' fixtures'):g?g.name:'all fixtures';quiet(command('park.set',finding?{ids:selected,parked:!pAll}:{group:id,parked:!pAll}).then(()=>toast(pAll?`Unparked ${who}.`:`Parked ${who}: it holds this look over every cue.`)))},color:()=>groupColor(g),
+  find:()=>quiet(command(findOn?'find.stop':'find.start',findOn?{}:{group:id})),park:()=>{const who=finding?(selected.length===1?'fixture '+selected[0]:selected.length+' fixtures'):g?g.name:'all fixtures';quiet(command('park.set',finding?{ids:selected,parked:!pAll}:{group:id,parked:!pAll}).then(()=>toast(pAll?`Unparked ${who}.`:`Parked ${who}: it holds this look over every cue.`)))},color:()=>groupColor(g),copylook:()=>quiet(command('look.copy',{from:{ids:selected},to:{group:id}}).then(r=>{const n=x=>Array.isArray(x)?x.length:x??0,c=n(r.created?.copied),k=n(r.created?.skipped);toast(`Copied the look onto ${c} fixture${c===1?'':'s'} of ${g.name}${k?` · ${k} skipped (no matching parts)`:''}. It is in the programmer: Save or Clear.`)})),kill:()=>quiet(command('kill.set',{group:id}).then(r=>toast(r.created.killed?`${g.name} killed: off over every cue until you bring it back.`:`${g.name} is back.`))),
   select:()=>selectGroup(id),'add-select':()=>{const ids=[...new Set([...selected,...idsForGroup(id)])];applySelection(ids);quiet(command('selection.set',{ids}))},
   add:()=>quiet(command('group.edit',{id,add:selected}).then(()=>toast(`Added to ${g.name}.`))),remove:()=>quiet(command('group.edit',{id,remove:selected.filter(x=>g.fixtures.includes(x))})),
   replace:()=>quiet(command('group.save',{id,name:g.name,fixtures:selected})),rename:()=>renameGroup(g),edit:()=>groupEditor(id),new:()=>groupEditor(null),
-  purge:()=>confirmDialog(`Remove ${g.fixtures.length} fixtures from the show?`,`${esc(g.name)}: fixtures ${esc(g.fixtures[0])}–${esc(g.fixtures.at(-1))} are deleted from the patch, every group, cue, scene, position and park. Use this for lights that do not exist. Output must be off. The show is saved as a version first (Settings → Show versions), so it can be undone.`,'Remove fixtures',async()=>{await command('fixture.delete',{ids:g.fixtures});if(group===id)group=null;drawGroups();toast(`Removed ${g.fixtures.length} fixtures.`)}),
-  delete:()=>confirmDialog(`Delete “${g.name}”?`,'The group is removed. Fixtures, cues and positions are unchanged. A group used by a cue or saved effect cannot be deleted.','Delete group',async()=>{await command('group.delete',{id});if(group===id)group=null;drawGroups()})};
+  purge:()=>confirmDialog(`Remove ${g.fixtures.length} fixtures from the show?`,`${g.name}: fixtures ${g.fixtures[0]}–${g.fixtures.at(-1)} are deleted from the patch, every group, cue, scene, position and park. Use this for lights that do not exist. Output must be off. The show is saved as a version first (Settings → Show versions), so it can be undone.`,'Remove fixtures',async()=>{await command('fixture.delete',{ids:g.fixtures});undoToast(`Removed ${g.fixtures.length} fixtures.`);if(group===id)group=null;drawGroups();toast(`Removed ${g.fixtures.length} fixtures.`)}),
+  delete:()=>confirmDialog(`Delete “${g.name}”?`,'The group is removed. Fixtures, cues and positions are unchanged. A group used by a cue or saved effect cannot be deleted.','Delete group',async()=>{await command('group.delete',{id});undoToast(`Deleted group “${g.name}”.`);if(group===id)group=null;drawGroups()})};
  $$('[data-ctx]').forEach(b=>b.onclick=()=>{closeMenu();run[b.dataset.ctx]()});
 }
 function showCtxMenu(x,y){const m=$('#ctxMenu');m.hidden=false;fillIcons(m);const r=m.getBoundingClientRect();m.style.left=Math.min(x,innerWidth-r.width-8)+'px';m.style.top=Math.min(y,innerHeight-r.height-8)+'px'}
 function closeMenu(){$('#ctxMenu').hidden=true}
+// Cue row right-click: follow the live BPM (cue.bpm, so tap tempo scales its effects and movement) or keep its own
+// speed, and remove it from this page (the cue stays in the Library).
+function openCueMenu(entryId,x,y){
+ const p=page(),e=p?.cues.find(c=>c.id===entryId),cue=e&&show.cues.find(c=>c.id===e.cue);if(!cue)return;const idx=p.cues.indexOf(e);const live=runtime?.tempo?.bpm,item=(act,ic,label,danger=false)=>`<button role="menuitem" data-ctx="${act}" class="${danger?'danger':''}"><span data-icon="${ic}"></span>${label}</button>`;
+ $('#ctxMenu').innerHTML=`<div class="ctx-title">${esc(e.label??cue.name)}</div>`+(cue.bpm?item('nobpm','close',`Stop following BPM (written at ${Math.round(cue.bpm)})`):item('bpm','wave',`Follow BPM${live?` · now ${Math.round(live)}`:' (tap tempo)'}`))+item('speed','speed',`Set speed… (now ×${cue.speed??1}${cue.bpm?', follows tempo':', own speed'})`)+'<hr>'+item('timing','fade',`Fade & follow… (${e.fade>0?fmtSeconds(e.fade):'cut'}${e.follow==='auto'?' · auto':''})`)+item('rename','edit','Rename on this page…')+item('duplicate','copy','Duplicate cue')+(idx>0?item('up','up','Move up'):'')+(idx<p.cues.length-1?item('down','down','Move down'):'')+item('content','sliders','Edit cue content…')+'<hr>'+item('remove','trash',`Remove from ${esc(p.name)}`,true);
+ showCtxMenu(x,y);
+ const save=next=>quiet(command('cue.save',{cue:next}));
+ const run={bpm:()=>save({...structuredClone(cue),bpm:Math.round(live??120)}).then(()=>toast(`${cue.name} follows the BPM: tap tempo speeds it up or slows it down.`)),
+  nobpm:()=>{const n=structuredClone(cue);delete n.bpm;save(n).then(()=>toast(`${cue.name} keeps its own speed.`))},
+  // Its own speed (cue.speed), and whether it follows the show tempo (cue.bpm); a running cue changes at once.
+  speed:()=>{dialog(`Speed · ${esc(cue.name)}`,`<label class="check-row"><input type="checkbox" id="spFollow" ${cue.bpm?'checked':''}><span><strong>Follow the show tempo</strong><small>Off: it ignores tap tempo and keeps its own speed.</small></span></label><div class="segmented" id="spPresets">${[.5,1,1.5,2,3].map(v=>`<button data-sp="${v}" class="${(cue.speed??1)===v?'active':''}">×${v}</button>`).join('')}</div><label class="mini"><span>Speed × (0.25–4)</span><input id="spValue" type="number" min="0.25" max="4" step="0.25" value="${cue.speed??1}"></label><div class="dialog-actions"><button id="spSave" class="primary">Set speed</button></div>`);
+   $$('[data-sp]').forEach(b=>b.onclick=()=>{$('#spValue').value=b.dataset.sp;$$('[data-sp]').forEach(x=>x.classList.toggle('active',x===b))});
+   $('#spSave').onclick=()=>{const n=structuredClone(cue),sp=Math.max(.25,Math.min(4,+$('#spValue').value||1)),on=$('#spFollow').checked;if(on)n.bpm=cue.bpm??Math.round(live??120);else delete n.bpm;if(sp===1)delete n.speed;else n.speed=sp;$('#dialog').close();save(n).then(()=>toast(`${cue.name}: ×${sp}, ${on?'follows the show tempo':'own speed'}.`))}},
+  remove:()=>quiet(command('page.save',{page:{...p,cues:p.cues.filter(c=>c.id!==entryId)}}).then(()=>toast(`Removed ${cue.name} from ${p.name}. It is still in the Library.`))),
+  timing:()=>entryTiming(p,e),rename:()=>entryRename(p,e),content:()=>editCue(cue.id),
+  up:()=>moveEntry(p,e,-1),down:()=>moveEntry(p,e,1),
+  duplicate:async()=>{const id=uid('cue'),copy={...structuredClone(cue),id,name:`${cue.name} copy`},next=structuredClone(p),entry={...structuredClone(e),id:uid('entry'),cue:id};if(e.label)entry.label=`${e.label} copy`;delete entry.send;next.cues.splice(idx+1,0,entry);try{await command('cue.save',{cue:copy});await command('page.save',{page:next});toast(`“${copy.name}” added after cue ${idx+1}. Edit it freely: the original is unchanged.`)}catch{}}};
+ $$('[data-ctx]').forEach(b=>b.onclick=()=>{closeMenu();run[b.dataset.ctx]()});
+}
+// A cue-list entry's fade and follow, edited in place (page.save, like the Build editor) from the row's right-click menu.
+function entryTiming(p,e){
+ const cue=cueOf(e);dialog(`Fade & follow · ${esc(entryName(e))}`,`<div class="form-grid"><label class="mini"><span>Fade in · seconds (0 = cut)</span><input id="etFade" type="number" min="0" max="60" step="0.5" value="${e.fade??0}"></label><label class="mini"><span>Then</span><select id="etFollow"><option value="manual" ${e.follow==='auto'?'':'selected'}>Wait for GO</option><option value="auto" ${e.follow==='auto'?'selected':''}>Auto-follow</option></select></label><label class="mini" id="etWaitRow" ${e.follow==='auto'?'':'hidden'}><span>Next cue after · seconds</span><input id="etWait" type="number" min="0" max="3600" step="0.5" value="${e.wait??cue?.duration??10}"></label></div><div class="dialog-actions"><button class="primary" id="etSave"><span data-icon="save"></span>Save</button></div>`);
+ $('#etFollow').onchange=()=>{$('#etWaitRow').hidden=$('#etFollow').value!=='auto'};
+ $('#etSave').onclick=async()=>{const next=structuredClone(p),x=next.cues.find(y=>y.id===e.id);if(!x)return $('#dialog').close();x.fade=Math.max(0,Math.min(60,+$('#etFade').value||0));x.follow=$('#etFollow').value;if(x.follow==='auto')x.wait=Math.max(0,Math.min(3600,+$('#etWait').value||0));else delete x.wait;try{await command('page.save',{page:next});$('#dialog').close()}catch{}};
+}
+function entryRename(p,e){
+ dialog('Name on this page',`<p class="hint">Only this page shows the new name; the cue keeps its library name “${esc(cueOf(e)?.name??'')}”. Leave it empty to use that again.</p><div class="inline-form"><input id="erName" type="text" maxlength="100" value="${esc(e.label??'')}" placeholder="${esc(cueOf(e)?.name??'')}" aria-label="Name on this page"><button class="primary" id="erSave">Save</button></div>`);
+ $('#erName').select();$('#erSave').onclick=async()=>{const next=structuredClone(p),x=next.cues.find(y=>y.id===e.id);if(!x)return $('#dialog').close();const v=$('#erName').value.trim();if(v)x.label=v;else delete x.label;try{await command('page.save',{page:next});$('#dialog').close()}catch{}};
+}
+function moveEntry(p,e,dir){const next=structuredClone(p),i=next.cues.findIndex(y=>y.id===e.id),j=i+dir;if(i<0||j<0||j>=next.cues.length)return;[next.cues[i],next.cues[j]]=[next.cues[j],next.cues[i]];quiet(command('page.save',{page:next}))}
 function bindGroupMenu(el,id){
  el.oncontextmenu=e=>{e.preventDefault();openGroupMenu(id,e.clientX,e.clientY)};
- let timer;el.onpointerdown=e=>{if(e.pointerType!=='touch')return;timer=setTimeout(()=>{el.dataset.longPress='1';openGroupMenu(id,e.clientX,e.clientY)},550)};el.onpointerup=el.onpointerleave=()=>clearTimeout(timer);
+ let timer;el.onpointerdown=e=>{if(e.pointerType!=='touch')return;timer=setTimeout(()=>{el.dataset.longPress='1';openGroupMenu(id,e.clientX,e.clientY)},550)};el.onpointerup=el.onpointerleave=el.onpointercancel=()=>clearTimeout(timer);
 }
 // Group colour (group.edit color): tints the group's pill and card so it is easy to spot.
 const GROUP_COLORS=['#ff5d5d','#ff9f43','#ffd166','#7bd88f','#2ec4b6','#4cc9f0','#4361ee','#9b5de5','#f15bb5','#e9ecef'];
@@ -245,13 +297,19 @@ function groupEditor(id){
 }
 
 // ── Side panel ──
+// Redrawing the side panel (Joystick/Fine, gobo, prism, a preset…) keeps each scroll area where it was while the same
+// panel and tab are showing; switching panel or tab starts at the top.
+let sideScroll={key:'',tops:[]};
 function drawSide(){
- destroyJoystick?.();destroyJoystick=null;const el=$('#sidePanel');
+ destroyJoystick?.();destroyJoystick=null;const el=$('#sidePanel'),scrollKey=[mode,side,progTab,ovTab].join('|');
+ if(sideScroll.key===scrollKey)sideScroll.tops=[...el.querySelectorAll('.prog-body,.cue-list')].map(n=>n.scrollTop);
  if(mode==='show'&&side==='override'&&selected.length)el.innerHTML=overridePanel();
  else if(mode==='build'){if(side==='override')side='program';el.innerHTML=`<div class="side-tabs"><button data-side="cues" class="${side!=='program'?'active':''}"><span data-icon="list"></span>Cue list</button><button data-side="program" class="${side==='program'?'active':''}"><span data-icon="sliders"></span>Programmer${selected.length?`<b>${selected.length}</b>`:''}</button></div>`+(side==='program'?programmerPanel():cueListPanel(true))}
  else if(mode==='library')el.innerHTML=cueSheet();
  else el.innerHTML=cueListPanel(false);
  fillIcons(el);bindSide();drawSelectionBar();liveKey='';paint(runtime);
+ if(sideScroll.key===scrollKey)[...el.querySelectorAll('.prog-body,.cue-list')].forEach((n,i)=>n.scrollTop=sideScroll.tops[i]??0);
+ sideScroll={key:scrollKey,tops:[]};
 }
 function bindSide(){
  $$('[data-side]').forEach(b=>b.onclick=()=>{side=b.dataset.side;drawSide()});
@@ -260,16 +318,16 @@ function bindSide(){
 
 // ── Cue list ──
 function badges(e,cue){
- const fade=e.fade>0?`<span class="badge" title="Crossfade ${e.fade}s"><span data-icon="fade"></span>${e.fade}s</span>`:`<span class="badge" title="Hard cut"><span data-icon="cut"></span>Cut</span>`;
- const follow=e.follow==='auto'?`<span class="badge auto" title="Auto-follow to the next cue"><span data-icon="auto"></span>${e.wait!==undefined?e.wait+'s':format(cue?.duration??0)}</span>`:'';
+ const fade=e.fade>0?`<span class="badge" title="Crossfade ${e.fade} s"><span data-icon="fade"></span>${fmtSeconds(e.fade)}</span>`:`<span class="badge" title="Hard cut"><span data-icon="cut"></span>Cut</span>`;
+ const follow=e.follow==='auto'?`<span class="badge auto" title="Auto-follow to the next cue"><span data-icon="auto"></span>${fmtSeconds(e.wait!==undefined?e.wait:cue?.duration??0)}</span>`:'';
  const kind=cue?.tracks?.length?`<span class="badge muted" title="Contains effects"><span data-icon="spark"></span></span>`:'';
  return fade+follow+kind;
 }
 function cueListPanel(build){
  const p=page();if(!p)return `<div class="panel-empty">${icon('pages')}<p>Create a page to start a cue list.</p>${build?'<button class="primary" id="emptyNewPage">New page</button>':''}</div>`;
  const head=build?`<div class="page-head"><input id="pageName" value="${esc(p.name)}" aria-label="Page name"><div class="page-colors">${PAGE_COLORS.map(c=>`<button class="dot ${c===p.color?'active':''}" data-page-color="${c}" style="background:${c}" aria-label="Page color"></button>`).join('')}</div><button id="deletePage" class="round-button small danger" aria-label="Delete page" data-icon="trash"></button></div>`
-  :`<div class="page-head show"><i style="background:${esc(p.color??'#8bc9d0')}"></i><h2>${esc(p.name)}</h2><span class="count">${p.cues.length}</span></div>`;
- const rows=p.cues.map((e,i)=>{const cue=cueOf(e),open=build&&editingEntry===e.id;return `<div class="cue-item ${open?'open':''}" data-entry-row="${esc(e.id)}"><button class="cue-row" data-entry="${esc(e.id)}" ${build?'':'title="Click to stand by · ▶ or double-click to GO now"'}><span class="cue-num">${i+1}</span><span class="cue-main"><strong>${esc(entryName(e))}</strong><span class="badges">${badges(e,cue)}</span></span><span class="cue-state"></span><span class="cue-progress"><i></i></span></button>${build?`<div class="row-actions"><button class="round-button small eye" data-preview-entry="${esc(e.id)}" title="Preview in the visualizer only" aria-label="Preview ${esc(entryName(e))}" data-icon="eye"></button><button class="round-button small danger stop-entry" data-stop-entry="${esc(e.cue)}" title="Stop this cue · others keep running" aria-label="Stop ${esc(entryName(e))}" data-icon="stop" hidden></button><button class="round-button small" data-go-entry="${esc(e.id)}" title="Run this cue" data-icon="play"></button><button class="round-button small" data-edit-entry="${esc(e.id)}" title="Edit" data-icon="edit"></button></div>`:`<div class="row-actions"><button class="round-button eye" data-preview-entry="${esc(e.id)}" title="Preview in the visualizer only — not live" aria-label="Preview ${esc(entryName(e))}" data-icon="eye"></button><button class="round-button danger stop-entry" data-stop-entry="${esc(e.cue)}" title="Stop this cue · others keep running" aria-label="Stop ${esc(entryName(e))}" data-icon="stop" hidden></button><button class="round-button go-now" data-go-entry="${esc(e.id)}" title="GO this cue now" aria-label="GO ${esc(entryName(e))} now" data-icon="go"></button></div>`}${open?entryEditor(p,e,i):''}</div>`}).join('');
+  :`<div class="page-head show"><i style="background:${esc(p.color??'#8bc9d0')}"></i><h2>${esc(p.name)}</h2><span class="count">${p.cues.length}</span><button class="round-button small page-release" id="pageRelease" data-icon="stop" title="Release this page: every running cue on ${esc(p.name)} fades out (1.5 s). Masters and other pages keep running." aria-label="Release all cues on ${esc(p.name)}"></button></div>`;
+ const rows=p.cues.map((e,i)=>{const cue=cueOf(e),open=build&&editingEntry===e.id;return `<div class="cue-item ${open?'open':''}" data-entry-row="${esc(e.id)}"><button class="cue-row" data-entry="${esc(e.id)}" ${build?'':'title="Click to stand by · ▶ or double-click to GO now"'}><span class="cue-num">${i+1}</span><span class="cue-main"><strong>${esc(entryName(e))}</strong><span class="badges">${badges(e,cue)}</span></span><span class="cue-state"></span><span class="cue-progress"><i></i></span></button>${build?`<div class="row-actions"><button class="round-button small eye" data-preview-entry="${esc(e.id)}" title="Preview in the visualizer only" aria-label="Preview ${esc(entryName(e))}" data-icon="eye"></button><button class="round-button small danger stop-entry" data-stop-entry="${esc(e.cue)}" title="Release this cue: it fades out, others keep running" aria-label="Release ${esc(entryName(e))}" data-icon="stop" hidden></button><button class="round-button small" data-go-entry="${esc(e.id)}" title="Run this cue" data-icon="play"></button><button class="round-button small" data-edit-entry="${esc(e.id)}" title="Edit" data-icon="edit"></button></div>`:`<div class="row-actions"><button class="round-button eye" data-preview-entry="${esc(e.id)}" title="Preview in the visualizer only — not live" aria-label="Preview ${esc(entryName(e))}" data-icon="eye"></button><button class="round-button danger stop-entry" data-stop-entry="${esc(e.cue)}" title="Release this cue: it fades out, others keep running" aria-label="Release ${esc(entryName(e))}" data-icon="stop" hidden></button><button class="round-button go-now" data-go-entry="${esc(e.id)}" title="GO this cue now" aria-label="GO ${esc(entryName(e))} now" data-icon="go"></button></div>`}${open?entryEditor(p,e,i):''}</div>`}).join('');
  const add=build?`<div class="add-bar"><button id="addRecord" class="add-button"><span data-icon="record"></span>Record look</button><button id="addLibrary" class="add-button"><span data-icon="library"></span>Library</button></div>`:'';
  return `<div class="cue-panel">${head}<div class="cue-list">${rows||`<div class="panel-empty small"><p>${build?'Add cues with Record look, Effect or Library.':'This page has no cues yet. Build them in Build mode.'}</p></div>`}</div>${add}</div>`;
 }
@@ -283,8 +341,10 @@ function entryEditor(p,e,i){
 const savePage=p=>command('page.save',{page:p});
 function bindCueList(){
  if($('#emptyNewPage'))$('#emptyNewPage').onclick=newPage;
+ if($('#pageRelease'))$('#pageRelease').onclick=()=>{const p=page();quiet(command('page.release',{id:p.id}).then(r=>toast(r.created.released.length?`Released ${r.created.released.length} cue${r.created.released.length===1?'':'s'} on ${p.name}.`:`Nothing on ${p.name} is running.`)))};
  const p=page();if(!p)return;
  $$('[data-entry]').forEach(b=>{b.onclick=()=>{if(mode==='build'){editingEntry=editingEntry===b.dataset.entry?null:b.dataset.entry;drawSide()}else{standby=b.dataset.entry;paint(runtime)}};b.ondblclick=()=>{if(mode==='show')go(b.dataset.entry)}});
+ $$('[data-entry-row]').forEach(el=>el.oncontextmenu=e=>{e.preventDefault();openCueMenu(el.dataset.entryRow,e.clientX,e.clientY)});
  $$('[data-go-entry]').forEach(b=>b.onclick=()=>{const st=b.dataset.run,id=b.dataset.cue;if(st==='playing'||st==='paused')quiet(command('cue.pause',{id,paused:st==='playing'}));else go(b.dataset.goEntry)});
  $$('[data-stop-entry]').forEach(b=>b.onclick=()=>quiet(command('cue.release',{id:b.dataset.stopEntry})));
  entryControlsKey=null;
@@ -292,7 +352,7 @@ function bindCueList(){
  $$('[data-edit-entry]').forEach(b=>b.onclick=()=>{editingEntry=editingEntry===b.dataset.editEntry?null:b.dataset.editEntry;drawSide()});
  if($('#pageName'))$('#pageName').onchange=e=>{const name=e.target.value.trim();if(name)quiet(savePage({...structuredClone(p),name}))};
  $$('[data-page-color]').forEach(b=>b.onclick=()=>quiet(savePage({...structuredClone(p),color:b.dataset.pageColor})));
- if($('#deletePage'))$('#deletePage').onclick=()=>confirmDialog(`Delete “${p.name}”?`,'The page and its cue list are removed. Cues stay in the library.','Delete page',async()=>{await command('page.delete',{id:p.id});pageId=show.pages[0]?.id??null;drawAll()});
+ if($('#deletePage'))$('#deletePage').onclick=()=>confirmDialog(`Delete “${p.name}”?`,'The page and its cue list are removed. Cues stay in the library.','Delete page',async()=>{await command('page.delete',{id:p.id});undoToast(`Deleted page “${p.name}”. Its cues are still in the Library.`);pageId=show.pages[0]?.id??null;drawAll()});
  if($('#addRecord'))$('#addRecord').onclick=recordDialog;if($('#addLibrary'))$('#addLibrary').onclick=()=>setMode('library');
  const e=p.cues.find(x=>x.id===editingEntry);if(!e||!$('#entryLabel'))return;
  const update=fn=>{const next=structuredClone(p),entry=next.cues.find(x=>x.id===e.id);fn(entry,next);quiet(savePage(next))};
@@ -370,14 +430,14 @@ function overridePanel(){
 }
 // ── Effects: layered on the current look; preview first (visualizer only) or straight to live ──
 // Built-ins from the schema plus the show's custom presets (custom:true), same shape as the engine's allPresets().
-function allPresets(){const cat={intensity:'intensity',color:'color',position:'movement'},out={};for(const [k,v] of Object.entries(schema.presets))if(!v.custom)out[k]=v;for(const p of show.presets??[]){const layer=schema.effects[p.effect]?.layer;out[p.id]={duration:20,loop:true,...p,category:cat[layer],movers:layer==='position',custom:true}}return out}
-const fxPresetsFor=info=>Object.entries(allPresets()).filter(([,p])=>{const layer=schema.effects[p.effect]?.layer;return layer&&(layer!=='position'||info.hasMover)});
+function allPresets(){const cat={intensity:'intensity',color:'color',position:'movement'},out={};for(const [k,v] of Object.entries(schema.presets))if(!v.custom)out[k]=v;for(const p of show.presets??[]){const layer=presetLayer(p,schema.effects);out[p.id]={duration:20,loop:true,...p,category:cat[layer],movers:layer==='position',custom:true}}return out}
+const fxPresetsFor=info=>Object.entries(allPresets()).filter(([,p])=>{const layer=presetLayer(p,schema.effects);return layer&&(layer!=='position'||info.hasMover)});
 const fxSlider=(key,label,ic,value,[min,max])=>`<div class="slider"><span class="slider-icon" data-icon="${ic}"></span><div class="slider-body"><div class="slider-head"><label>${label}</label></div><input type="range" data-fxparam="${key}" min="${min}" max="${max}" step="${(max-min)/200}" value="${value}"></div></div>`;
 function secEffects(info){
  const presets=fxPresetsFor(info),pv=runtime.fxPreview,running=runtime.fx.filter(x=>x.fixtures.some(id=>selected.includes(id)));
  const active=new Set(running.map(x=>x.preset));
  let html=`<div class="seg-row"><div class="segmented wide"><button data-fxmode="preview" class="${fxMode==='preview'?'active':''}">${icon('eye')}Preview first</button><button data-fxmode="live" class="${fxMode==='live'?'active':''}">${icon('go')}Straight to live</button></div></div>`;
- html+=[['intensity','Intensity'],['color','Color'],['movement','Movement']].map(([c,label])=>{const list=presets.filter(([,p])=>p.category===c);return list.length?`<h4 class="fx-cat">${label}</h4><div class="fx-grid">${list.map(([id,p])=>`<button class="fx-tile ${active.has(id)?'active':''} ${pv?.preset===id?'previewing':''} ${p.custom?'custom':''}" data-fx="${esc(id)}" title="${esc((p.custom?'Custom · ':'')+(p.description??schema.effects[p.effect].description))}${p.custom?' · right-click to delete':''}">${icon(p.icon)}<span>${esc(p.name)}</span>${p.custom?'<b class="custom-dot" aria-label="custom"></b>':''}</button>`).join('')}</div>`:''}).join('');
+ html+=[['intensity','Intensity'],['color','Color'],['movement','Movement']].map(([c,label])=>{const list=presets.filter(([,p])=>p.category===c);return list.length?`<h4 class="fx-cat">${label}</h4><div class="fx-grid">${list.map(([id,p])=>`<button class="fx-tile ${active.has(id)?'active':''} ${pv?.preset===id?'previewing':''} ${p.custom?'custom':''}" data-fx="${esc(id)}" title="${esc((p.custom?'Custom · ':'')+(p.description??(p.effect==='code'?'Code effect written by the assistant':schema.effects[p.effect]?.description??'')))}${p.custom?' · right-click to delete':''}">${icon(p.icon)}<span>${esc(p.name)}</span>${p.effect==='code'?'<b class="code-badge">code</b>':p.custom?'<b class="custom-dot" aria-label="custom"></b>':''}</button>`).join('')}</div>`:''}).join('');
  if(!info.hasMover)html+=`<p class="hint">Movement effects appear when moving heads are selected.</p>`;
  const cur=pv??running.at(-1);
  if(cur){const params=cur.params,strobe=cur.effect==='strobe';
@@ -385,18 +445,25 @@ function secEffects(info){
    +fxSlider('speed','Speed','speed',strobe?params.frequency??3:params.speed??1,strobe?[.25,6]:[.05,4])
    +(cur.layer==='position'?fxSlider('size','Size','zoom',params.panAmplitude??.04,[.005,.2]):fxSlider('brightness','Level','sun',params.brightness??.8,[0,1]))
    +(cur.layer==='color'&&cur.effect!=='rainbow'?`<div class="fx-colors"><label>${icon('palette')}A<input type="color" data-fxcolor="color" value="${esc(params.color??'#ffffff')}"></label><label>B<input type="color" data-fxcolor="secondary" value="${esc(params.secondary??'#9955ee')}"></label></div>`:'')
+   +(cur.effect==='code'&&Object.keys(params.args??{}).length?`<div class="fx-args"><h5>Settings</h5><div class="form-grid">${argInputs(params.args,'data-fxarg')}</div>${show.presets?.some(x=>x.id===cur.preset)?`<button class="text-button" id="fxSaveArgs">${icon('save')}Keep these settings in “${esc(cur.name)}”</button>`:''}</div>`:'')
    +`<div class="editor-actions">${pv?`<button class="primary go-fill" id="fxApplyBtn">${icon('go')}Apply live</button><button class="ghost-button" id="fxDiscard">Discard</button>`:''}<button class="text-button" id="fxSaveCustom">${icon('save')}Save as custom effect</button></div></div>`}
  if(running.length)html+=`<h4 class="fx-cat">Running live</h4><div class="pool-list fx-running">${running.map(x=>`<div class="pool-row"><span class="pill-icon">${icon(allPresets()[x.preset]?.icon??'spark')}</span><strong>${esc(x.name)}</strong><small>${x.fixtures.length} fixtures</small><button class="round-button small danger" data-fx-stop="${esc(x.id)}" title="Stop this effect" aria-label="Stop ${esc(x.name)}">${icon('stop')}</button></div>`).join('')}</div>`;
  return section('Effects','spark',html+`<p class="hint">Effects layer on the current look: movement circles where heads already point, intensity pulses the current level, color recolors. Save (GO bar) adds them to the cue.</p>`);
 }
+// A code effect's params.args as controls: sliders for 0–1, number fields, colour wells, checkboxes (desk-ux.js argControls).
+const argInputs=(args,attr)=>argControls(args).map(c=>{const lab=esc(argLabel(c.key)),k=esc(c.key);return c.kind==='slider'?`<label class="mini arg"><span>${lab}<output data-arg-read="${k}">${+c.value.toFixed(2)}</output></span><input type="range" min="0" max="1" step="0.01" ${attr}="${k}" value="${c.value}"></label>`:c.kind==='number'?`<label class="mini arg"><span>${lab}</span><input type="number" step="any" ${attr}="${k}" value="${c.value}"></label>`:c.kind==='color'?`<label class="mini arg color"><span>${lab}</span><input type="color" ${attr}="${k}" value="${esc(c.value)}"></label>`:c.kind==='check'?`<label class="check arg"><input type="checkbox" ${attr}="${k}" ${c.value?'checked':''}>${lab}</label>`:`<label class="mini arg"><span>${lab}</span><input type="text" value="${esc(JSON.stringify(c.value))}" readonly></label>`}).join('');
+const argValue=el=>el.type==='checkbox'?el.checked:el.type==='color'?el.value:+el.value;
+// Wire arg controls: each change calls onArg(key, value); range readouts follow the slider.
+function bindArgInputs(attr,onArg){for(const el of $$(`[${attr}]`)){const k=el.getAttribute(attr),fire=()=>{const v=argValue(el);if(el.type==='range')setText(el.closest('label')?.querySelector('output'),String(+v.toFixed(2)));onArg(k,v)};if(el.type==='number')el.onchange=fire;else el.oninput=el.onchange=fire}}
 // Save the effect being previewed (or the newest running one) as a custom preset in the show library.
 function customEffectDialog(){
  const cur=runtime.fxPreview??runtime.fx.filter(x=>x.fixtures.some(id=>selected.includes(id))).at(-1);if(!cur)return toast('Preview or run an effect first.');
  const base=allPresets()[cur.preset];let chosen=base?.icon??'spark';
- dialog('Save custom effect',`<p class="hint">Saves ${esc(schema.effects[cur.effect].name)} with its current settings to this show's effects library. It shows up in the Effects tab for any matching selection, and agents can use it too.</p><label class="mini"><span>Name</span><input id="customName" type="text" maxlength="100" value="${esc(base&&!base.custom?base.name+' · mine':cur.name)}"></label><label class="mini"><span>Description</span><input id="customDesc" type="text" maxlength="300" placeholder="Optional"></label><h3>Icon</h3><div class="icon-picker">${ICONS.map(n=>`<button class="icon-pick ${n===chosen?'active':''}" data-icon-pick="${n}" title="${n}">${icon(n)}</button>`).join('')}</div><div class="dialog-actions"><button class="primary" id="customSave">${icon('save')}Save effect</button></div>`);
+ dialog('Save custom effect',`<p class="hint">Saves ${esc(schema.effects[cur.effect]?.name??cur.effect)} with its current settings to this show's effects library. It shows up in the Effects tab for any matching selection, and agents can use it too.</p><label class="mini"><span>Name</span><input id="customName" type="text" maxlength="100" value="${esc(base&&!base.custom?base.name+' · mine':cur.name)}"></label><label class="mini"><span>Description</span><input id="customDesc" type="text" maxlength="300" placeholder="Optional"></label><h3>Icon</h3><div class="icon-picker">${ICONS.map(n=>`<button class="icon-pick ${n===chosen?'active':''}" data-icon-pick="${n}" title="${n}">${icon(n)}</button>`).join('')}</div><div class="dialog-actions"><button class="primary" id="customSave">${icon('save')}Save effect</button></div>`);
  $$('[data-icon-pick]').forEach(b=>b.onclick=()=>{chosen=b.dataset.iconPick;$$('[data-icon-pick]').forEach(x=>x.classList.toggle('active',x===b))});
  $('#customSave').onclick=async()=>{const name=$('#customName').value.trim();if(!name)return toast('Name the effect first.');const desc=$('#customDesc').value.trim();
-  try{const id=uid('fx');await command('preset.save',{preset:{id,name,icon:chosen,effect:cur.effect,params:cur.params,...(desc?{description:desc}:{})}});$('#dialog').close();toast(`“${name}” saved to the effects library.`);drawSide()}catch{}};
+  const code=cur.effect==='code'?show.presets?.find(x=>x.id===cur.preset)?.params.code:null;if(cur.effect==='code'&&!code)return toast('This code effect was started without a saved preset, so the desk cannot see its code. Ask the assistant to save it as a preset.','error');
+  try{const id=uid('fx');await command('preset.save',{preset:{id,name,icon:chosen,effect:cur.effect,params:{...cur.params,...(code?{code}:{})},...(cur.effect==='code'&&cur.layer?{layer:cur.layer}:{}),...(desc?{description:desc}:{})}});$('#dialog').close();toast(`“${name}” saved to the effects library.`);drawSide()}catch{}};
 }
 async function runFx(preset){
  // Going straight to live drops any open preview so the controls follow the effect just touched.
@@ -404,7 +471,7 @@ async function runFx(preset){
 }
 // Slider edits re-send the same effect: the engine keeps its phase, so it changes smoothly.
 const liveFx=createLiveControl((_k,values)=>{const pv=runtime.fxPreview,cur=pv??runtime.fx.filter(x=>x.fixtures.some(id=>selected.includes(id))).at(-1);if(!cur)return Promise.resolve();
- const params={...cur.params};for(const [k,v] of Object.entries(values)){if(k==='speed'&&cur.effect==='strobe')params.frequency=v;else if(k==='size'){const ratio=(cur.params.tiltAmplitude??v*.6)/Math.max(.001,cur.params.panAmplitude??v);params.panAmplitude=v;params.tiltAmplitude=Math.min(.2,v*ratio)}else params[k]=v}
+ const params={...cur.params};for(const [k,v] of Object.entries(values)){if(k==='speed'&&cur.effect==='strobe')params.frequency=v;else if(k.startsWith('arg:'))params.args={...(params.args??{}),[k.slice(4)]:v};else if(k==='size'){const ratio=(cur.params.tiltAmplitude??v*.6)/Math.max(.001,cur.params.panAmplitude??v);params.panAmplitude=v;params.tiltAmplitude=Math.min(.2,v*ratio)}else params[k]=v}
  return pv?command('fx.preview',{fixtures:cur.fixtures,...(cur.preset?{preset:cur.preset}:{effect:cur.effect}),params}):command('fx.apply',{fixtures:cur.fixtures,...(cur.preset?{preset:cur.preset}:{effect:cur.effect}),params,fade:0})});
 async function applyFxPreview(){try{await command('fx.apply',{});viewSource=runtime.preview||runtime.blind?.enabled?'preview':'live';toast(show.playback.blindFade?`Effect fading in live over ${show.playback.blindFade} s.`:'Effect is live.');drawSide()}catch{}}
 async function cancelFx(){try{await command('fx.cancel');viewSource=runtime.preview||runtime.blind?.enabled?'preview':'live';drawSide()}catch{}}
@@ -434,9 +501,12 @@ function secBeam(info,compact=false){
  if(hasMH7&&!compact)html+=`<div class="seg-row"><div class="segmented wide"><button data-optical="beam" class="${st.opticalMode!=='spot'?'active':''}"><span data-icon="beam"></span>Beam</button><button data-optical="spot" class="${st.opticalMode==='spot'?'active':''}" title="Unverified on this rig"><span data-icon="target"></span>Spot<small>unverified</small></button></div></div>`;
  if(moverProfile){const slots=GOBOS[moverProfile]?.length??(schema.profiles[moverProfile].maxGobo??17)+1;html+=`<div class="gobo-grid ${compact?'compact':''}">${Array.from({length:slots},(_,i)=>`<button class="gobo-button ${(st.gobo??0)===i?'active':''}" data-gobo="${i}" title="${esc(goboName(moverProfile,i))}">${goboIcon(moverProfile,i)}<span>${i||'Open'}</span></button>`).join('')}</div>`}
  else html+=`<p class="hint">Select one fixture type to pick gobos — each model has its own wheel.</p>`;
- const {has200,has7R}=info,single=has200||has7R,prisms=[[0,'Single'],[1,hasMH7?'4-facet':has7R&&!has200?'8-face':has200&&!has7R?'3-face':'Prism 1'],...(single?[]:[[2,hasMH7?'8-facet':'Prism 2']]),...(hasMH7||single?[]:[[3,'Both']])];
+ // A profile can name its prisms (prismNames), e.g. the R3s: prism 1 = 5-face narrow spread, prism 2 = 8-face, both = wide.
+ const {has200,has7R}=info,single=has200||has7R,pn=moverProfile?schema.profiles[moverProfile]?.prismNames??{}:{},prisms=[[0,'Single'],[1,pn[1]??(hasMH7?'4-facet':has7R&&!has200?'8-face':has200&&!has7R?'3-face':'Prism 1')],...(single?[]:[[2,pn[2]??(hasMH7?'8-facet':'Prism 2')]]),...(hasMH7||single?[]:[[3,pn[3]??'Both']])];
  html+=`<div class="icon-choices">${prisms.map(([v,label])=>`<button class="choice ${(st.prism??0)===v?'active':''}" data-prism="${v}">${prismIcon(v)}<span>${label}</span></button>`).join('')}</div>`;
  if(!compact)html+=(hasMH7?slider('zoom','Zoom','zoom',st.zoom??.5):'')+slider('focus','Focus','focus',st.focus??.5)+slider('frost','Frost','frost',st.frost??0)+(has200||has7R?slider('goboShake','Gobo shake','twinkle',st.goboShake??0):'')+(hasMH7?`<details class="more"><summary>${icon('info')}MH7 notes</summary><p>Static gobos work in Beam mode; Spot parks the wheel. Frost switches on at 50%. Colors snap to the nearest wheel slot. Preview beams are illustrative.</p></details>`:'');
+ if(!compact){const profs=new Set(info.movers.map(f=>f.profile)),pool=(show.beamPresets??[]).map(p=>{const fits=!p.profiles||p.profiles.some(x=>profs.has(x));return `<span class="palette-chip"><button class="pool-button ${fits?'':'dim'}" data-beam-preset="${esc(p.id)}" ${fits?'':'disabled'} title="${esc(p.profiles?'For '+p.profiles.map(x=>schema.profiles[x]?.name??x).join(', '):'Any fixture')}">${icon('beam')}<span>${esc(p.name)}</span></button>${mode==='build'?`<button class="x" data-delete-beam="${esc(p.id)}" aria-label="Delete ${esc(p.name)}">×</button>`:''}</span>`}).join('');
+  html+=`<label class="field-label">Beam presets</label><div class="pool">${pool||'<p class="hint">No beam presets yet. Set prism, focus and frost, then save them here.</p>'}</div><div class="inline-form"><input id="beamName" type="text" placeholder="e.g. Soft · 5-face" aria-label="Beam preset name"><button id="captureBeam" class="chip-button"><span data-icon="save"></span>Save beam</button></div>`}
  return section('Beam','beam',html);
 }
 function prismIcon(v){const dots=v===0?[[12,12]]:v===1?[[8,8],[16,8],[8,16],[16,16]]:v===2?Array.from({length:8},(_,i)=>[12+6*Math.cos(i*Math.PI/4),12+6*Math.sin(i*Math.PI/4)]):[[12,12],...Array.from({length:6},(_,i)=>[12+7*Math.cos(i*Math.PI/3),12+7*Math.sin(i*Math.PI/3)])];return `<svg class="i" viewBox="0 0 24 24" aria-hidden="true">${dots.map(([x,y])=>`<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${v===0?4:2}" fill="currentColor"/>`).join('')}</svg>`}
@@ -475,10 +545,12 @@ function bindProgrammer(){
  if($('#releaseSelected'))$('#releaseSelected').onclick=()=>quiet(command('override.release',{ids:selected.filter(id=>progOverrides(runtime)[id])}).then(()=>drawSide()));
  $$('[data-ovtab]').forEach(b=>b.onclick=()=>{ovTab=b.dataset.ovtab;drawSide()});
  $$('[data-fxmode]').forEach(b=>b.onclick=()=>{fxMode=b.dataset.fxmode;store.set('fxMode',fxMode);drawSide()});
- $$('[data-fx]').forEach(b=>{b.onclick=()=>runFx(b.dataset.fx);const p=allPresets()[b.dataset.fx];if(p?.custom)b.oncontextmenu=e=>{e.preventDefault();confirmDialog(`Delete “${p.name}”?`,'This custom effect is removed from the library. Cues already made with it keep their effects.','Delete effect',()=>command('preset.delete',{id:b.dataset.fx}).then(drawSide))}});
+ $$('[data-fx]').forEach(b=>{b.onclick=()=>runFx(b.dataset.fx);const p=allPresets()[b.dataset.fx];if(p?.custom)b.oncontextmenu=e=>{e.preventDefault();confirmDialog(`Delete “${p.name}”?`,'This custom effect is removed from the library. Cues already made with it keep their effects.','Delete effect',()=>command('preset.delete',{id:b.dataset.fx}).then(()=>{drawSide();undoToast(`Deleted effect “${p.name}”.`)}))}});
  if($('#fxSaveCustom'))$('#fxSaveCustom').onclick=customEffectDialog;
  $$('[data-fxparam]').forEach(el=>el.oninput=()=>liveFx(['fx'],{[el.dataset.fxparam]:+el.value}));
  $$('[data-fxcolor]').forEach(el=>el.oninput=()=>liveFx(['fx'],{[el.dataset.fxcolor]:el.value}));
+ bindArgInputs('data-fxarg',(k,v)=>liveFx(['fx'],{['arg:'+k]:v}));
+ if($('#fxSaveArgs'))$('#fxSaveArgs').onclick=async()=>{const cur=runtime.fxPreview??runtime.fx.filter(x=>x.fixtures.some(id=>selected.includes(id))).at(-1),pr=show.presets?.find(x=>x.id===cur?.preset);if(!pr)return;const args={...(pr.params.args??{})};for(const el of $$('[data-fxarg]'))args[el.dataset.fxarg]=argValue(el);try{await command('preset.save',{preset:{...structuredClone(pr),params:{...pr.params,args}}});toast(`“${pr.name}” keeps these settings.`)}catch{}};
  if($('#fxApplyBtn'))$('#fxApplyBtn').onclick=applyFxPreview;if($('#fxDiscard'))$('#fxDiscard').onclick=cancelFx;
  $$('[data-fx-stop]').forEach(b=>b.onclick=()=>{const x=runtime.fx.find(x=>x.id===b.dataset.fxStop);if(x)quiet(command('fx.stop',{ids:x.fixtures}).then(drawSide))});
  if(!info)return;
@@ -486,10 +558,11 @@ function bindProgrammer(){
  $$('[data-attr]').forEach(el=>{const update=()=>{el.dataset.editedAt=String(performance.now());const key=el.dataset.attr,value=+el.value/(['pan','tilt'].includes(key)?255:1);setText($(`[data-read="${key}"]`),attrRead(key,value));const ids=key==='colorWheel2'?info.fixtures.filter(f=>f.profile==='beam200').map(f=>f.id):key==='colorWheel'?info.wheelFixtures.map(f=>f.id):selected;liveFixture(ids,{[key]:value})};el.oninput=update;el.onchange=update});
  $$('[data-level]').forEach(b=>b.onclick=()=>quiet(command('fixture.set',{ids:selected,values:{intensity:+b.dataset.level}}).then(drawSide)));
  if($('#color'))$('#color').oninput=e=>liveFixture(selected,{color:e.target.value});
+ // A saved palette goes through palette.apply, which picks each fixture's profile values (Hog CTO differs per type).
  // A palette with emitter values (e.g. Hog CTB = white RGB + mint) sets them; any other color puts amber and mint back
  // under the white level, only where a palette had set them, so a plain color after CTB does not keep the mint.
- $$('[data-color]').forEach(b=>b.onclick=()=>{const p=show.palettes.find(x=>x.id===b.dataset.pal),ov=selected.map(id=>runtime?.overrides?.[id]).find(o=>o&&(o.amber!==undefined||o.mint!==undefined)),extra=p&&(p.white!==undefined||p.amber!==undefined||p.mint!==undefined)?{...(p.white!==undefined?{white:p.white}:{}),amber:p.amber??0,mint:p.mint??0}:ov?{amber:ov.white??0,mint:ov.white??0}:{};quiet(command('fixture.set',{ids:selected,values:{color:b.dataset.color,...(b.dataset.color.toLowerCase()==='#ffffff'?{white:0}:{}),...extra}}))});
- $$('[data-delete-palette]').forEach(b=>b.onclick=()=>quiet(command('palette.delete',{id:b.dataset.deletePalette})));
+ $$('[data-color]').forEach(b=>b.onclick=()=>{const p=show.palettes.find(x=>x.id===b.dataset.pal);if(p)return quiet(command('palette.apply',{id:p.id,ids:selected}));const ov=selected.map(id=>runtime?.overrides?.[id]).find(o=>o&&(o.amber!==undefined||o.mint!==undefined)),extra=p&&(p.white!==undefined||p.amber!==undefined||p.mint!==undefined)?{...(p.white!==undefined?{white:p.white}:{}),amber:p.amber??0,mint:p.mint??0}:ov?{amber:ov.white??0,mint:ov.white??0}:{};quiet(command('fixture.set',{ids:selected,values:{color:b.dataset.color,...(b.dataset.color.toLowerCase()==='#ffffff'?{white:0}:{}),...extra}}))});
+ $$('[data-delete-palette]').forEach(b=>b.onclick=()=>quiet(command('palette.delete',{id:b.dataset.deletePalette}).then(()=>undoToast('Colour deleted.'))));
  if($('#savePalette'))$('#savePalette').onclick=()=>{dialog('Save color',`<div class="inline-form"><span class="swatch" style="--c:${esc($('#color').value)}"></span><input id="paletteName" type="text" placeholder="e.g. Dawn gold"><button id="paletteSave" class="primary">Save</button></div>`);$('#paletteSave').onclick=async()=>{const name=$('#paletteName').value.trim();if(!name)return toast('Name the color first.');await command('palette.save',{id:uid('palette'),name,color:hexOf(current().color)});$('#dialog').close()}};
  $$('[data-wheel-neutral]').forEach(b=>b.onclick=async()=>{try{await command('fixture.set',{ids:info.wheelFixtures.map(f=>f.id),values:{color:'#ffffff',colorWheel:0}});const extra=info.fixtures.filter(f=>f.profile==='beam200').map(f=>f.id);if(extra.length)await command('fixture.set',{ids:extra,values:{colorWheel2:0}});drawSide()}catch{}});
  $$('[data-wheel-slot]').forEach(b=>b.onclick=async()=>{const c=sharedWheelColors(info.fixtures)[+b.dataset.wheelSlot];try{for(const e of c.entries)await command('fixture.set',{ids:[e.id],values:{color:c.color,colorWheel:e.value,...(e.secondary===undefined?{}:{colorWheel2:e.secondary})}});drawSide()}catch{}});
@@ -506,7 +579,10 @@ function bindProgrammer(){
  $$('[data-prism]').forEach(b=>b.onclick=()=>quiet(command('fixture.set',{ids:moverIds,values:{prism:+b.dataset.prism}}).then(drawSide)));
  $$('[data-lamp]').forEach(b=>b.onclick=()=>quiet(command('fixture.lamp',{ids:info.lampFixtures.map(f=>f.id),action:b.dataset.lamp}).then(()=>toast('Lamp command sent for 5 seconds — check the actual lamps.'))));
  $$('[data-point]').forEach(b=>b.onclick=()=>quiet(command('point.recall',{id:b.dataset.point,ids:selected})));
- $$('[data-delete-point]').forEach(b=>b.onclick=()=>quiet(command('point.delete',{id:b.dataset.deletePoint})));
+ $$('[data-beam-preset]').forEach(b=>b.onclick=()=>quiet(command('beam.apply',{id:b.dataset.beamPreset,ids:moverIds}).then(drawSide)));
+ $$('[data-delete-beam]').forEach(b=>b.onclick=()=>quiet(command('beam.delete',{id:b.dataset.deleteBeam}).then(()=>undoToast('Beam look deleted.'))));
+ if($('#captureBeam'))$('#captureBeam').onclick=async()=>{const name=$('#beamName').value.trim();if(!name)return toast('Name this beam preset first.');if(!moverIds.length)return toast('Select moving heads first.');await command('beam.capture',{id:uid('beam'),name,ids:moverIds});toast(`Beam preset “${name}” saved.`)};
+ $$('[data-delete-point]').forEach(b=>b.onclick=()=>quiet(command('point.delete',{id:b.dataset.deletePoint}).then(()=>undoToast('Position deleted.'))));
  if($('#capturePoint'))$('#capturePoint').onclick=async()=>{const name=$('#pointName').value.trim();if(!name)return toast('Name this position first.');if(!moverIds.length)return toast('Select moving heads first.');await command('point.save',{id:uid('point'),name,fixtures:moverIds});toast(`“${name}” saved for ${moverIds.length} heads.`)};
  $$('[data-position-mode]').forEach(b=>b.onclick=()=>{positionMode=b.dataset.positionMode;drawSide()});
  $$('[data-joy-speed]').forEach(b=>b.onclick=()=>{joystickSpeed=+b.dataset.joySpeed;drawSide()});
@@ -516,8 +592,8 @@ function bindProgrammer(){
  $$('[data-nudge]').forEach(b=>b.onclick=()=>{const i='xyz'.indexOf(b.dataset.nudge),position=[...one.position];position[i]=Math.round((position[i]+nudgeStep*+b.dataset.dir)*100)/100;quiet(command('fixture.place',{id:one.id,position}))});
  $$('[data-place]').forEach(el=>el.onchange=()=>quiet(command('fixture.place',{id:one.id,position:$$('[data-place]').map(e=>+e.value)})));
  if($('#beginAlignment'))$('#beginAlignment').onclick=()=>beginAlignment(one).catch(e=>toast(e.message));
- if($('#saveCalibration'))$('#saveCalibration').onclick=async()=>{const f=structuredClone(one);f.calibration.panRange=[+$('#panMin').value,+$('#panMax').value];f.calibration.tiltRange=[+$('#tiltMin').value,+$('#tiltMax').value];f.calibration.home=[current().pan,current().tilt];f.calibration.reviewed=$('#reviewed').checked;await command('fixture.patch',{fixture:f});toast('Calibration saved.')};
- if($('#savePatch'))$('#savePatch').onclick=async()=>{const f=structuredClone(one);f.name=$('#patchName').value;f.address=+$('#patchAddress').value;f.universe=+$('#patchUniverse').value;await command('fixture.patch',{fixture:f});toast('Patch saved.')};
+ if($('#saveCalibration'))$('#saveCalibration').onclick=async()=>{const f=structuredClone(fixture(one.id)??one);f.calibration.panRange=[+$('#panMin').value,+$('#panMax').value];f.calibration.tiltRange=[+$('#tiltMin').value,+$('#tiltMax').value];f.calibration.home=[current().pan,current().tilt];f.calibration.reviewed=$('#reviewed').checked;await command('fixture.patch',{fixture:f});toast('Calibration saved.')};
+ if($('#savePatch'))$('#savePatch').onclick=async()=>{const f=structuredClone(fixture(one.id)??one);f.name=$('#patchName').value;f.address=+$('#patchAddress').value;f.universe=+$('#patchUniverse').value;await command('fixture.patch',{fixture:f});toast('Patch saved.')};
 }
 
 // ── Beam alignment (build › Stage) ──
@@ -526,7 +602,7 @@ async function beginAlignment(f){
  destroyJoystick?.();destroyJoystick=null;await command('calibration.hold',{id:f.id});
  const st=runtime.frames.find(x=>x.id===f.id),a=f.calibration.alignment;
  aligning={id:f.id,actual:[st.pan,st.tilt],virtual:aimAngles(f,st.pan,st.tilt),panSign:a?.panSign??1,tiltSign:a?.tiltSign??1};
- ensureStageView();stage.alignmentPreview=aligning;drawSide();
+ ensureStageView();if(stage)stage.alignmentPreview=aligning;drawSide();
 }
 function alignmentHTML(f){
  const a=aligning;
@@ -541,7 +617,7 @@ function bindAlignment(f){
 }
 
 // ── LED wall ──
-function syncLedWall(){const wall=show.ledWall,item=mediaList().find(m=>m.id===wall?.media);stage.setLedWall(wall,item)}
+function syncLedWall(){const wall=show.ledWall,item=mediaList().find(m=>m.id===wall?.media);stage?.setLedWall(wall,item)}
 function drawLedTray(){
  const tray=$('#ledTray');tray.hidden=!ledOpen;$('#ledButton').classList.toggle('active',ledOpen);if(!ledOpen)return;
  const wall=show.ledWall,items=mediaList();
@@ -551,7 +627,7 @@ function drawLedTray(){
  $$('[data-media]').forEach(b=>b.onclick=()=>quiet(command('ledwall.set',{media:b.dataset.media})));
  $$('[data-delete-media]').forEach(b=>b.onclick=()=>quiet(command('media.delete',{id:b.dataset.deleteMedia})));
  $$('[data-fit]').forEach(b=>b.onclick=()=>quiet(command('ledwall.set',{fit:b.dataset.fit})));
- $('#ledBrightness').onchange=e=>quiet(command('ledwall.set',{brightness:+e.target.value}));$('#ledBrightness').oninput=e=>stage.setLedWall({...show.ledWall,brightness:+e.target.value},mediaList().find(m=>m.id===show.ledWall.media));
+ $('#ledBrightness').onchange=e=>quiet(command('ledwall.set',{brightness:+e.target.value}));$('#ledBrightness').oninput=e=>stage?.setLedWall({...show.ledWall,brightness:+e.target.value},mediaList().find(m=>m.id===show.ledWall.media));
  $('#ledClose').onclick=()=>{ledOpen=false;drawLedTray()};$('#addMedia').onclick=()=>$('#mediaFile').click();
 }
 $('#mediaFile').onchange=async e=>{
@@ -561,24 +637,31 @@ $('#mediaFile').onchange=async e=>{
 };
 
 // ── Dialogs ──
-function dialog(title,html){$('#dialog').classList.remove('wide');clearInterval(patchTimer);clearInterval(netTimer);$('#dialogTitle').textContent=title;$('#dialogBody').innerHTML=html;fillIcons($('#dialogBody'));if(!$('#dialog').open)$('#dialog').showModal()}
+function dialog(title,html){$('#dialog').classList.remove('wide');clearInterval(patchTimer);clearInterval(netTimer);$('#dialogTitle').textContent=title;$('#dialogBody').innerHTML=html;fillIcons($('#dialogBody'));if(!$('#dialog').open)$('#dialog').showModal();const f=$('#dialogBody').querySelector('input[type=text]:not([readonly]):not([disabled]),input[type=search]:not([disabled])');if(f&&!f.closest('details:not([open]),[hidden]'))f.focus()}
+$('#dialog').addEventListener('keydown',e=>{if(e.key!=='Enter'||e.isComposing)return;const t=e.target;if(t.tagName!=='INPUT'||!['text','number','search'].includes(t.type)||t.onkeydown)return;const one=$$('#dialogBody .dialog-actions .primary:not([disabled])'),btn=t.closest('.inline-form')?.querySelector('button.primary:not([disabled])')??(one.length===1?one[0]:null);if(btn){e.preventDefault();btn.click()}});
 function confirmDialog(title,text,action,run){dialog(title,`<p>${esc(text)}</p><div class="dialog-actions"><button class="ghost-button" id="confirmNo">Cancel</button><button class="primary danger" id="confirmYes">${esc(action)}</button></div>`);$('#confirmNo').onclick=()=>$('#dialog').close();$('#confirmYes').onclick=async()=>{try{await run();$('#dialog').close()}catch{}}}
 // Save: update the playing cue (merge changes, keep its effects) or save a copy as a new cue after it.
 function saveDialog(){
  const pb=runtime.playback,cue=pb&&show.cues.find(c=>c.id===pb.id),stack=runtime.stack,pg=stack?show.pages.find(p=>p.id===stack.page):page();
  const b=runtime.blind?.enabled,changed=new Set([...Object.keys(progOverrides(runtime)),...(b?[]:runtime.fx.flatMap(x=>x.fixtures))]).size,effects=b?0:runtime.fx.length;
  const usedOn=cue?show.pages.filter(p=>p.cues.some(e=>e.cue===cue.id)).length:0,liveName=stack?entryName(pg?.cues.find(e=>e.id===stack.entry)):cue?.name;
- dialog('Save changes',`<p class="hint">${changed} fixture${changed===1?'':'s'} changed${effects?` · ${effects} effect${effects===1?'':'s'}`:''}${b?' in blind':''}.</p><div class="save-options">
+ dialog('Save changes',`<p class="hint">${changed} fixture${changed===1?'':'s'} changed${effects?` · ${effects} effect${effects===1?'':'s'}`:''}${b?' in blind':''}.</p>
+  <div class="save-what"><div class="segmented small" id="saveScope"><button data-scope="look" class="active">Whole look</button><button data-scope="changes">Just my changes</button></div><div class="save-parts">${[['intensity','Intensity'],['color','Colour'],['position','Position'],['beam','Beam']].map(([k,l])=>`<label class="chip-check"><input type="checkbox" data-part="${k}" checked><span>${l}</span></label>`).join('')}</div><p class="hint" id="saveWhatHint"></p></div><div class="save-options">
   ${cue?`<button class="save-option" data-save="update">${icon('save')}<div><strong>Update “${esc(liveName)}”</strong><small>Adds your changes to this cue — its own effects keep running.${usedOn>1?` Used on ${usedOn} pages, all get the update.`:''}</small></div></button>`:''}
-  <div class="save-option as-new">${icon('plus')}<div><strong>Save as new cue</strong><small>${cue?`A copy of “${esc(liveName)}” plus your changes`:'The current look'}${pg?`, placed ${stack?'right after it':'at the end of'} “${esc(pg.name)}”${stack?' and run':''}`:''}.</small><div class="inline-form"><input id="saveName" type="text" maxlength="100" value="${esc(cue?liveName+' · alt':'New look')}" aria-label="New cue name"><button class="primary" data-save="new">Save new</button></div></div></div>
+  <div class="save-option as-new">${icon('plus')}<div><strong>Save as new cue</strong><small>${cue?`A copy of “${esc(liveName)}” plus your changes`:effects?`The current look, with the running effect${effects===1?'':'s'} kept as effect${effects===1?'':'s'} in the cue`:'The current look'}${pg?`, placed ${stack?'right after it':'at the end of'} “${esc(pg.name)}”${stack?' and run':''}`:''}.</small><div class="inline-form"><input id="saveName" type="text" maxlength="100" value="${esc(cue?liveName+' · alt':'New look')}" aria-label="New cue name"><button class="primary" data-save="new">Save new</button></div></div></div>
   ${show.scenes.length?`<div class="save-option as-new">${icon('scene')}<div><strong>Update a scene</strong><small>Saves the whole look as it is now into the scene${b?' (the blind look)':''}. ${runtime.scene?'The active scene changes at once.':'Make it active from Scenes.'}</small><div class="inline-form"><select id="saveScene" aria-label="Scene to update">${show.scenes.map(s=>`<option value="${esc(s.id)}" ${runtime.scene?.id===s.id?'selected':''}>${esc(s.name)}${runtime.scene?.id===s.id?' · active':''}</option>`).join('')}</select><button class="primary" data-save="scene">Update scene</button></div></div></div>`:''}</div>
-  ${cue?`<details class="more"><summary>${icon('sliders')}More</summary><button class="ghost-button" data-save="replace">${icon('record')}Replace “${esc(liveName)}” with the whole current look</button><p class="hint">Freezes everything you see — including running effects — into a still look.</p></details>`:''}`);
+  ${cue?`<details class="more"><summary>${icon('sliders')}More</summary><button class="ghost-button" data-save="replace">${icon('record')}Replace “${esc(liveName)}” with the whole current look</button><p class="hint">Snapshots the whole look underneath as it is now. Running programmer effects stay effects on the cue.</p></details>`:''}`);
+ // What to save, like Hog record masks: the whole look or just your changes, and which parts. A new cue with only some
+ // parts (or just the changes) plays them over whatever runs underneath.
+ const scope=()=>$('#saveScope .active').dataset.scope,parts=()=>[...$$('[data-part]')].filter(x=>x.checked).map(x=>x.dataset.part),only=()=>parts().length===4?{}:{only:parts()};
+ const whatHint=()=>{const p=parts();setText($('#saveWhatHint'),!p.length?'Tick at least one part.':`${scope()==='changes'?'A new cue holds only what you changed':'A new cue holds the whole look'}${p.length<4||scope()==='changes'?`, and plays ${p.length<4?'only '+p.join(', '):'its changes'} over whatever runs underneath`:''}. Update a scene always saves everything.`)};
+ $$('[data-scope]').forEach(x=>x.onclick=()=>{$$('[data-scope]').forEach(y=>y.classList.toggle('active',y===x));whatHint()});$$('[data-part]').forEach(x=>x.onchange=whatHint);whatHint();
  const after=()=>{$('#dialog').close();viewSource=runtime.preview?'preview':'live';drawSide()};
- $$('[data-save]').forEach(btn=>btn.onclick=async()=>{const kind=btn.dataset.save;try{
+ $$('[data-save]').forEach(btn=>btn.onclick=async()=>{const kind=btn.dataset.save;if(kind!=='scene'&&!parts().length)return toast('Tick at least one part to save.');try{
   if(kind==='scene'){const sc=show.scenes.find(s=>s.id===$('#saveScene').value);await command('scene.capture',{id:sc.id,name:sc.name});toast(`Scene “${sc.name}” updated from the current look.`)}
-  else if(kind==='update'){await command('cue.record',{id:cue.id});toast(`“${liveName}” updated.`)}
-  else if(kind==='replace'){await command('cue.record',{id:cue.id,mode:'replace'});toast(`“${liveName}” replaced with the current look.`)}
-  else{const name=$('#saveName').value.trim()||'New look';const r=await command('cue.record',{id:uid('cue'),name,...(pg?{page:pg.id}:{}),...(stack?{after:stack.entry,go:true}:{})});if(pg){pageId=pg.id;store.set('page',pageId)}toast(`Saved “${name}”${pg?' to '+pg.name:''}.`)}
+  else if(kind==='update'){await command('cue.record',{id:cue.id,...only()});toast(`“${liveName}” updated.`)}
+  else if(kind==='replace'){await command('cue.record',{id:cue.id,mode:'replace',...only()});toast(`“${liveName}” replaced with the current look.`)}
+  else{const name=$('#saveName').value.trim()||'New look';const r=await command('cue.record',{id:uid('cue'),name,...only(),...(scope()==='changes'?{changes:true}:{}),...(pg?{page:pg.id}:{}),...(stack?{after:stack.entry,go:true}:{})});if(pg){pageId=pg.id;store.set('page',pageId)}toast(`Saved “${name}”${pg?' to '+pg.name:''}.`)}
   after()}catch{}});
 }
 function recordDialog(){
@@ -588,10 +671,10 @@ function recordDialog(){
 function presetDialog(){
  const presets=Object.entries(allPresets()),cats=[['intensity','Intensity'],['color','Color'],['movement','Movement']];let chosen=presets[0][0];
  const defaultGroup=group&&group!=='all'?group:'backlights';
- dialog('Add an effect',`<div class="preset-cats">${cats.map(([c,label])=>`<h3>${label}</h3><div class="preset-grid">${presets.filter(([,p])=>p.category===c).map(([id,p])=>`<button class="preset ${id===chosen?'active':''}" data-preset="${id}" title="${esc(p.description??schema.effects[p.effect].description)}">${icon(p.icon)}<span>${esc(p.name)}</span></button>`).join('')}</div>`).join('')}</div>
+ dialog('Add an effect',`<div class="preset-cats">${cats.map(([c,label])=>`<h3>${label}</h3><div class="preset-grid">${presets.filter(([,p])=>p.category===c).map(([id,p])=>`<button class="preset ${id===chosen?'active':''}" data-preset="${id}" title="${esc(p.description??(p.effect==='code'?'Code effect written by the assistant':schema.effects[p.effect]?.description??''))}">${icon(p.icon)}<span>${esc(p.name)}</span>${p.effect==='code'?'<b class="code-badge">code</b>':''}</button>`).join('')}</div>`).join('')}</div>
  <div class="form-grid"><label class="mini"><span>Fixture group</span><select id="presetGroup">${sortedGroups().map(g=>`<option value="${esc(g.id)}" ${g.id===defaultGroup?'selected':''}>${esc(g.name)}</option>`).join('')}</select></label><label class="mini"><span>Name</span><input id="presetName" type="text" placeholder="Auto"></label><label class="mini color"><span>Colors</span><span class="color-pair"><input id="presetColor" type="color" value="#52d3ff"><input id="presetSecondary" type="color" value="#b758ef"></span></label><label class="mini"><span>Speed</span><input id="presetSpeed" type="range" min=".05" max="4" step=".05" value="1"></label><label class="mini"><span>Level</span><input id="presetLevel" type="range" min="0" max="1" step=".01" value=".85"></label><label class="mini"><span>Length · s</span><input id="presetDuration" type="number" min=".5" max="3600" step="1" value="20"></label><label class="mini"><span>Fade in · s</span><input id="presetFade" type="number" min="0" max="60" step=".5" value="2"></label></div>
  <p class="hint" id="presetHint"></p><div class="dialog-actions"><button id="presetCustom" class="ghost-button"><span data-icon="sliders"></span>Custom effect…</button><button id="presetPreview" class="ghost-button"><span data-icon="eye"></span>Preview</button><button id="presetAdd" class="primary"><span data-icon="plus"></span>Add to page</button></div>`);
- const pick=id=>{chosen=id;const p=allPresets()[id];$$('[data-preset]').forEach(b=>b.classList.toggle('active',b.dataset.preset===id));if(p.params.color)$('#presetColor').value=p.params.color;if(p.params.secondary)$('#presetSecondary').value=p.params.secondary;$('#presetSpeed').value=p.params.speed??1;$('#presetLevel').value=p.params.brightness??.85;$('#presetDuration').value=p.duration;$('#presetHint').textContent=(p.description??schema.effects[p.effect].description)+(p.movers?' Needs moving heads.':'')};pick(chosen);
+ const pick=id=>{chosen=id;const p=allPresets()[id];p.params??={};$$('[data-preset]').forEach(b=>b.classList.toggle('active',b.dataset.preset===id));if(p.params.color)$('#presetColor').value=p.params.color;if(p.params.secondary)$('#presetSecondary').value=p.params.secondary;$('#presetSpeed').value=p.params.speed??1;$('#presetLevel').value=p.params.brightness??.85;$('#presetDuration').value=p.duration;$('#presetHint').textContent=(p.description??schema.effects[p.effect].description)+(p.movers?' Needs moving heads.':'')};pick(chosen);
  $$('[data-preset]').forEach(b=>b.onclick=()=>pick(b.dataset.preset));
  const args=()=>({preset:chosen,group:$('#presetGroup').value,color:$('#presetColor').value,secondary:$('#presetSecondary').value,speed:+$('#presetSpeed').value,brightness:+$('#presetLevel').value,duration:Math.max(.5,+$('#presetDuration').value||20),...($('#presetName').value.trim()?{name:$('#presetName').value.trim()}:{})});
  $('#presetPreview').onclick=()=>{const a=args(),p=allPresets()[a.preset],params={...p.params,color:a.color,secondary:a.secondary,speed:a.speed,brightness:a.brightness},fades=p.effect==='fade'?0:.7;previewCue({cue:{id:'preset-preview',name:`${p.name} · preview`,duration:a.duration,loop:p.loop,...(p.hold?{hold:true}:{}),tracks:[{group:a.group,effect:p.effect,start:0,duration:a.duration,params,fadeIn:fades,fadeOut:p.loop?fades:0}]}}).then(()=>toast('Previewing in the visualizer only.'))};
@@ -670,7 +753,7 @@ function bindLibrary(){
  $('#sheetPreview').onclick=()=>peekCue(c.id);$('#sheetMaster').onclick=()=>masterPicker(c.id);
  $('#sheetAdd').onclick=async()=>{const pg=structuredClone(page());pg.cues.push({id:uid('entry'),cue:c.id,fade:2,follow:'manual'});await quiet(savePage(pg));toast(`Added to “${pg.name}”.`)};
  $('#sheetDelete').onclick=()=>{const n=pagesOf(c.id).length,m=mastersOf(c.id).length,t=triggersOf(c.id).length,uses=[n?`${n} page${n===1?'':'s'}`:'',m?`${m} master${m===1?'':'s'}`:'',t?`${t} trigger${t===1?'':'s'}`:''].filter(Boolean);
-  confirmDialog(`Delete “${c.name}”?`,`It is removed from the library${uses.length?' and from '+uses.join(', '):''}.${t?' Triggers that play it will report an unknown cue.':''}`,'Delete cue',async()=>{await command('cue.delete',{id:c.id});libCue=null;drawSide()})};
+  confirmDialog(`Delete “${c.name}”?`,`It is removed from the library${uses.length?' and from '+uses.join(', '):''}.${t?' Triggers that play it will report an unknown cue.':''}`,'Delete cue',async()=>{await command('cue.delete',{id:c.id});undoToast(`Deleted cue “${c.name}”.`);libCue=null;drawSide()})};
  if($('#sheetAll'))$('#sheetAll').onclick=()=>{libShowAll=true;drawSide()};
 }
 function paintLibrary(r){
@@ -682,7 +765,7 @@ function paintLibrary(r){
 // Flash (default) plays while the key is held; toggle, go, pause and release act on a press. The key sits bold in the
 // slot's corner: click it and press another key to change it. A key someone else has gets a Swap / Take it choice.
 const ACTIONS={flash:['bolt','Flash','Hold the key: the cue plays. Let go: it stops.'],toggle:['toggle','Toggle','Press: the cue plays. Press again: it stops.'],go:['play','Go','Press: the cue plays from the top. Pressing again restarts it.'],pause:['pause','Pause','Press: the running cue freezes. Press again: it carries on.'],release:['stop','Release','Press: the running cue stops, fading out over the fade time.']};
-const DESK_NAMES={highlight:'Highlight',clear:'Clear',blackout:'Blackout',tap:'Tap tempo'};
+const DESK_NAMES={highlight:'Highlight',clear:'Clear',blackout:'Blackout',tap:'Tap tempo',stop:'Stop all'};
 let learning=null,conflict=null,masterQueue=Promise.resolve();const heldMasters=new Set(),heldKeys=new Map();
 const slots=()=>show?.masters?.slots??[],slotIndex=id=>slots().findIndex(m=>m.id===id),slotOf=id=>slots().find(m=>m.id===id);
 const slotCue=m=>m?.cue?show.cues.find(c=>c.id===m.cue):null,slotName=m=>m.label??slotCue(m)?.name??'';
@@ -706,7 +789,7 @@ function drawMasters(){
 }
 function bindMasters(){
  $$('[data-master]').forEach(el=>{const id=el.dataset.master,up=()=>releaseMaster(id);
-  el.onpointerdown=e=>{if(e.button!==0||e.target.closest('button,.m-conflict,.m-level')||!slotCue(slotOf(id)))return;e.preventDefault();el.setPointerCapture(e.pointerId);pressMaster(id)};
+  el.onpointerdown=e=>{if(e.button!==0||e.target.closest('button,.m-conflict,.m-level')||!slotCue(slotOf(id)))return;e.preventDefault();try{el.setPointerCapture(e.pointerId)}catch{}pointerMasters.set(e.pointerId,id);pressMaster(id)};
   el.onpointerup=up;el.onpointercancel=up;el.onlostpointercapture=up;
   el.onclick=e=>{if(!e.target.closest('button,.m-conflict')&&!slotCue(slotOf(id)))cuePicker(id)};
   el.oncontextmenu=e=>{e.preventDefault();openMasterPop(id,el)};
@@ -719,10 +802,15 @@ function bindMasters(){
  if($('#addMaster'))$('#addMaster').onclick=addMaster;
 }
 // Presses go out one after another, so a quick tap's let-go can never overtake its press.
-function sendMaster(slot,down){masterQueue=masterQueue.then(()=>command('masters.trigger',{slot,down})).catch(()=>{});return masterQueue}
+function sendMaster(slot,down){masterQueue=masterQueue.then(()=>command('masters.trigger',{slot,down},{timeout:3000})).catch(()=>{});return masterQueue}
 function pressMaster(id){if(heldMasters.has(id))return;heldMasters.add(id);sendMaster(id,true)}
 function releaseMaster(id){if(heldMasters.delete(id))sendMaster(id,false)}
-function releaseAllMasters(){heldKeys.clear();for(const id of [...heldMasters])releaseMaster(id)}
+function releaseAllMasters(){heldKeys.clear();pointerMasters.clear();for(const id of [...heldMasters])releaseMaster(id)}
+// A slot held by the mouse or a finger is let go wherever the pointer is released, even if the bank was redrawn while it
+// was held (the slot it was captured on is gone then, so its own pointerup never fires).
+const pointerMasters=new Map();
+function releasePointerMasters(e){const id=pointerMasters.get(e.pointerId);if(id!==undefined){pointerMasters.delete(e.pointerId);releaseMaster(id)}}
+addEventListener('pointerup',releasePointerMasters,true);addEventListener('pointercancel',releasePointerMasters,true);
 function assignMaster(id,cueId){const m=slotOf(id),cue=show.cues.find(c=>c.id===cueId);quiet(command('masters.assign',{slot:id,cue:cueId}).then(()=>toast(`Master ${slotIndex(id)+1}${m.key?` (${keyLabel(m.key)})`:''}: ${ACTIONS[m.action][1].toLowerCase()} “${cue.name}”.${m.key&&m.action==='flash'?` Hold ${keyLabel(m.key)} to flash it.`:''}`)))}
 function addMaster(){const n=Math.max(0,...slots().map(m=>+(/^m(\d+)$/.exec(m.id)?.[1]??0)))+1;quiet(command('masters.save',{slots:[...structuredClone(slots()),{id:'m'+n,action:'flash',fade:0}]}).then(()=>$('#masterBank').scrollTo({left:1e6,behavior:'smooth'})))}
 function cuePicker(id){
@@ -759,6 +847,8 @@ function openMasterPop(id,anchor){
   <div class="mp-row"><label class="mini"><span>Fade · s</span><input id="mpFade" type="number" min="0" max="60" step=".5" value="${m.fade??0}"></label><label class="mini"><span>Label</span><input id="mpLabel" type="text" maxlength="40" value="${esc(m.label??'')}" placeholder="${esc(cue?.name??'Cue name')}"></label></div>
   <div class="mp-row"><label class="mini"><span>Pad colour</span><input id="mpColor" type="color" value="${esc(masterColor(show,m))}"></label><label class="mini"><span>MIDI note out (ProPresenter)</span><input id="mpNote" type="number" min="0" max="127" placeholder="none" value="${m.midi?.note??''}"></label></div>
   <label class="check-row mp-priority" title="While this master's cue runs, its lights ignore the scene and every other cue, even newer ones. Manual changes, Highlight, Park, the grand master and Blackout still apply."><input type="checkbox" id="mpPriority" ${m.priority?'checked':''}><span><strong>Highest precedence</strong><small>Wins over the scene and every other cue, like a high-priority Hog cuelist.</small></span></label>
+  <label class="check-row mp-solo" title="On the APC40 this master's Solo button kills every light its cue uses, over every cue, scene and master, until pressed again (lit blue while killed)."><input type="checkbox" id="mpSoloKill" ${m.soloKill?'checked':''}><span><strong>Solo kills its lights</strong><small>Its APC40 Solo button turns them off over everything; press again to bring them back.</small></span></label>
+  ${cue?`<div class="mp-tempo"><label class="check-row" title="On: the cue follows the global tempo (tap tempo, ½, ×2). Off: it keeps its own speed."><input type="checkbox" id="mpTempo" ${cue.bpm?'checked':''}><span><strong>Follow the global tempo</strong><small>${cue.bpm?`Plays at tap tempo ÷ ${Math.round(cue.bpm)}`:'Off: it keeps its own speed'}</small></span></label><label class="mini"><span>Speed ×</span><input id="mpSpeed" type="number" min="0.25" max="4" step="0.25" value="${cue.speed??1}"></label></div>`:''}
   <section class="mp-sound" id="mpSound"></section>
   ${cue?`<button class="ghost-button small danger" id="mpClear"><span data-icon="trash"></span>Clear this master</button>`:''}`;
  pop.hidden=false;fillIcons(pop);
@@ -770,6 +860,10 @@ function openMasterPop(id,anchor){
  $('#mpLabel').onchange=e=>quiet(command('masters.assign',{slot:id,label:e.target.value.trim()}));
  if($('#mpClear'))$('#mpClear').onclick=()=>{closeMasterPop();quiet(command('masters.assign',{slot:id,clear:true}))};
  $('#mpPriority').onchange=e=>quiet(command('masters.assign',{slot:id,priority:e.target.checked}));
+ $('#mpSoloKill').onchange=e=>quiet(command('masters.assign',{slot:id,soloKill:e.target.checked}));
+ // Tempo: follow the global tempo (cue.bpm) or not, and the cue's own speed (cue.speed). Saved on the master's cue.
+ const saveTempo=()=>{const next=structuredClone(cue),on=$('#mpTempo').checked,sp=Math.max(.25,Math.min(4,+$('#mpSpeed').value||1));if(on)next.bpm=cue.bpm??Math.round(runtime?.tempo?.bpm??120);else delete next.bpm;if(sp===1)delete next.speed;else next.speed=sp;const sm=$('#mpTempo').closest('label').querySelector('small');if(sm)sm.textContent=on?`Plays at tap tempo ÷ ${next.bpm}`:'Off: it keeps its own speed';quiet(command('cue.save',{cue:next}).then(()=>toast(`${cue.name}: ${on?'follows the tempo':'own speed'}${sp!==1?` × ${sp}`:''}.`)))};
+ if($('#mpTempo')){$('#mpTempo').onchange=saveTempo;$('#mpSpeed').onchange=saveTempo}
  $('#mpColor').onchange=e=>quiet(command('masters.assign',{slot:id,color:e.target.value}));
  $('#mpNote').onchange=e=>{const v=e.target.value.trim();quiet(command('masters.assign',v===''?{slot:id,clearMidi:true}:{slot:id,midi:{note:Math.max(0,Math.min(127,Math.round(+v))),channel:1}}))};
  // Sound trigger: the panel is loaded only when the sound module is on.
@@ -821,9 +915,9 @@ function designer(){
 }
 function editCue(cueId){
  const cue=structuredClone(show.cues.find(c=>c.id===cueId));if(!cue)return;
- dialog('Edit cue',`<label class="mini"><span>Name</span><input id="editName" type="text" value="${esc(cue.name)}"></label><div class="form-grid"><label class="mini"><span>Length · s</span><input id="editDuration" type="number" min=".1" max="3600" step=".5" value="${cue.duration}"></label><label class="check"><input id="editLoop" type="checkbox" ${cue.loop?'checked':''}>Loop</label><label class="check"><input id="editHold" type="checkbox" ${cue.hold?'checked':''}>Hold last frame</label></div>${cue.tracks.length?`<label class="mini"><span>Track</span><select id="editTrack">${cue.tracks.map((t,i)=>`<option value="${i}">${t.start}s · ${esc(t.group)} · ${esc(schema.effects[t.effect]?.name??t.effect)}</option>`).join('')}</select></label><div id="trackFields"></div>`:'<p class="hint">A recorded still look. Adjust fixtures and record a new look to change it, or edit the definition below.</p>'}<details class="more"><summary>${icon('edit')}Full cue definition</summary><textarea id="cueJson" spellcheck="false">${esc(JSON.stringify(cue,null,2))}</textarea><button id="saveJson" class="ghost-button">Validate &amp; save definition</button></details><div class="dialog-actions"><button id="cueSave" class="primary"><span data-icon="save"></span>Save cue</button></div>`);
+ dialog('Edit cue',`<label class="mini"><span>Name</span><input id="editName" type="text" value="${esc(cue.name)}"></label><div class="form-grid"><label class="mini"><span>Length · s</span><input id="editDuration" type="number" min=".1" max="3600" step=".5" value="${cue.duration}"></label><label class="check"><input id="editLoop" type="checkbox" ${cue.loop?'checked':''}>Loop</label><label class="check"><input id="editHold" type="checkbox" ${cue.hold?'checked':''}>Hold last frame</label></div>${cue.tracks.length?`<label class="mini"><span>Track</span><select id="editTrack">${cue.tracks.map((t,i)=>`<option value="${i}">${t.start}s · ${esc(t.group?show.groups.find(g=>g.id===t.group)?.name??t.group:(t.fixtures?.length??0)+' fixtures')} · ${esc(schema.effects[t.effect]?.name??t.effect)}</option>`).join('')}</select></label><div id="trackFields"></div>`:'<p class="hint">A recorded still look. Adjust fixtures and record a new look to change it, or edit the definition below.</p>'}<details class="more"><summary>${icon('edit')}Full cue definition</summary><textarea id="cueJson" spellcheck="false">${esc(JSON.stringify(cue,null,2))}</textarea><button id="saveJson" class="ghost-button">Validate &amp; save definition</button></details><div class="dialog-actions"><button id="cueSave" class="primary"><span data-icon="save"></span>Save cue</button></div>`);
  const sync=()=>{$('#cueJson').value=JSON.stringify(cue,null,2)};
- const draw=()=>{const t=cue.tracks[+$('#editTrack').value];$('#trackFields').innerHTML=`<div class="form-grid"><label class="mini color"><span>Color</span><input id="editColor" type="color" value="${t.params.color??'#6ddcff'}"></label><label class="mini"><span>Speed</span><input id="editSpeed" type="number" min=".05" max="4" step=".05" value="${t.params.speed??1}"></label><label class="mini"><span>Level</span><input id="editIntensity" type="range" min="0" max="1" step=".01" value="${t.params.brightness??.8}"></label><label class="mini"><span>Position A</span><select id="editPoint"><option value="">Fixture home</option>${show.points.map(p=>`<option value="${esc(p.id)}">${esc(p.name)}</option>`).join('')}</select></label></div>`;$('#editPoint').value=t.params.pointA??'';for(const el of ['editColor','editSpeed','editIntensity','editPoint'])$('#'+el).onchange=()=>{t.params.color=$('#editColor').value;t.params.speed=+$('#editSpeed').value;t.params.brightness=+$('#editIntensity').value;if($('#editPoint').value)t.params.pointA=$('#editPoint').value;else delete t.params.pointA;sync()}};
+ const draw=()=>{const t=cue.tracks[+$('#editTrack').value];t.params??={};if(t.effect==='code'){$('#trackFields').innerHTML=Object.keys(t.params.args??{}).length?`<div class="form-grid">${argInputs(t.params.args,'data-trackarg')}</div><p class="hint">A code effect: these are its settings. Its code is written by the assistant.</p>`:'<p class="hint">A code effect with no settings. Its code is written by the assistant.</p>';bindArgInputs('data-trackarg',(k,v)=>{t.params.args={...(t.params.args??{}),[k]:v};sync()});return}$('#trackFields').innerHTML=`<div class="form-grid"><label class="mini color"><span>Color</span><input id="editColor" type="color" value="${t.params.color??'#6ddcff'}"></label><label class="mini"><span>Speed</span><input id="editSpeed" type="number" min=".05" max="4" step=".05" value="${t.params.speed??1}"></label><label class="mini"><span>Level</span><input id="editIntensity" type="range" min="0" max="1" step=".01" value="${t.params.brightness??.8}"></label><label class="mini"><span>Position A</span><select id="editPoint"><option value="">Fixture home</option>${show.points.map(p=>`<option value="${esc(p.id)}">${esc(p.name)}</option>`).join('')}</select></label></div>`;$('#editPoint').value=t.params.pointA??'';for(const el of ['editColor','editSpeed','editIntensity','editPoint'])$('#'+el).onchange=()=>{t.params.color=$('#editColor').value;t.params.speed=+$('#editSpeed').value;t.params.brightness=+$('#editIntensity').value;if($('#editPoint').value)t.params.pointA=$('#editPoint').value;else delete t.params.pointA;sync()}};
  if(cue.tracks.length){draw();$('#editTrack').onchange=draw}
  $('#cueSave').onclick=async()=>{cue.name=$('#editName').value;cue.duration=+$('#editDuration').value;cue.loop=$('#editLoop').checked;if($('#editHold').checked)cue.hold=true;else delete cue.hold;for(const t of cue.tracks)if(t.start+t.duration>cue.duration)t.duration=Math.max(.1,cue.duration-t.start);await command('cue.save',{cue});$('#dialog').close();toast('Saved. The next GO uses the new version.')};
  $('#saveJson').onclick=async()=>{try{await command('cue.save',{cue:JSON.parse($('#cueJson').value)});$('#dialog').close();toast('Cue validated and saved.')}catch(e){toast(e.message)}};
@@ -862,12 +956,15 @@ function paintAgentStatus(r){
  el.innerHTML=agents.length?`<span class="as-icon">${icon('check')}</span><div><strong>Connected</strong><small>${agents.map(a=>esc(a.client+(a.version?' '+a.version:''))).join(' · ')}</small></div><button class="primary" id="agentDone">Done</button>`:`<span class="as-icon"><i class="pulse-dot"></i></span><div><strong>Waiting for an agent…</strong><small>Follow the steps below. Nothing to press here — it updates by itself.</small></div>`;
  if($('#agentDone'))$('#agentDone').onclick=()=>$('#dialog').close();
 }
-function importDialog(){dialog('Import a show',`<p class="hint">Includes fixtures, placement, alignment, positions, groups, cues, pages and LED wall choice. Network settings stay. Output must be disarmed; the current show is backed up. Imported media files are not inside the show file.</p><input id="showFile" type="file" accept=".json,application/json" aria-label="Show file"><div class="dialog-actions"><button id="loadShow" class="primary"><span data-icon="upload"></span>Import</button></div>`);$('#loadShow').onclick=async()=>{try{const file=$('#showFile').files[0];if(!file)return toast('Choose an exported show file.');if(file.size>300000)throw Error('Show file is too large');await command('show.import',{show:JSON.parse(await file.text())});cancelAlignment();selected=[];group=null;$('#dialog').close();toast('Show imported. Output remains disarmed.')}catch(e){toast(e.message)}}}
 // Show files (show.save / show.open / show.files, docs/SHOW-FILES.md): named shows in a folder on this Mac, like documents.
 let showFileKey='';
-function paintShowFile(r){const f=r?.showFile,name=f?.name??show?.name.split('·')[0].trim()??'',key=`${name}|${f?.name?1:0}|${f?.dirty?1:0}`;if(key===showFileKey)return;showFileKey=key;const el=$('#showName');
- el.innerHTML=`<span>${esc(name)}</span>${f?.dirty?'<i class="unsaved-dot" aria-hidden="true"></i>':''}`;el.classList.toggle('unsaved',!!f?.dirty);
- el.title=!f?.name?'Not saved to a show file yet · ⌘S to save':f.dirty?`${f.name} · unsaved changes · ⌘S to save`:`${f.name} · saved · click to open another show`}
+// runtime.showFile.error: the show could not be written to disk (edits are live, not on disk). The dot becomes a warning
+// with the reason as its title, and the reason is toasted once.
+let saveErrorShown='';
+function paintShowFile(r){const f=r?.showFile,err=f?.error??'',name=f?.name??show?.name.split('·')[0].trim()??'',key=`${name}|${f?.name?1:0}|${f?.dirty?1:0}|${err}`;if(key===showFileKey)return;showFileKey=key;const el=$('#showName');
+ if(err&&err!==saveErrorShown)toast(`The show could not be saved to disk: ${err}. Your edits are live but not on disk.`,'error');saveErrorShown=err;
+ el.innerHTML=`<span>${esc(name)}</span>${err?`<span class="save-warn" aria-label="Not saved to disk">${icon('warning')}</span>`:f?.dirty?'<i class="unsaved-dot" aria-hidden="true"></i>':''}`;el.classList.toggle('unsaved',!!f?.dirty);el.classList.toggle('save-failed',!!err);
+ el.title=err?`Not saved to disk: ${err} · edits are live but not on disk`:!f?.name?'Not saved to a show file yet · ⌘S to save':f.dirty?`${f.name} · unsaved changes · ⌘S to save`:`${f.name} · saved · click to open another show`}
 const when=iso=>new Date(iso).toLocaleString([],{dateStyle:'medium',timeStyle:'short'});
 function folderBar(folder,back){return `<div class="file-folder"><span data-icon="folder"></span><span class="file-path" title="${esc(folder??'')}">${esc(folder?(folder.split('/').length>4?'…/'+folder.split('/').slice(-2).join('/'):folder):'No folder')}</span><button class="chip-button" id="fileFolder">Change…</button><button class="chip-button" id="fileReveal">Show in Finder</button></div>`}
 function wireFolderBar(back){
@@ -897,7 +994,7 @@ async function openDialog(){
   $('#openList').innerHTML=rows.map(f=>`<button class="pool-row file-row${f.name===chosen?' selected':''}" data-open="${esc(f.name)}" ${f.valid?'':'disabled'}><span class="pill-icon" data-icon="${f.valid?'show':'warning'}"></span><span class="file-main"><strong>${esc(f.name)}${f.name===list.current.name?' <em>open now</em>':''}</strong><small>${f.valid?`${esc(f.title&&f.title!==f.name?f.title+' · ':'')}${f.fixtures} fixtures · ${f.cues} cues`:'Not a StageLight show'}</small></span><small>${esc(when(f.modified))}</small></button>`).join('')||`<p class="hint">${list.files.length?'No show matches.':'No saved shows in this folder yet. Use Save show as… to make one.'}</p>`;
   fillIcons($('#openList'));$('#openGo').disabled=!chosen;
   $$('[data-open]').forEach(b=>{b.onclick=()=>{chosen=b.dataset.open;draw()};b.ondblclick=()=>{chosen=b.dataset.open;open()}})};
- const open=async()=>{if(!chosen)return;const name=chosen,f=runtime.showFile,run=async discard=>{await command('show.open',{name,...(discard?{discard}:{})});cancelAlignment();selected=[];group=null;$('#dialog').close();toast(`Opened “${name}”. Output remains disarmed.`)};
+ const open=async()=>{if(!chosen)return;const name=chosen,f=runtime.showFile,run=async discard=>{await command('show.open',{name,...(discard?{discard}:{})});cancelAlignment();selected=[];group=null;standby=null;editingEntry=null;libCue=null;closeMasterPop();drawAll();$('#dialog').close();toast(`Opened “${name}”. Output remains disarmed.`)};
   if(runtime.output.armed)return toast('Turn output off before opening another show.');
   // Like any document app: unsaved changes ask first, with Save offered when the show already has a file.
   if(f.dirty){dialog(`Open “${name}”?`,`<p>${f.name?`“${esc(f.name)}” has unsaved changes.`:'The current show has not been saved to a file. Cancel and use Save show as… to keep it.'} Opening replaces it; a copy stays in Settings → Show versions.</p><div class="dialog-actions"><button class="ghost-button" id="openNo">Cancel</button><button class="ghost-button danger" id="openDiscard">Don't save</button>${f.name?'<button class="primary" id="openSave"><span data-icon="save"></span>Save and open</button>':''}</div>`);
@@ -906,6 +1003,7 @@ async function openDialog(){
  $('#openSearch').oninput=draw;$('#openSearch').onkeydown=e=>{if(e.key==='Enter'){const first=$('[data-open]:not([disabled])');if(!chosen&&first)chosen=first.dataset.open;open()}};
  $('#openGo').onclick=open;$('#openCancel').onclick=()=>$('#dialog').close();wireFolderBar(openDialog);draw();$('#openSearch').focus();
 }
+function importDialog(){dialog('Import a show',`<p class="hint">Includes fixtures, placement, alignment, positions, groups, cues, pages and LED wall choice. Network settings stay. Output must be disarmed; the current show is backed up. Imported media files are not inside the show file.</p><input id="showFile" type="file" accept=".json,application/json" aria-label="Show file"><div class="dialog-actions"><button id="loadShow" class="primary"><span data-icon="upload"></span>Import</button></div>`);$('#loadShow').onclick=async()=>{try{const file=$('#showFile').files[0];if(!file)return toast('Choose an exported show file.');if(file.size>300000)throw Error('Show file is too large');await command('show.import',{show:JSON.parse(await file.text())});cancelAlignment();selected=[];group=null;standby=null;editingEntry=null;libCue=null;closeMasterPop();drawAll();$('#dialog').close();toast('Show imported. Output remains disarmed.')}catch(e){toast(e.message,'error')}}}
 function helpDialog(){dialog('Guides',`<div class="pool-list"><a class="pool-row link" href="/help/operator.html" target="_blank"><span class="pill-icon" data-icon="show"></span><strong>Running the show</strong><small>Pages, GO, overrides</small></a><a class="pool-row link" href="/help/hog-setup.html" target="_blank"><span class="pill-icon" data-icon="plug"></span><strong>Hog 4 setup</strong><small>Field guide</small></a><a class="pool-row link" href="/help/mh7.html" target="_blank"><span class="pill-icon" data-icon="beam"></span><strong>MH7 notes</strong><small>Verified behavior</small></a><a class="pool-row link" href="/help/triggers.html" target="_blank"><span class="pill-icon" data-icon="network"></span><strong>Triggers from other apps</strong><small>OSC setup</small></a><a class="pool-row link" href="/help/agent-api.html" target="_blank"><span class="pill-icon" data-icon="agent"></span><strong>Agent API</strong><small>HTTP, OSC, MCP</small></a></div><h3>Keys</h3><dl class="diagnostic"><dt>Space</dt><dd>GO</dd><dt>⌫</dt><dd>Back</dd>${Object.entries(DESK_NAMES).filter(([k])=>show.masters.desk[k]).map(([k,n])=>`<dt>${esc(keyLabel(show.masters.desk[k]))}</dt><dd>${n}</dd>`).join('')}<dt>← →</dt><dd>Page through the masters</dd><dt>Master keys</dt><dd>${esc(slots().filter(m=>m.key).slice(0,9).map(m=>keyLabel(m.key)).join(' '))}… shown on each master</dd><dt>Esc</dt><dd>Close panels</dd></dl><p class="hint">Version 0.2 prototype. The stage is an approximate spatial model, not a photometric simulator.</p>`)}
 // Art-Net output: where the desk sends DMX and a check of the path (output.status / output.check / output.configure,
 // the same commands agents use as lights_output_*). The check sends no DMX.
@@ -922,9 +1020,9 @@ function outputSection(){
  <p class="hint">The check pings the address and asks it to identify itself over Art-Net. It sends no DMX. Agents: lights_output_status, lights_output_check.</p></section>`;
 }
 function paintOutputState(){
- const el=$('#outState');if(!el)return;const o=runtime.output,key=[o.armed,o.packets,o.lastError].join('|');if(el.dataset.key===key)return;el.dataset.key=key;
+ const el=$('#outState');if(!el)return;const o=runtime.output,key=[o.armed,o.packets,o.lastError,o.failing].join('|');if(el.dataset.key===key)return;el.dataset.key=key;
  el.className='out-state '+(o.armed?'live':'off');
- el.innerHTML=o.armed?`<i></i><div><strong>Output on</strong><small>Sending to ${esc(show.settings.target)} · ${o.packets.toLocaleString()} packets${o.lastError?' · '+esc(o.lastError):''}</small></div>`:`<i></i><div><strong>Output off</strong><small>Nothing is sent to the rig. The visualizer is preview only until you arm output.</small></div><button class="primary danger small" id="outArm">Arm output…</button>`;
+ el.innerHTML=o.armed&&o.failing?`<i></i><div><strong>Output armed · packets are not getting out</strong><small>${esc(o.lastError??'Art-Net send failed')} · ${o.recovering?'reopening the socket':'still trying'} · ${o.packets.toLocaleString()} packets sent so far</small></div>`:o.armed?`<i></i><div><strong>Output on</strong><small>Sending to ${esc(show.settings.target)} · ${o.packets.toLocaleString()} packets${o.lastError?' · '+esc(o.lastError):''}</small></div>`:`<i></i><div><strong>Output off</strong><small>Nothing is sent to the rig. The visualizer is preview only until you arm output.</small></div><button class="primary danger small" id="outArm">Arm output…</button>`;
  if($('#outArm'))$('#outArm').onclick=armDialog;
 }
 function paintChecks(c){
@@ -957,7 +1055,7 @@ function paintRunning(r){
 // The active scene shows under Now, and Stop says it fades back to it. The Scenes list redraws only when it changes.
 function paintScene(r){
  const sc=r.scene,line=$('#sceneLine');if(line.hidden!==!sc)line.hidden=!sc;if(sc)setText(line.lastElementChild,'Scene · '+sc.name);
- $('#stopButton').title=sc?`Stop all running cues · fade back to scene ${sc.name}`:'Stop all running cues · fade to dark';
+ const sk=show?.masters?.desk?.stop,stopTitle=`Stop all${sk?` (${keyLabel(sk)})`:''}: running cues stop and manual changes clear · ${sc?`fade back to scene ${sc.name}`:'fade to dark'}`;if($('#stopButton').title!==stopTitle)$('#stopButton').title=stopTitle;
  if(railTab==='scenes'&&(sc?.id??'')!==sceneKey)drawPages();
 }
 // Tap tempo (tempo.tap / tempo.set / tempo.scale, docs/MIDI-AND-SOUND.md): cues with a bpm follow the live tempo. The
@@ -965,7 +1063,7 @@ function paintScene(r){
 let tempoKey='';
 function paintTempo(r){
  const t=r.tempo??{},bpm=t.bpm??t.cue;setText($('#bpmValue'),bpm?String(Math.round(bpm*10)/10):'—');setText($('#bpmSource'),t.bpm?(t.source==='tap'?'TAP':'BPM'):t.cue?'CUE':'BPM');
- $('#tempo').classList.toggle('live',!!t.bpm);$('[data-tempo="reset"]').disabled=!t.bpm;$('#tapButton').title=t.bpm?`Live tempo ${t.bpm} BPM${t.cue?` (cue ${t.cue})`:''}: tap on the beat (T)`:t.cue?`The cue's own tempo, ${t.cue} BPM: tap on the beat (T) to follow the band`:'Tap tempo (T): tap on the beat';
+ $('#tempo').classList.toggle('live',!!t.bpm);$('[data-tempo="reset"]').disabled=!t.bpm;const tapTitle=(t.bpm?`Live tempo ${t.bpm} BPM${t.cue?` (cue ${t.cue})`:''}: tap on the beat (T)`:t.cue?`The cue's own tempo, ${t.cue} BPM: tap on the beat (T) to follow the band`:'Tap tempo (T): tap on the beat')+' · right-click: half, double, reset';if($('#tapButton').title!==tapTitle)$('#tapButton').title=tapTitle;
  const key=bpm+'|'+(t.anchorAgo===null?'':Math.round((Date.now()-t.anchorAgo*1000)/250));if(key===tempoKey)return;tempoKey=key;
  const dot=$('#tapButton .beat-dot');dot.style.animation='none';if(!bpm)return;void dot.offsetWidth;const p=60/bpm;dot.style.animation=`beat ${p}s linear ${-((t.anchorAgo??0)%p)}s infinite`;
 }
@@ -979,10 +1077,11 @@ function paintLock(r){
  const on=!!r.locked,key=on+'|'+mode;if(key===lockKey)return;lockKey=key;document.body.classList.toggle('locked',on);const b=$('#lockButton');b.setAttribute('aria-pressed',String(on));
  b.innerHTML=`${icon(on?'lock':'unlock')}<span>${on?'Locked':'Unlocked'}</span><i class="hold-fill"></i>`;b.title=on?'Locked for the show: hold for 1 second to unlock':'Lock the show for the performance: editing off, playback on';$('#lockBanner').hidden=!(on&&mode!=='show');fillIcons($('#lockBanner'));
 }
-{const b=$('#lockButton');let hold=null;
- b.onpointerdown=e=>{if(!runtime?.locked)return;e.preventDefault();b.classList.add('holding');hold=setTimeout(()=>{hold=null;b.classList.remove('holding');quiet(command('performance.lock',{enabled:false}).then(()=>toast('Unlocked: the show can be edited.')))},1000)};
+{const b=$('#lockButton');let hold=null,downLocked=false;
+ addEventListener('blur',()=>{if(hold){clearTimeout(hold);hold=null;b.classList.remove('holding')}});
+ b.onpointerdown=e=>{downLocked=!!runtime?.locked;if(!downLocked)return;e.preventDefault();b.classList.add('holding');hold=setTimeout(()=>{hold=null;b.classList.remove('holding');quiet(command('performance.lock',{enabled:false}).then(()=>toast('Unlocked: the show can be edited.')))},1000)};
  b.onpointerup=b.onpointerleave=b.onpointercancel=()=>{if(hold){clearTimeout(hold);hold=null;b.classList.remove('holding');toast('Hold the padlock for a second to unlock.')}};
- b.onclick=()=>{if(!runtime?.locked)quiet(command('performance.lock',{enabled:true}).then(()=>toast('Locked for the show. A version was saved. Hold the padlock to unlock.')))}}
+ b.onclick=()=>{if(downLocked){downLocked=false;return}if(!runtime?.locked)quiet(command('performance.lock',{enabled:true}).then(()=>toast('Locked for the show. A version was saved. Hold the padlock to unlock.')))}}
 // After an unexpected engine restart during a show (runtime.resume): one press puts it back; nothing happens on its own.
 let resumeKey='';
 function paintResume(r){
@@ -1033,18 +1132,39 @@ async function drawModules(){
 // Shown over the stage while lights are being driven but output is off, so "the rig does nothing" is never a mystery.
 let outputHintDismissed=false;
 function paintOutputHint(r){
- const el=$('#outputHint');if(!el)return;if(r.output.armed)outputHintDismissed=false;
- const driving=!!r.playback||(r.frames??[]).some(f=>f.intensity>.01);const show_=!r.output.armed&&driving&&!outputHintDismissed;
- if(el.hidden!==!show_)el.hidden=!show_;
+ const el=$('#outputHint');if(!el)return;const o=r.output;if(o.armed&&!o.failing)outputHintDismissed=false;
+ // Output stays armed through send failures and keeps reopening its socket: while that lasts the bar says packets are not
+ // getting out, with the reason (desk-ux.js outputBar). It cannot be dismissed and goes away once packets flow again.
+ const bar=outputBar(o,!!r.playback||(r.frames??[]).some(f=>f.intensity>.01),outputHintDismissed),key=[bar.failing,bar.title,bar.detail].join('|');
+ if(el.dataset.key!==key){el.dataset.key=key;el.classList.toggle('failing',bar.failing);setText(el.querySelector('strong'),bar.title);setText(el.querySelector('small'),bar.detail);$('#outputHintArm').hidden=bar.failing;$('#outputHintClose').hidden=!bar.dismissible}
+ document.body.classList.toggle('output-failing',bar.failing);setText($('#outputButton span'),bar.pill);
+ if(el.hidden!==!bar.show)el.hidden=!bar.show;
 }
+
 // Playback preferences live in the show (settings.set), so agents and every desk share them.
+// Desk keys (show.masters.desk via masters.save {desk}): click a key, press the new one. Esc cancels, Delete removes it.
+// A key that a master or another desk key already has is refused with its owner named.
+let deskLearning=null;
+const DESK_ORDER=['clear','highlight','blackout','tap','stop'];
+function deskKeysSection(){const d=show.masters?.desk??{};return `<section class="prop"><h3><span data-icon="key"></span>Desk keys</h3><p class="hint">Click a key, then press the new one. Esc cancels, Delete removes it. Master keys are changed on each master.</p><div class="desk-keys">${DESK_ORDER.map(k=>`<div class="desk-key"><span>${DESK_NAMES[k]}</span><button class="chip-button ${deskLearning===k?'accent':''}" data-desk-key="${k}">${deskLearning===k?'Press a key…':d[k]?`<kbd>${esc(keyLabel(d[k]))}</kbd>`:'No key'}</button></div>`).join('')}</div></section>`}
+function saveDesk(desk){quiet(command('masters.save',{desk}).then(()=>{deskLearning=null;settingsDialog()}))}
+function learnDeskKey(e){
+ if(['Shift','Control','Alt'].includes(e.key))return;const name=deskLearning,desk={...(show.masters?.desk??{})};
+ if(e.key==='Escape'){deskLearning=null;return settingsDialog()}
+ if(e.key==='Delete'||e.key==='Backspace'){delete desk[name];return saveDesk(desk)}
+ const why=reservedReason(e);if(why){toast(why+'.','error');return}
+ const k=keyOf(e),m=slots().find(x=>x.key===k),other=Object.keys(desk).find(x=>x!==name&&desk[x]===k);
+ if(m||other){toast(`${keyLabel(k)} is ${m?`master ${slotIndex(m.id)+1}'s key`:`the ${DESK_NAMES[other]} key`}. Pick another, or change that one first.`,'error');return}
+ desk[name]=k;saveDesk(desk);
+}
 function settingsDialog(){
- const row=(key,title,hint)=>`<section class="prop"><h3><span data-icon="${key==='clearFade'?'release':'blind'}"></span>${title}</h3><p class="hint">${hint}</p><div class="seg-row"><div class="segmented">${[[0,'Instant'],[1,'1 s'],[2,'2 s'],[3,'3 s'],[5,'5 s']].map(([v,l])=>`<button data-setting="${key}" data-value="${v}" class="${show.playback[key]===v?'active':''}">${l}</button>`).join('')}</div><label class="num"><input data-setting-number="${key}" type="number" min="0" max="30" step=".5" value="${show.playback[key]}">s</label></div></section>`;
+ const row=(key,title,hint)=>`<section class="prop"><h3><span data-icon="${key==='clearFade'?'release':key==='manualFade'?'sliders':'blind'}"></span>${title}</h3><p class="hint">${hint}</p><div class="seg-row"><div class="segmented">${[[0,'Instant'],[1,'1 s'],[2,'2 s'],[3,'3 s'],[5,'5 s']].map(([v,l])=>`<button data-setting="${key}" data-value="${v}" class="${(show.playback[key]??0)===v?'active':''}">${l}</button>`).join('')}</div><label class="num"><input data-setting-number="${key}" type="number" min="0" max="30" step=".5" value="${show.playback[key]??0}">s</label></div></section>`;
  const hold=`<section class="prop"><h3><span data-icon="lock"></span>When the engine stops</h3><label class="check-row"><label class="switch small"><input type="checkbox" id="holdOnStop" ${show.playback.holdOnStop!==false?'checked':''}><span></span></label> Keep the lights at their last look</label><p class="hint">${show.playback.holdOnStop!==false?'On: quitting, updating or restarting the engine stops sending without blacking out, like a crash. Turning output off still blacks out.':'Off: stopping the engine closes shutters and sends zero intensity first, so the rig goes dark.'} Closing the window never stops the engine.</p></section>`;
- dialog('Settings',outputSection()+hold+row('clearFade','Clear','How long Clear (C) takes to fade manual changes back to the running cue. Instant is a hard cut.')+row('blindFade','Blind','How long clearing blind changes, and Apply live, take to fade. Instant is a hard cut.')+'<p class="hint">Saved in the show, so it travels with exports and agents see it (lights_settings_set).</p>'+`<section class="prop" id="modulesSection"><h3><span data-icon="midi"></span>Modules</h3><p class="hint">A module that is off is not loaded at all: no background process, no ports, no audio.</p><div id="modulesBody"><p class="hint">Loading…</p></div></section><section class="prop"><h3><span data-icon="restore"></span>Show versions</h3><p class="hint">Saved by themselves: at most every five minutes of edits, before an import or restore, and when the show is locked.</p><div class="pool-list versions" id="versionList"><p class="hint">Loading…</p></div></section>`);
+ dialog('Settings',outputSection()+hold+row('clearFade','Clear','How long Clear (C) takes to fade manual changes back to the running cue. Instant is a hard cut.')+row('blindFade','Blind','How long clearing blind changes, and Apply live, take to fade. Instant is a hard cut.')+row('manualFade','Manual changes fade over','When you set a level, colour, palette or position by hand, the lights fade to it over this time. Instant snaps straight there (the default).')+deskKeysSection()+'<p class="hint">Saved in the show, so it travels with exports and agents see it (lights_settings_set).</p>'+`<section class="prop" id="modulesSection"><h3><span data-icon="midi"></span>Modules</h3><p class="hint">A module that is off is not loaded at all: no background process, no ports, no audio.</p><div id="modulesBody"><p class="hint">Loading…</p></div></section><section class="prop"><h3><span data-icon="restore"></span>Show versions</h3><p class="hint">Saved by themselves: at most every five minutes of edits, before an import or restore, and when the show is locked.</p><div class="pool-list versions" id="versionList"><p class="hint">Loading…</p></div></section>`);
  const save=async(key,value)=>{if(!Number.isFinite(value)||value<0||value>30)return toast('Use 0 to 30 seconds.');try{await command('settings.set',{[key]:value});settingsDialog()}catch{}};
  wireOutputSection();drawModules();drawVersions();$('#holdOnStop').onchange=async e=>{try{await command('settings.set',{holdOnStop:e.target.checked});settingsDialog()}catch{}};
  $$('[data-setting]').forEach(b=>b.onclick=()=>save(b.dataset.setting,+b.dataset.value));
+ $$('[data-desk-key]').forEach(b=>b.onclick=()=>{deskLearning=deskLearning===b.dataset.deskKey?null:b.dataset.deskKey;settingsDialog()});
  $$('[data-setting-number]').forEach(el=>el.onchange=()=>save(el.dataset.settingNumber,Math.round(+el.value*10)/10));
 }
 // Patch sheet (like a Hog fixture window), read from patch.report — the same readback agents get.
@@ -1184,19 +1304,19 @@ function updatesDialog(){
  }
  checkUpdate(false).then(()=>draw()).catch(e=>draw(String(e)));
 }
-function armDialog(){if(runtime.output.armed){quiet(command('output.disarm'));return}dialog('Enable physical output?',`<p>This sends Art-Net to <strong>${esc(show.settings.target)}</strong>. Playback and overrides are stopped first. Verify the Hog handover.</p><p class="warning">${icon('warning')}Arming does not play a cue. You choose the next live action.</p><div class="dialog-actions"><button id="armCancel" class="ghost-button">Stay in preview</button><button id="armOutput" class="primary danger">Arm physical output</button></div>`);$('#armCancel').onclick=()=>$('#dialog').close();$('#armOutput').onclick=async()=>{await command('cue.stop',{fade:0});await new Promise(r=>setTimeout(r,80));await command('output.arm',{confirmation:'ENABLE_PHYSICAL_OUTPUT'});$('#dialog').close();toast('Output armed. Choose a cue to GO live.')}}
+function armDialog(){if(runtime.output.armed)return confirmDialog('Turn output off?','The rig blacks out and stops receiving anything from this desk until you arm again. For a quick dark stage keep output on and use Blackout (B) instead.','Turn output off',()=>command('output.disarm').then(()=>toast('Output off. The rig is dark.')));dialog('Enable physical output?',`<p>This sends Art-Net to <strong>${esc(show.settings.target)}</strong>. Playback and overrides are stopped first. Verify the Hog handover.</p><p class="warning">${icon('warning')}${runtime.scene?`Scene <strong>${esc(runtime.scene.name)}</strong> goes out to the rig as soon as you arm.`:'Arming does not play a cue. You choose the next live action.'}</p><div class="dialog-actions"><button id="armCancel" class="ghost-button">Stay in preview</button><button id="armOutput" class="primary danger">Arm physical output</button></div>`);$('#armCancel').onclick=()=>$('#dialog').close();$('#armOutput').onclick=async()=>{await command('cue.stop',{fade:0});await new Promise(r=>setTimeout(r,80));await command('output.arm',{confirmation:'ENABLE_PHYSICAL_OUTPUT'});$('#dialog').close();toast(runtime.scene?`Output armed · scene ${runtime.scene.name} is live.`:'Output armed. Choose a cue to GO live.')}}
 
 // ── 10 Hz paint: readback only, no structural redraws ──
 function paint(r){
- paintOutputHint(r);paintOutputState();paintRunning(r);
- if(!r)return;runtime=r;paintAgentStatus(r);paintMasters(r);paintLibrary(r);if(show){paintScene(r);paintTempo(r);paintLock(r);paintResume(r);paintHits(r);paintShowFile(r)}
- if(show&&r.selection&&r.selection.revision>selectionRevision){const first=!selectionRevision;selectionRevision=r.selection.revision;if(!first||r.selection.ids.length)applySelection(r.selection.ids,r.selection.group)}$('#engineStatus').innerHTML='<i></i>Engine ready';document.body.classList.toggle('live',r.output.armed);
- setText($('#outputButton span'),r.output.armed?'LIVE':'Output off');setText($('.preview-label'),stage?.mode==='reference'?'Reference render · not live lighting':r.output.armed?'Live view · output on':'Live view · output off');drawPreviewBanner(r);
+ if(!r)return;paintOutputHint(r);paintOutputState();paintRunning(r);
+ runtime=r;paintAgentStatus(r);paintMasters(r);paintLibrary(r);paintHolds(r);paintFailures(r);paintUndo(r);if(show){paintScene(r);paintTempo(r);paintLock(r);paintResume(r);paintHits(r);paintShowFile(r)}
+ if(show&&r.selection&&r.selection.revision>selectionRevision){const first=!selectionRevision;selectionRevision=r.selection.revision;if(!first||r.selection.ids.length)applySelection(r.selection.ids,r.selection.group)}if(!engineReady){engineReady=true;$('#engineStatus').innerHTML='<i></i>Engine ready'}document.body.classList.toggle('live',r.output.armed);
+ setText($('.preview-label'),stage?.mode==='reference'?'Reference render · not live lighting':r.output.armed?'Live view · output on':'Live view · output off');drawPreviewBanner(r);
  stage?.setLedPlaying(!r.output.armed);
  const p=page(),stack=r.stack,onPage=stack&&p&&stack.page===p.id;
  // Now / next
  const pb=r.playback;setText($('#nowName'),pb?(stack?entryName(show.pages.find(x=>x.id===stack.page)?.cues.find(e=>e.id===stack.entry))??pb.name:pb.name):'—');
- setText($('#playState'),pb?(r.transition?`Fading ${(r.transition.duration*(1-r.transition.progress)).toFixed(1)}s`:pb.paused?'Paused':r.output.armed?'Live':'Now playing'):r.output.armed?'Live · idle':'Ready');
+ setText($('#nowTime'),pb&&!r.transition?cueTime(pb):'');setText($('#playState'),pb?(r.transition?`Fading ${(r.transition.duration*(1-r.transition.progress)).toFixed(1)}s`:pb.paused?'Paused':r.output.armed?'Live':'Now playing'):r.output.armed?'Live · idle':'Ready');
  $('#progressBar').style.width=pb?Math.min(100,pb.elapsed/pb.duration*100)+'%':'0';$('#fadeBar').style.width=r.transition?r.transition.progress*100+'%':'0';$('#fadeBar').hidden=!r.transition;
  if(onPage&&standby===stack.entry)standby=null;
  const nextId=standby??(onPage?stack.next?.entry:p?.cues[0]?.id),next=p?.cues.find(e=>e.id===nextId);
@@ -1207,9 +1327,9 @@ function paint(r){
  const key=[p?.id,stack?.entry,nextId,rev].join('|');
  if(key!==liveKey){liveKey=key;const liveIndex=onPage?stack.index:-1;$$('[data-entry-row]').forEach((row,i)=>{const id=row.dataset.entryRow;row.classList.toggle('live',onPage&&id===stack.entry);row.classList.toggle('standby',id===nextId);row.classList.toggle('done',liveIndex>=0&&i<liveIndex);setText(row.querySelector('.cue-state'),onPage&&id===stack.entry?'LIVE':id===nextId?'NEXT':'')})}
  const liveRow=onPage&&$(`[data-entry-row="${CSS.escape(stack.entry)}"] .cue-progress i`);if(liveRow&&pb)liveRow.style.width=Math.min(100,pb.elapsed/pb.duration*100)+'%';
- $$('[data-page]').forEach(b=>b.classList.toggle('running',stack?.page===b.dataset.page));
+ if(pagesRunKey!==(stack?.page??'')){pagesRunKey=stack?.page??'';$$('[data-page]').forEach(b=>b.classList.toggle('running',stack?.page===b.dataset.page))}
  // Overrides & master
- const overrides=new Set([...Object.keys(progOverrides(r)),...(r.blind?.enabled?[]:r.fx.flatMap(x=>x.fixtures))]).size;$('#saveButton').disabled=!overrides;$('#saveButton').classList.toggle('active',overrides>0);$('#blindButton').classList.toggle('active',!!r.blind?.enabled);const prefs=show?.playback??{clearFade:3,blindFade:2},fadeText=s=>s?`over ${s} s`:'instantly';$('#releaseButton').title=r.blind?.enabled?`Clear the blind changes ${fadeText(prefs.blindFade)}`:`Fade manual changes back to the running cue ${fadeText(prefs.clearFade)}`;setText($('#overrideCount'),String(overrides));$('#releaseButton').disabled=!overrides;$('#releaseButton').classList.toggle('active',overrides>0);
+ const overrides=new Set([...Object.keys(progOverrides(r)),...(r.blind?.enabled?[]:r.fx.flatMap(x=>x.fixtures))]).size;$('#saveButton').disabled=!overrides;$('#saveButton').classList.toggle('active',overrides>0);$('#blindButton').classList.toggle('active',!!r.blind?.enabled);const prefs=show?.playback??{clearFade:3,blindFade:2},fadeText=s=>s?`over ${s} s`:'instantly';const clearTitle=(r.blind?.enabled?`Clear${$('#releaseButton').dataset.key??''}: the blind changes ${fadeText(prefs.blindFade)}`:`Clear${$('#releaseButton').dataset.key??''}: fade manual changes back to the running cue ${fadeText(prefs.clearFade)}`);if($('#releaseButton').title!==clearTitle)$('#releaseButton').title=clearTitle;setText($('#overrideCount'),String(overrides));$('#releaseButton').disabled=!overrides;$('#releaseButton').classList.toggle('active',overrides>0);
  if(document.activeElement!==$('#master'))$('#master').value=Math.round(r.master*100);setText($('#masterValue'),Math.round(r.master*100)+'%');
  $('#blackout').classList.toggle('active',r.blackout);setText($('#blackout span:last-child'),r.blackout?'Blackout on':'Blackout');
  // Chips show the blind buffer while blind (what the operator is editing), else the live frames.
@@ -1224,6 +1344,27 @@ function paint(r){
  if(show&&r.revision!==rev)quiet(refresh());
 }
 
+let engineReady=false,pagesRunKey=null,undoKey=null;
+function paintUndo(r){const label=r.showUndo?.label??'';if(label===undoKey)return;undoKey=label;const b=$('[data-menu=undo]');if(!b)return;const u=undoText(label);b.disabled=!u;setText($('#undoLabel'),u?u.menu:'Undo last show edit');b.title=u?(u.redo?`Puts back: ${u.words}.`:`Puts the show back as it was before: ${u.words}. Press again to redo.`):'Nothing to undo yet'}
+// runtime.effectErrors (a code effect failed; its fixtures keep the look underneath) and runtime.engineError (a frame could
+// not be built; the engine keeps the last good one): each new failure is toasted once as an error and lands in Messages.
+const seenFailures=new Set();
+function paintFailures(r){
+ for(const e of r.effectErrors??[]){const k=`fx|${e.effect}|${e.message}|${e.line??''}`;if(seenFailures.has(k))continue;seenFailures.add(k);toast(`Effect “${e.effect}” failed${e.line?` at line ${e.line}`:''}: ${e.message}. Its fixtures keep the look underneath.`,'error')}
+ const x=r.engineError;if(x){const k=`engine|${x.message}`;if(!seenFailures.has(k)){seenFailures.add(k);toast(`The engine could not build a frame: ${x.message}. It keeps the last good look and lets go of what is failing.`,'error')}}
+}
+// Kills and parks override everything else, so while any is on a chip in the top bar says so; click it to bring them back.
+let holdKey='';
+function paintHolds(r){
+ const kills=r.kills??[],parked=r.parked??[],key=JSON.stringify(kills)+'|'+parked.length;if(key===holdKey)return;holdKey=key;paintKills();
+ const b=$('#holdChip'),parts=[kills.length?`${kills.length} killed`:'',parked.length?`${parked.length} parked`:''].filter(Boolean);b.hidden=!parts.length;if(!parts.length)return;
+ b.classList.toggle('kill',kills.length>0);b.innerHTML=`${icon(kills.length?'close':'lock')}<span>${parts.join(' · ')}</span>`;
+ b.title=[...kills.map(k=>'Killed: '+(k.group?k.name:`master ${k.master} · ${k.name}`)),parked.length?`Parked: ${parked.length} fixture${parked.length===1?'':'s'} hold their look`:''].filter(Boolean).join('\n')+'\nClick to bring them back';
+}
+$('#holdChip').onclick=e=>{e.stopPropagation();const r=runtime,kills=r?.kills??[],parked=r?.parked??[],item=(act,ic,label,i='')=>`<button role="menuitem" data-ctx="${act}" data-i="${i}"><span data-icon="${ic}"></span>${label}</button>`;
+ $('#ctxMenu').innerHTML='<div class="ctx-title">Held over every cue</div>'+kills.map((k,i)=>item('unkill','restore',`Bring back ${esc(k.group?k.name:`master ${k.master} · ${k.name}`)}`,i)).join('')+(kills.length>1?item('unkillAll','restore','Bring back everything killed'):'')+(parked.length?(kills.length?'<hr>':'')+item('unpark','unlock',`Unpark ${parked.length} fixture${parked.length===1?'':'s'}`):'');
+ const rect=$('#holdChip').getBoundingClientRect();showCtxMenu(rect.left,rect.bottom+6);
+ $$('#ctxMenu [data-ctx]').forEach(x=>x.onclick=()=>{closeMenu();const k=kills[+x.dataset.i];({unkill:()=>quiet(command('kill.set',k.group?{group:k.group,killed:false}:{slot:k.slot,killed:false})),unkillAll:()=>quiet(command('kill.clear',{})),unpark:()=>quiet(command('park.set',{ids:parked,parked:false}).then(()=>toast('Unparked: those fixtures follow the cues again.')))})[x.dataset.ctx]()})};
 // ── Wiring ──
 $$('.mode-switch [data-mode]').forEach(b=>b.onclick=()=>setMode(b.dataset.mode));
 $('#newPage').onclick=newPage;
@@ -1265,6 +1406,8 @@ $('#findNext').onclick=()=>findStep('next');$('#findBack').onclick=()=>findStep(
 $('#highlightButton').onclick=()=>quiet(command('highlight.set',{enabled:!runtime?.highlight}));
 $('#releaseButton').onclick=()=>quiet(command('override.release',{}).then(()=>drawSide()));
 $('#blackout').onclick=()=>quiet(command('blackout.set',{enabled:!runtime.blackout}));
+// Let go of the grand master and it gives focus back, so the keys work and APC40/MCP changes show on it again.
+$('#master').onchange=e=>e.target.blur();
 $('#master').oninput=e=>{const v=+e.target.value/100;setText($('#masterValue'),Math.round(v*100)+'%');liveMaster([],{value:v})};
 $('#haze').oninput=e=>{if(stage)stage.haze=+e.target.value/100};
 // Visualizer fixtures: hidden groups are not drawn at all (visualizer.hide), so big rigs stay fast. Output is unaffected.
@@ -1274,47 +1417,91 @@ function layersDialog(){const v=show.visualizer??{hiddenGroups:[],hiddenFixtures
  if($('#layersShowFixtures'))$('#layersShowFixtures').onclick=async()=>{await quiet(command('visualizer.hide',{fixtures:v.hiddenFixtures,hidden:false}));layersDialog()};
 }
 $('#visLayers').onclick=layersDialog;
-$$('[data-view]').forEach(b=>b.onclick=()=>{stage.setView(b.dataset.view);$$('[data-view]').forEach(x=>x.classList.toggle('active',x===b));paint(runtime)});
+$$('[data-view]').forEach(b=>b.onclick=()=>{if(!stage)return;stage.setView(b.dataset.view);$$('[data-view]').forEach(x=>x.classList.toggle('active',x===b));paint(runtime)});
 $('#ledButton').onclick=()=>{ledOpen=!ledOpen;drawLedTray()};
-$('#tapButton').onpointerdown=e=>{e.preventDefault();quiet(command('tempo.tap',{}))};
+$('#tapButton').onpointerdown=e=>{if(e.button!==0)return;e.preventDefault();quiet(command('tempo.tap',{}))};
+// Right-click the tap button for half / double / back to each cue's tempo (the ½ ×2 buttons hide on laptop widths).
+$('#tapButton').oncontextmenu=e=>{e.preventDefault();const live=!!runtime?.tempo?.bpm,item=(t,ic,label,dis=false)=>`<button role="menuitem" data-ctx="${t}" ${dis?'disabled':''}><span data-icon="${ic}"></span>${label}</button>`;$('#ctxMenu').innerHTML='<div class="ctx-title">Tempo</div>'+item('half','speed','Half time ½')+item('double','speed','Double time ×2')+item('reset','restore','Back to each cue’s own tempo',!live);showCtxMenu(e.clientX,e.clientY);$$('#ctxMenu [data-ctx]').forEach(b=>b.onclick=()=>{closeMenu();const t=b.dataset.ctx;quiet(command(t==='reset'?'tempo.set':'tempo.scale',t==='reset'?{}:{factor:t==='half'?.5:2}))})};
 $$('[data-tempo]').forEach(b=>b.onclick=()=>quiet(command(b.dataset.tempo==='reset'?'tempo.set':'tempo.scale',b.dataset.tempo==='reset'?{}:{factor:b.dataset.tempo==='half'?.5:2})));
+$('#groupPills').addEventListener('wheel',e=>{const el=e.currentTarget;if(Math.abs(e.deltaY)>Math.abs(e.deltaX)&&el.scrollWidth>el.clientWidth){el.scrollLeft+=e.deltaY;e.preventDefault()}},{passive:false});
 $('#pillToggle').onclick=()=>{drawerOpen=!drawerOpen;store.set('pillDrawer',drawerOpen?'open':'closed');applyDrawer()};
 $('#outputButton').onclick=armDialog;$('#outputHintArm').onclick=armDialog;$('#outputHintClose').onclick=()=>{outputHintDismissed=true;$('#outputHint').hidden=true};
 $('#menuButton').onclick=e=>{e.stopPropagation();const open=$('#menu').hidden;$('#menu').hidden=!open;$('#menuButton').setAttribute('aria-expanded',String(open))};
 document.addEventListener('click',e=>{if(!e.target.closest('#ctxMenu'))closeMenu();if(!$('#masterPop').hidden&&!e.target.closest('#masterPop,[data-master-edit]'))closeMasterPop();if(learning&&!e.target.closest('[data-master-key],#mpKey')){learning=null;drawMasters()}if(!$('#menu').hidden&&!e.target.closest('.menu-wrap')){$('#menu').hidden=true;$('#menuButton').setAttribute('aria-expanded','false')}});
-$$('[data-menu]').forEach(b=>b.onclick=()=>{$('#menu').hidden=true;({preshow:preshowDialog,agent:agentHelp,connection,settings:settingsDialog,patch:patchSheet,network:networkSheet,export:()=>window.open('/api/show'),import:importDialog,save:saveShow,saveAs:saveAsDialog,open:openDialog,help:helpDialog,update:updatesDialog})[b.dataset.menu]()});
-$('#closeDialog').onclick=()=>$('#dialog').close();$('#dialog').onclick=e=>{if(e.target===$('#dialog'))$('#dialog').close()};
-// Keys: Space GO, Backspace back, Esc cancels, ← → page the masters; Clear, Highlight and Blackout and every master key
-// come from show.masters (desk shortcuts default to C, Shift+H, B). A held master key flashes until it is let go.
+$$('[data-menu]').forEach(b=>b.onclick=()=>{$('#menu').hidden=true;({preshow:preshowDialog,agent:agentHelp,connection,settings:settingsDialog,patch:patchSheet,network:networkSheet,export:()=>window.open('/api/show'),import:importDialog,save:saveShow,saveAs:saveAsDialog,open:openDialog,help:helpDialog,update:updatesDialog,messages:messagesDialog,shortcuts:shortcutSheet,undo:showUndo})[b.dataset.menu]()});
+$('#closeDialog').onclick=()=>$('#dialog').close();// A closed dialog gives focus back: a text field left focused inside it would otherwise swallow every desk key.
+$('#dialog').addEventListener('close',()=>{deskLearning=null;if($('#dialog').contains(document.activeElement))document.activeElement.blur()});$('#dialog').onclick=e=>{if(e.target===$('#dialog'))$('#dialog').close()};
+// Keys: Space GO, Backspace back, Esc cancels, ← → page the masters, digits + Enter go to a cue by number, ? lists every
+// key. Clear, Highlight, Blackout, Tap and every master key come from show.masters (desk shortcuts default to C, Shift+H,
+// B, T). A held master key flashes until it is let go. Keys are ignored only while typing in a text field or while a
+// dialog is open: a slider or checkbox that still has focus does not swallow them. Holding a key never repeats an action.
+let gotoText='',gotoTimer=null;
+function setGoto(t){gotoText=t;clearTimeout(gotoTimer);const el=$('#gotoHud');if(el){el.hidden=!t;if(t){const p=page(),e=entryByNumber(p,t);el.innerHTML=`<small>Go to cue</small><strong>${esc(t)}</strong><span>${e?esc(entryName(e)):p?'No cue '+esc(t)+' on '+esc(p.name):'No page chosen'}</span><kbd>Enter</kbd>`}}if(t)gotoTimer=setTimeout(()=>setGoto(''),5000)}
+function runGoto(){const e=entryByNumber(page(),gotoText),n=gotoText;setGoto('');if(e)go(e.id);else toast(`There is no cue ${n} on this page.`,'error')}
 document.addEventListener('keydown',e=>{
+ // macOS stops sending keyup for other keys while ⌘ is down, so a flash held into a ⌘ shortcut would stick.
+ if(e.key==='Meta'){releaseAllMasters();return}
+ // Focus left on a field inside a closed dialog (browsers do not always hand it back) must not swallow the desk keys.
+ if(!$('#dialog').open){deskLearning=null;if($('#dialog').contains(document.activeElement))document.activeElement.blur()}
  if(learning){e.preventDefault();learnKey(e);return}
- if(['INPUT','TEXTAREA','SELECT'].includes(document.activeElement.tagName)||$('#dialog').open||document.activeElement.id==='joystick')return;
+ if(deskLearning){e.preventDefault();learnDeskKey(e);return}
  if(e.metaKey&&!e.altKey&&!e.ctrlKey&&(e.code==='KeyS'||e.code==='KeyO')){e.preventDefault();if($('#dialog').open||!show)return;if(e.code==='KeyO')openDialog();else if(e.shiftKey)saveAsDialog();else saveShow();return}
- if(runtime?.find?.active&&(e.key==='ArrowLeft'||e.key==='ArrowRight')){e.preventDefault();findStep(e.key==='ArrowLeft'?'back':'next');return}
+ if(isTyping(document.activeElement)||$('#dialog').open||document.activeElement.id==='joystick')return;
+ if(e.metaKey&&!e.altKey&&!e.ctrlKey&&e.code==='KeyZ'){e.preventDefault();if(!e.repeat)(e.shiftKey?showUndo:programmerUndo)();return}
+ const onRange=document.activeElement?.type==='range';
+ if(runtime?.find?.active&&!onRange&&(e.key==='ArrowLeft'||e.key==='ArrowRight')){e.preventDefault();findStep(e.key==='ArrowLeft'?'back':'next');return}
+ if(e.key==='Escape'&&gotoText){setGoto('');return}
  if(e.key==='Escape'&&runtime?.find?.active&&$('#masterPop').hidden){quiet(command('find.stop'));return}
  if(e.key==='Escape'){if(!$('#masterPop').hidden)closeMasterPop();else if(!$('#ctxMenu').hidden){closeMenu()}else if(runtime?.preview){stopPreview()}else if(aligning){cancelAlignment();drawSide()}else if(!$('#menu').hidden)$('#menu').hidden=true;else if(ledOpen){ledOpen=false;drawLedTray()}else if(selected.length){applySelection([]);quiet(command('selection.set',{ids:[]}))}return}
- if(e.code==='Space'){e.preventDefault();$('#goButton').click()}
- else if(e.key==='Backspace'){e.preventDefault();$('#backButton').click()}
- else if((e.key==='ArrowLeft'||e.key==='ArrowRight')&&paneShown()==='masters'){e.preventDefault();pageBank(e.key==='ArrowLeft'?-1:1)}
- else{const k=keyOf(e),desk=show?.masters.desk;if(!k||!desk)return;
-  if(k===desk.clear)$('#releaseButton').click();else if(k===desk.highlight)$('#highlightButton').click();else if(k===desk.blackout)$('#blackout').click();else if(k===desk.tap){e.preventDefault();if(!e.repeat)quiet(command('tempo.tap',{}))}
+ if(e.key==='Enter'&&gotoText){e.preventDefault();runGoto();return}
+ if(e.code==='Space'){e.preventDefault();if(!e.repeat)$('#goButton').click()}
+ else if(e.key==='Backspace'){e.preventDefault();if(gotoText)setGoto(gotoText.slice(0,-1));else if(!e.repeat)$('#backButton').click()}
+ else if((e.key==='ArrowLeft'||e.key==='ArrowRight')&&!onRange&&paneShown()==='masters'){e.preventDefault();pageBank(e.key==='ArrowLeft'?-1:1)}
+ else{const k=keyOf(e),desk=show?.masters?.desk;if(!k||!desk)return;
+  if(k===desk.clear||k===desk.highlight||k===desk.blackout){e.preventDefault();if(!e.repeat)$(k===desk.clear?'#releaseButton':k===desk.highlight?'#highlightButton':'#blackout').click()}
+  else if(k===desk.tap){e.preventDefault();if(!e.repeat)quiet(command('tempo.tap',{}))}
+  else if(desk.stop&&k===desk.stop){e.preventDefault();if(!e.repeat)$('#stopButton').click()}
   else{const m=slots().find(x=>x.key===k);
-   // Shift + a master's key switches its sound trigger, unless that combination is bound to something itself.
-   if(!m){const base=k.startsWith('shift+')&&slots().find(x=>x.key===k.slice(6)&&x.sound);if(base){e.preventDefault();if(!e.repeat)toggleSound(base.id)}return}
+   if(!m){
+    // Shift + a master's key switches its sound trigger, unless that combination is bound to something itself.
+    const base=k.startsWith('shift+')&&slots().find(x=>x.key===k.slice(6)&&x.sound);if(base){e.preventDefault();if(!e.repeat)toggleSound(base.id);return}
+    if(/^\d$/.test(k)){e.preventDefault();if(!e.repeat)setGoto((gotoText+k).slice(-4));return}
+    if(e.key==='?'){e.preventDefault();shortcutSheet()}
+    return}
    e.preventDefault();if(e.repeat)return;
    if(!m.cue)return toast(`${keyLabel(k)} is master ${slotIndex(m.id)+1}, which has no cue yet. Click it to choose one.`);heldKeys.set(e.code,m.id);pressMaster(m.id)}}
 });
+// The shortcut sheet (? or ☰ → Keyboard shortcuts): every key, the masters' included, read from the show.
+function shortcutSheet(){
+ const rows=shortcutRows(show?.masters,keyLabel,m=>slotName(m)),groups=[...new Set(rows.map(r=>r.group))];
+ dialog('Keyboard shortcuts',`<div class="shortcut-sheet">${groups.map(g=>`<section><h3>${esc(g)}</h3>${rows.filter(r=>r.group===g).map(r=>`<div class="sc-row"><span class="sc-keys">${r.keys.map(k=>k==='…'?'<i>…</i>':`<kbd>${esc(k)}</kbd>`).join('')}</span><span>${esc(r.action)}</span></div>`).join('')}</section>`).join('')}</div><p class="hint">Change a master's key by clicking the key on its slot. Keys are ignored while you type in a field or a dialog is open.</p>`);$('#dialog').classList.add('wide');
+}
+// Tooltips name the key that does the same thing (desk keys can be changed, so they are read from the show).
+function paintShortcutTitles(){
+ const d=show?.masters?.desk??{},k=x=>x?` (${keyLabel(x)})`:'';
+ $('#highlightButton').title=`Highlight${k(d.highlight)}: selected fixtures go full, open white, open beam`;
+ $('#blackout').title=`Blackout${k(d.blackout)}: every light off, positions held. Press again to bring them back`;
+ $('#releaseButton').dataset.key=k(d.clear);
+}
+// The message log: every toast this session (errors in red) and the engine's own recent events.
+function messagesDialog(){
+ seenErrors=messages.errors();paintMessages();const rows=messages.list(),logs=(runtime?.logs??[]).slice(0,40),t=at=>new Date(at).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+ dialog('Messages',`<p class="hint">${rows.length?'What the desk told you this session, newest first. Errors are red.':'Nothing yet. Every message the desk shows lands here, so one that flashed by can still be read.'}</p>${rows.length?`<div class="msg-list">${rows.map(r=>`<div class="msg-row ${r.kind}"><time>${t(r.at)}</time><span>${esc(r.text)}${r.count>1?` <b>×${r.count}</b>`:''}</span></div>`).join('')}</div>`:''}${logs.length?`<details class="more"><summary>${icon('list')}Engine events</summary><pre class="msg-pre">${logs.map(l=>esc(String(l.at).slice(11,19)+' '+l.message)).join('\n')}</pre></details>`:''}${rows.length?'<div class="dialog-actions"><button class="ghost-button" id="msgClear">Clear the list</button></div>':''}`);
+ if($('#msgClear'))$('#msgClear').onclick=()=>{messages.clear();paintMessages();messagesDialog()};
+}
 document.addEventListener('keyup',e=>{const id=heldKeys.get(e.code);if(id){heldKeys.delete(e.code);releaseMaster(id)}});
 addEventListener('blur',releaseAllMasters);document.addEventListener('visibilitychange',()=>{if(document.hidden)releaseAllMasters()});
 async function start(){
  fillIcons();document.body.dataset.mode=mode;$$('.mode-switch [data-mode]').forEach(b=>b.setAttribute('aria-selected',String(b.dataset.mode===mode)));
- try{token=(await fetch('/api/session').then(r=>r.json())).token;schema=await fetch('/api/schema').then(r=>r.json());await refresh();
+ try{({token,build}=await fetch('/api/session').then(r=>r.json()));schema=await fetch('/api/schema').then(r=>r.json());await refresh();
   stage=new Stage($('#viewport'),show.fixtures,selectFixture);stage.select(selected);syncLedWall();stage.update(runtime.frames);applyStageView();
   $$('[data-stage-view]').forEach(b=>b.onclick=()=>{if(b.dataset.stageView==='stage'&&visOut()){visWin.focus();return toast('The visualizer is in its own window. Use the dock button to bring it back.')}stageView=b.dataset.stageView;store.set('stageView',stageView);applyStageView()});
   $('#popoutButton').onclick=popOutVisualizer;
   // Desktop app: look for a newer release a few seconds after start and every six hours. Nothing installs by itself.
   if(shell){$('[data-menu=update]').hidden=false;setTimeout(()=>checkUpdate(),5000);setInterval(()=>checkUpdate(),6*3600e3)}
-  const events=new EventSource('/api/events');events.onopen=async()=>{try{token=(await fetch('/api/session').then(r=>r.json())).token;await refresh()}catch(e){toast('Engine reconnect failed: '+e.message)}};events.onmessage=e=>paint(JSON.parse(e.data));events.onerror=()=>{$('#engineStatus').innerHTML='<i class="off"></i>Engine offline'};
- }catch(e){toast('Could not connect to the engine: '+e.message);$('#engineStatus').innerHTML='<i class="off"></i>Engine offline'}
+  const events=new EventSource('/api/events');events.onopen=async()=>{try{const s=await fetch('/api/session').then(r=>r.json());if(s.build&&s.build!==build)return location.reload();token=s.token;selectionRevision=0;await refresh()}catch(e){toast('Engine reconnect failed: '+e.message)}};events.onmessage=e=>{try{paint(JSON.parse(e.data))}catch(err){console.error('Desk frame failed',err)}};events.onerror=()=>{engineReady=false;$('#engineStatus').innerHTML='<i class="off"></i>Engine offline'};
+ }catch(e){engineReady=false;$('#engineStatus').innerHTML='<i class="off"></i>Engine offline';
+  // Started before the engine was up: try again until it answers (the 3D stage is only made once).
+  if(!stage){toast('Waiting for the engine… '+e.message,'error');setTimeout(start,3000)}else toast('Could not connect to the engine: '+e.message,'error')}
 }
 start();

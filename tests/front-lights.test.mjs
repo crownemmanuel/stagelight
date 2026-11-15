@@ -19,3 +19,18 @@ test('fixture.place saves an aim point and keeps the patch',async()=>{
  await engine.command('fixture.place',{id:'409',position:[-8.1,6.1,8]});assert.deepEqual(engine.show.fixtures.find(f=>f.id==='409').aim,[-8,1.5,0]);
  await engine.close?.();fs.rmSync(dir,{recursive:true,force:true});
 });
+
+// Hog 4 DMX Output, universe 2, 2026-10-31: front light 409 in CTO = 255 255 205 94 0 127 0 (dimmer, R, G, B, W, zoom, strobe),
+// the same as the backlights in CTO. The face lights' Hog CTO is #ffcdb4 + amber + mint, so one CTO palette carries both.
+test('One CTO palette gives the Colorados and the face lights their own Hog values',async()=>{
+ const output={armed:false,send(){},status(){return {armed:false}}},e=new Engine({output});await e.command('show.import',{show});
+ await e.command('palette.save',{id:'hog-cto',name:'CTO · Hog',color:'#ffcdb4',amber:1,mint:103/255,profiles:[{profile:'colorado',color:'#ffcd5e',white:0}]});
+ await e.command('palette.apply',{id:'hog-cto',ids:['409','401','27']});
+ assert.deepEqual(e.overrides['409'],{color:'#ffcd5e',white:0,amber:0,mint:0});assert.deepEqual(e.overrides['401'],e.overrides['409']);
+ assert.deepEqual(e.overrides['27'],{color:'#ffcdb4',amber:1,mint:103/255});
+ const f=e.show.fixtures.find(f=>f.id==='409'),p=encode(show,[{...baseState(f),...e.overrides['409'],color:[1,205/255,94/255],intensity:1,zoom:127/255}]).get(1);
+ assert.deepEqual([...p.subarray(240,247)],[255,255,205,94,0,127,0],'matches the Hog bytes');
+ await assert.rejects(e.command('palette.save',{id:'x',name:'X',color:'#ffffff',profiles:[{profile:'colorado',color:'#000000'},{profile:'colorado',color:'#111111'}]}),/each profile once/);
+ await assert.rejects(e.command('palette.apply',{id:'nope',ids:['409']}),/Unknown palette/);
+ assert.ok(COMMANDS['palette.apply'].live&&!COMMANDS['palette.apply'].internal,'exposed to MCP as lights_palette_apply');
+});

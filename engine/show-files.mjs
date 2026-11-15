@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import crypto from 'node:crypto';
+import {writeAtomic} from './safety.mjs';
 // Show files (docs/SHOW-FILES.md): named copies of the show in a folder on this Mac, saved and opened like documents.
 // The folder and which file the show came from are this Mac's, kept in <data>/show-files.json, never inside a show.
 export const SHOW_NAME=/^(?!\.)[^/\\:*?"<>|\u0000-\u001f]{1,80}$/;
@@ -11,30 +12,36 @@ export const defaultShowsFolder=()=>process.env.LIGHTS_SHOWS_DIR??path.join(os.h
 export class ShowFiles{
  constructor(dataDir,folder){
   this.file=dataDir?path.join(dataDir,'show-files.json'):null;this.meta=new Map();let saved={};
-  try{if(this.file&&fs.existsSync(this.file))saved=JSON.parse(fs.readFileSync(this.file,'utf8'))}catch{}
-  this.folder=saved.folder??folder??(dataDir?defaultShowsFolder():null);this.current=saved.current??null;
+  // A missing, empty or corrupt show-files.json is ignored (default folder, no current file): it never stops the engine starting.
+  try{if(this.file&&fs.existsSync(this.file)){const v=JSON.parse(fs.readFileSync(this.file,'utf8'));if(v&&typeof v==='object'&&!Array.isArray(v))saved=v}}catch{}
+  const cur=saved.current;
+  this.folder=(typeof saved.folder==='string'&&saved.folder?saved.folder:null)??folder??(dataDir?defaultShowsFolder():null);
+  this.current=cur&&typeof cur==='object'&&typeof cur.name==='string'&&SHOW_NAME.test(cur.name)?{name:cur.name,hash:typeof cur.hash==='string'?cur.hash:null,at:typeof cur.at==='string'?cur.at:null}:null;
  }
- persist(){if(!this.file)return;fs.writeFileSync(this.file+'.tmp',JSON.stringify({folder:this.folder,current:this.current},null,2));fs.renameSync(this.file+'.tmp',this.file)}
+ persist(){if(!this.file)return;writeAtomic(this.file,JSON.stringify({folder:this.folder,current:this.current},null,2))}
  dir(){if(!this.folder)throw Error('No shows folder: set one with show.folder.set {path}.');return this.folder}
  name(raw){const n=String(raw??'').trim().replace(/\.json$/i,'');if(!SHOW_NAME.test(n))throw Error('Show names are 1–80 characters, without / \\ : * ? " < > | and not starting with a dot.');return n}
  pathOf(name){return path.join(this.dir(),this.name(name)+'.json')}
  // Case-insensitive like the Mac's disk: "Sunday" and "sunday" are the same file.
  find(name){const n=this.name(name).toLowerCase();return this.list().find(f=>f.name.toLowerCase()===n)??null}
- setFolder(p){const abs=path.resolve(String(p).replace(/^~(?=$|\/)/,os.homedir()));fs.mkdirSync(abs,{recursive:true});if(!fs.statSync(abs).isDirectory())throw Error('Not a folder: '+abs);this.folder=abs;this.meta.clear();this.persist();return abs}
+ setFolder(p){const abs=path.resolve(String(p).replace(/^~(?=$|\/)/,os.homedir()));try{fs.mkdirSync(abs,{recursive:true})}catch(e){throw Error(`Could not use ${abs} as the shows folder: ${e.code==='EACCES'||e.code==='EPERM'?'permission was refused':e.code==='EROFS'?'the disk is read-only':e.code==='EEXIST'||e.code==='ENOTDIR'?'it is a file, not a folder':e.message}`)}if(!fs.statSync(abs).isDirectory())throw Error('Not a folder: '+abs);this.folder=abs;this.meta.clear();this.persist();return abs}
  // Summaries are cached by size and modified time, so listing a folder of large shows does not stall the engine tick.
  list(query){
-  const dir=this.dir();if(!fs.existsSync(dir))return [];const q=String(query??'').trim().toLowerCase(),rows=[];
+  const dir=this.dir();if(!fs.existsSync(dir))return [];const q=String(query??'').trim().toLowerCase(),rows=[],seen=new Set();
   for(const f of fs.readdirSync(dir)){
    if(!f.toLowerCase().endsWith('.json')||f.startsWith('.'))continue;const p=path.join(dir,f);let st;try{st=fs.statSync(p)}catch{continue}if(!st.isFile())continue;
-   const key=`${st.size}:${st.mtimeMs}`;let m=this.meta.get(p);
+   const key=`${st.size}:${st.mtimeMs}`;let m=this.meta.get(p);seen.add(p);
    if(m?.key!==key){m={key};try{if(st.size>MAX_BYTES)throw Error('too large');const s=JSON.parse(fs.readFileSync(p,'utf8'));if(!Array.isArray(s.fixtures)||!Array.isArray(s.cues))throw Error('not a show');Object.assign(m,{title:typeof s.name==='string'?s.name.slice(0,120):'',fixtures:s.fixtures.length,cues:s.cues.length,pages:Array.isArray(s.pages)?s.pages.length:0,valid:true})}catch{m.valid=false}this.meta.set(p,m)}
    const name=f.slice(0,-5),{key:_,...summary}=m;
    if(!q||name.toLowerCase().includes(q)||m.title?.toLowerCase().includes(q))rows.push({name,file:p,modified:st.mtime.toISOString(),bytes:st.size,...summary});
   }
+  for(const p of this.meta.keys())if(!seen.has(p))this.meta.delete(p);
   return rows.sort((a,b)=>b.modified.localeCompare(a.modified));
  }
- write(name,show){const n=this.name(name),dir=this.dir();fs.mkdirSync(dir,{recursive:true});const p=path.join(dir,n+'.json');fs.writeFileSync(p+'.tmp',JSON.stringify(show,null,2));fs.renameSync(p+'.tmp',p);return {name:n,file:p}}
+ // Atomic (writeAtomic): a full disk or a read-only folder leaves the previous file whole and says why.
+ write(name,show){const n=this.name(name),dir=this.dir();try{fs.mkdirSync(dir,{recursive:true})}catch(e){throw Error(`Could not save "${n}": the shows folder ${dir} cannot be created (${e.code??e.message})`)}const p=path.join(dir,n+'.json');writeAtomic(p,JSON.stringify(show,null,2));return {name:n,file:p}}
  read(name){const f=this.find(name);if(!f)throw Error(`No show named "${this.name(name)}" in ${this.dir()}`);if(f.bytes>MAX_BYTES)throw Error('Show file is larger than 20 MB');try{return {...f,show:JSON.parse(fs.readFileSync(f.file,'utf8'))}}catch{throw Error(`"${f.name}" is not a readable show file`)}}
  // Remembers which file the show is, and the show's hash at that moment, so an engine restart still knows if it was edited since.
- track(name,show,at=new Date().toISOString()){this.current=name?{name,hash:showHash(show),at}:null;this.persist()}
+ // Bookkeeping only: the show itself is already saved or opened, so a failure here is kept in .error, never thrown.
+ track(name,show,at=new Date().toISOString()){this.current=name?{name,hash:showHash(show),at}:null;try{this.persist();this.error=null}catch(e){this.error=e.message}}
 }

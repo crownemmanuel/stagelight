@@ -15,7 +15,7 @@ test('Dragging sends immediately, merges attributes and keeps the original selec
 });
 
 test('Intensity overrides update a paused preview and respect the master',async()=>{
- const engine=new Engine();await engine.command('cue.play',{id:'afterglow'});await engine.command('cue.pause',{paused:true});
+ const engine=new Engine();assert.equal(engine.master,1,'the grand master starts at full');await engine.command('master.set',{value:.8});await engine.command('cue.play',{id:'afterglow'});await engine.command('cue.pause',{paused:true});
  await engine.command('fixture.set',{ids:['405'],values:{intensity:0}});assert.equal(engine.frames.find(f=>f.id==='405').intensity,0);
  await engine.command('fixture.set',{ids:['405'],values:{intensity:1}});assert.equal(engine.frames.find(f=>f.id==='405').intensity,.8);
  assert.equal(engine.output.armed,false);assert.equal(engine.output.status().packets,0);

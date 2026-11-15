@@ -7,7 +7,8 @@ export class Modules{
  async apply(cfg){
   const e=this.engine;if(!this.io){this.io=new Helper(e);this.io.start()}
   if(cfg.sound?.enabled&&!this.sound){const {Sound}=await import('./sound.mjs');this.sound=new Sound(e,this.io);e.log('Sound module on')}
-  else if(!cfg.sound?.enabled&&this.sound){this.sound.close();this.sound=null;e.log('Sound module off')}
+  // Switching sound off lets go of any cue a follow trigger is holding up, as silence would (a shutdown does not).
+  else if(!cfg.sound?.enabled&&this.sound){this.sound.dropFollow();this.sound.close();this.sound=null;e.log('Sound module off')}
   if(cfg.midi?.enabled&&!this.midi){const {Midi}=await import('./midi.mjs');this.midi=new Midi(e,this.io);e.log('MIDI module on')}
   else if(!cfg.midi?.enabled&&this.midi){this.midi.close();this.midi=null;e.log('MIDI module off')}
   this.sound?.configure();this.midi?.configure();
@@ -16,6 +17,8 @@ export class Modules{
  // Extra runtime fields, only while something needs them: the controller's fader bank and last input while one is connected.
  // runtime.sound: the input level and hit counts whenever an input is open (the desk's meter and hit blinks).
  live(){const out={};const s=this.sound;if(s?.opened?.ok)out.sound={input:s.input,meter:s.levels,hits:s.hits,device:s.opened.device};const c=this.midi?.live();if(c)out.controller=c;return out}
- checks(){return [...this.io.checks(),...(this.sound?.checks()??[]),...(this.midi?.checks()??[])]}
- async close(){this.sound?.close();this.midi?.close();this.sound=this.midi=null;await this.io?.close();this.io=null}
+ checks(){return [...(this.io?.checks()??[]),...(this.sound?.checks()??[]),...(this.midi?.checks()??[])]}
+ // Also the path when every module is switched off: sound turned off in the show settings then lets go of follow cues
+ // as in apply(). At an engine shutdown sound is still on in the settings, so the last look is left as it is.
+ async close(){if(this.sound&&!this.engine.show.settings.modules?.sound?.enabled)this.sound.dropFollow();this.sound?.close();this.midi?.close();this.sound=this.midi=null;await this.io?.close();this.io=null}
 }

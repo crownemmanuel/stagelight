@@ -33,6 +33,8 @@ In the UI each cue row has an eye button. Previewing switches the stage to the p
 
 `show.presets[]` holds custom presets `{id, name, icon, effect, params, description?, duration?, loop?}` — `icon` must be one of `public/icons.js` `ICONS` (exposed as `schema.icons`), `effect` one with a `layer`, and ids may not shadow built-ins. `schema.presets` merges built-ins (`custom:false`) with these (`custom:true`, category derived from the layer). `preset.save` / `preset.delete` (custom only); every command that takes `preset` resolves both kinds.
 
+Code presets (`effect: "code"`, optional `layer`, `params.code` + `params.args`) are written by the assistant. The desk files them under the heading of their own `layer` (`p.layer ?? schema.effects[p.effect].layer`) in the Effects tab and the Add an effect dialog, with a small **code** badge. Previewed or running, each `params.args` entry gets a control under Settings (a slider for numbers 0–1, a number field otherwise, a colour well for `#rrggbb`, a checkbox for true/false) that re-sends `fx.preview` / `fx.apply` with the new args; **Keep these settings** saves them into the preset (`preset.save`). In Edit cue content a code track shows the same controls for its own args. The desk never shows or edits the code itself.
+
 ## Playback settings
 
 `show.playback = {clearFade, blindFade}` (seconds, 0 = instant cut; defaults 3 and 2, added by migration) travels with the show. `override.release` without `fade` uses `clearFade` live and `blindFade` in blind; `blind.apply` without `fade` uses `blindFade`. Clearing in blind now fades the blind view like a live release instead of cutting (`runtime.blind.release` reports progress). Set with `settings.set`; UI: ☰ → Settings.

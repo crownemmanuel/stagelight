@@ -4,19 +4,35 @@ import net from 'node:net';
 import {artDmx} from './render.mjs';
 export const interfaces=()=>Object.entries(os.networkInterfaces()).flatMap(([name,items])=>items.filter(i=>i.family==='IPv4').map(i=>({name,address:i.address,netmask:i.netmask,internal:i.internal})));
 export function validateNetwork(c){for(const key of ['source','target']){if(!net.isIPv4(c[key]))throw Error(`${key} must be an IPv4 address`);const n=c[key].split('.').map(Number);if(n[0]===0||n[0]>=224||n[3]===255)throw Error('Only specific unicast addresses are allowed')}if(c.source===c.target)throw Error('Source and destination must differ')}
+// Art-Net output. Once armed it stays armed until the operator disarms it (docs/SHOW-SAFETY.md): a failed send, a cable
+// pulled for a moment or a socket error never switches the rig off. Failures are counted and reported, sending carries on,
+// and if they last two seconds (or the socket itself fails) the socket is reopened every second until it works again.
 export class Output{
- constructor(log){this.log=log;this.socket=null;this.armed=false;this.sequence=0;this.stats={packets:0,bytes:0,lastSent:null,lastError:null,armedAt:null,receiver:'Unconfirmed · ArtDMX has no acknowledgment'};}
- async arm(config){validateNetwork(config);if(!interfaces().some(x=>x.address===config.source))throw Error(`Source ${config.source} is not present on this Mac`);if(this.socket)throw Error('Output already active');
-  const socket=dgram.createSocket('udp4');
-  await new Promise((resolve,reject)=>{socket.once('error',reject);socket.bind(6454,config.source,()=>{socket.removeListener('error',reject);resolve()})}).catch(e=>{socket.close();throw e});
-  this.socket=socket;this.config={...config};this.armed=true;this.stats.lastError=null;this.stats.armedAt=new Date().toISOString();
-  socket.on('error',e=>{this.stats.lastError=e.message;this.log('Output error: '+e.message);this.close()});this.log('Physical output armed');
+ constructor(log,{socketFactory=()=>dgram.createSocket('udp4'),retryMs=1000,reopenAfterMs=2000,now=()=>Date.now()}={}){this.log=log;this.socketFactory=socketFactory;this.retryMs=retryMs;this.reopenAfterMs=reopenAfterMs;this.now=now;this.socket=null;this.armed=false;this.recovering=false;this.failingSince=null;this.reopenAt=null;this.lastWarn=-Infinity;this.retry=null;this.sequence=0;this.stats={packets:0,bytes:0,sendErrors:0,lastSent:null,lastError:null,armedAt:null,receiver:'Unconfirmed · ArtDMX has no acknowledgment'};}
+ open(config){const socket=this.socketFactory();return new Promise((resolve,reject)=>{socket.once('error',reject);socket.bind(6454,config.source,()=>{socket.removeListener('error',reject);socket.on('error',e=>{if(socket===this.socket){this.note(e.message);this.reopen()}});resolve(socket)})}).catch(e=>{try{socket.close()}catch{}throw e})}
+ async arm(config){validateNetwork(config);if(!interfaces().some(x=>x.address===config.source))throw Error(`Source ${config.source} is not present on this Mac`);if(this.socket||this.armed)throw Error('Output already active');
+  this.socket=await this.open(config);this.config={...config};this.armed=true;this.recovering=false;this.failingSince=null;this.reopenAt=null;this.stats.lastError=null;this.stats.armedAt=new Date().toISOString();this.log('Physical output armed');
  }
- send(universes){if(!this.armed)return;const seq=this.sequence=this.sequence%255+1;
-  for(const [u,d] of universes){const p=artDmx(u,d,seq);this.socket.send(p,6454,this.config.target,e=>{if(e){this.stats.lastError=e.message;this.log('Send failed: '+e.message);this.close()}else{this.stats.packets++;this.stats.bytes+=p.length;this.stats.lastSent=new Date().toISOString()}})}
+ // A failure is logged when it starts and then at most every 10 s, so a dead link cannot flood the audit log.
+ note(message){this.stats.lastError=message;this.stats.sendErrors++;const now=this.now();this.failingSince??=now;this.reopenAt??=now+this.reopenAfterMs;if(now-this.lastWarn>=10000){this.lastWarn=now;this.log(`Art-Net send failing: ${message} · output stays armed and keeps trying`)}}
+ send(universes){if(!this.armed||!this.socket)return;const seq=this.sequence=this.sequence%255+1,socket=this.socket;
+  for(const [u,d] of universes){const p=artDmx(u,d,seq);
+   try{socket.send(p,6454,this.config.target,e=>{if(socket!==this.socket)return;
+    if(e){this.note(e.message);if(this.now()>=this.reopenAt)this.reopen();return}
+    if(this.failingSince!==null){this.log(`Art-Net output is sending again after ${((this.now()-this.failingSince)/1000).toFixed(1)} s`);this.failingSince=null;this.reopenAt=null;this.lastWarn=-Infinity}
+    this.stats.packets++;this.stats.bytes+=p.length;this.stats.lastSent=new Date().toISOString()})}
+   catch(e){this.note(e.message);this.reopen();return}}
  }
- close(){this.armed=false;if(this.socket){try{this.socket.close()}catch{}this.socket=null}}
- status(){return {armed:this.armed,...this.stats,interfaces:interfaces()}}
+ // Replace the socket without disarming. While none can be opened (the adapter or its address is gone) try again every second.
+ reopen(){
+  if(this.recovering||!this.armed)return;this.recovering=true;const old=this.socket;this.socket=null;try{old?.close()}catch{}
+  const attempt=async()=>{this.retry=null;if(!this.armed)return;
+   try{const socket=await this.open(this.config);if(!this.armed){try{socket.close()}catch{}return}this.socket=socket;this.recovering=false;this.failingSince??=this.now();this.reopenAt=this.now()+this.reopenAfterMs;this.log('Art-Net output socket reopened')}
+   catch(e){this.stats.lastError=e.message;if(this.armed){this.retry=setTimeout(attempt,this.retryMs);this.retry.unref?.()}}};
+  attempt();
+ }
+ close(){this.armed=false;this.recovering=false;this.failingSince=null;this.reopenAt=null;this.lastWarn=-Infinity;clearTimeout(this.retry);this.retry=null;if(this.socket){try{this.socket.close()}catch{}this.socket=null}}
+ status(){return {armed:this.armed,failing:this.armed&&(this.recovering||this.failingSince!==null),recovering:this.recovering,...this.stats,interfaces:interfaces()}}
  check(config){return checkConnection(config,{socket:this.armed?this.socket:null})}
 }
 

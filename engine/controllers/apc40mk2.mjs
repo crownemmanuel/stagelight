@@ -46,20 +46,25 @@ const byId=new Map(C.map(c=>[c.id,c]));
 
 // The default StageLight map. Faders 1-8 and the track buttons work on the fader bank (masters 1-8, A S D F G H J K,
 // moved by Bank ◀ ▶); the 40 pads are masters 1-40, top-left first; the five scene buttons are scenes 1-5; the eight
-// numbered Activator buttons switch the fader bank masters' sound triggers on and off (lit while on).
+// numbered Activator buttons and the red Record Arm buttons switch the fader bank masters' sound triggers on and off
+// (lit while on). Solo kills the lights of a fader bank master set to "Solo kills" (lit blue while killed). Device knobs 1-3
+// are intensity, pan and tilt of whatever is selected on the desk.
 export const DEFAULT_MAP=Object.fromEntries([
  ...Array.from({length:40},(_,i)=>[`pad-${i+1}`,{do:'master.press',n:i+1}]),
  ...Array.from({length:5},(_,i)=>[`scene-${i+1}`,{do:'scene',n:i+1}]),
- ...Array.from({length:8},(_,i)=>[[`fader-${i+1}`,{do:'bank.level',n:i+1}],[`track-${i+1}`,{do:'bank.press',n:i+1}],[`clip-stop-${i+1}`,{do:'bank.release',n:i+1}],[`activator-${i+1}`,{do:'bank.sound',n:i+1}]]).flat(),
+ ...Array.from({length:8},(_,i)=>[[`fader-${i+1}`,{do:'bank.level',n:i+1}],[`track-${i+1}`,{do:'bank.press',n:i+1}],[`clip-stop-${i+1}`,{do:'bank.release',n:i+1}],[`activator-${i+1}`,{do:'bank.sound',n:i+1}],[`arm-${i+1}`,{do:'bank.sound',n:i+1}],[`solo-${i+1}`,{do:'bank.kill',n:i+1}]]).flat(),
  ['master-fader',{do:'grand'}],['stop-all',{do:'stop'}],['play',{do:'go'}],['stop',{do:'back'}],['record',{do:'blackout'}],['session',{do:'highlight'}],
  ['tap',{do:'tap'}],['nudge-minus',{do:'tempo.nudge',delta:-1}],['nudge-plus',{do:'tempo.nudge',delta:1}],['shift-nudge-minus',{do:'tempo.half'}],['shift-nudge-plus',{do:'tempo.double'}],
- ['metronome',{do:'tempo.reset'}],['tempo',{do:'tempo.fine'}],['bank-left',{do:'bank.prev'}],['bank-right',{do:'bank.next'}],['left',{do:'bank.prev'}],['right',{do:'bank.next'}],['master',{do:'clear'}]
+ ['metronome',{do:'tempo.reset'}],['device-1',{do:'selection.intensity'}],['device-2',{do:'selection.pan'}],['device-3',{do:'selection.tilt'}],['tempo',{do:'tempo.fine'}],['bank-left',{do:'bank.prev'}],['bank-right',{do:'bank.next'}],['left',{do:'bank.prev'}],['right',{do:'bank.next'}],['master',{do:'clear'}]
 ]);
 // Introduction: Ableton Live Mode, app version 1.0.0 (protocol page 12).
 export const INTRO=[0xF0,0x47,0x7F,0x29,0x60,0x00,0x04,0x41,0x01,0x00,0x00,0xF7];
 
 // Incoming bytes → {control, value} (value 1/0 for buttons, 0..1 for faders and knobs, steps for encoders).
+// Anything that is not a whole 3-byte note or CC message (short, out of range, not numbers) is ignored.
+const byte=v=>Number.isInteger(v)&&v>=0&&v<=127;
 export function parse(bytes){
+ if(!Array.isArray(bytes)||bytes.length<3||!Number.isInteger(bytes[0])||!byte(bytes[1])||!byte(bytes[2]))return null;
  const [st,a,b]=bytes,kind=st&0xF0,ch=st&0x0F;
  if(kind===0x90||kind===0x80){const down=kind===0x90&&b>0,c=C.find(x=>x.midi.type==='note'&&x.midi.number===a&&(x.midi.channel===undefined||x.midi.channel===ch));return c?{control:c.id,value:down?1:0}:null}
  if(kind===0xB0){const c=C.find(x=>x.midi.type==='cc'&&x.midi.number===a&&(x.midi.channel===undefined||x.midi.channel===ch));if(!c)return null;return {control:c.id,value:c.kind==='encoder'?(b<64?b:b-128):b/127}}
@@ -67,7 +72,7 @@ export function parse(bytes){
 }
 // One message for an LED: note on with the LED type on the channel (RGB) or the track (per-track buttons).
 export function ledMessage(control,velocity,type=0){
- const c=byId.get(control),m=c.midi,channel=c.led==='rgb'?type:m.channel??0;
+ const c=byId.get(control);if(!c)return [];const m=c.midi,channel=c.led==='rgb'?type:m.channel??0;
  return velocity?[0x90|channel,m.number,velocity]:[0x80|(m.channel??0),m.number,0];
 }
 export const control=id=>byId.get(id);

@@ -1,5 +1,6 @@
 import {PROFILE_DEFS,fixtureIndex} from './model.mjs';
 import {nearestWheel,fixtureWheel} from '../public/fixture-colors.js';
+import {runCodeEffect,codeArgs} from './code-effects.mjs';
 export const clamp=(x,a=0,b=1)=>Math.max(a,Math.min(b,x));
 export const rgb=hex=>[1,3,5].map(i=>parseInt(hex.slice(i,i+2),16)/255);
 const mix=(a,b,t)=>a.map((v,i)=>v*(1-t)+b[i]*t);
@@ -22,7 +23,7 @@ function effectPose(f,i,n,type,p,time,show,length=1,center=null){
   }
   const head=.5-.5*Math.cos(time*(p.travelSpeed??.15)*Math.PI*2);
   const seed=[...f.id].reduce((v,c)=>(v*31+c.charCodeAt(0))>>>0,17),offset=p.strobePattern==='wave'?position*spread:(seed*.61803398875)%1;
-  const pulse=(time*(p.frequency??3)+offset)%1,band=Math.exp(-2*(((position-head)/(p.width??.3))**2));
+  const pulse=(time*(p.frequency??3)+offset)%1,band=p.even?1:Math.exp(-2*(((position-head)/(p.width??.3))**2));
   intensity=pulse<(p.duty??.4)?(.12+.88*band):0;color=mix(a,b,head);break;
  }
  // Note step: params.step/stepAt/stepFade are written into the running copy of the cue by Engine.stepMaster, never saved.
@@ -37,8 +38,13 @@ function effectPose(f,i,n,type,p,time,show,length=1,center=null){
  case 'orbit':pan+=(p.panAmplitude??.03)*Math.sin(q*.8+ph);tilt+=(p.tiltAmplitude??.015)*Math.cos(q*.8+ph);break;
  // Fade ramps across the whole track; its own envelope replaces the track fade.
  case 'fade':{const k=smooth(time/Math.max(.001,length));intensity=p.direction==='out'?1-k:k;break}
- case 'breathe':intensity=.08+.92*(.5+.5*Math.sin(q*1.6-ph*.25))**2;color=mix(a,b,.5+.5*Math.sin(q*.4));break;
+ // depth: how far a breath dips (0.92 default; lower keeps it subtle, never fully off).
+ case 'breathe':{const d=p.depth??.92;intensity=1-d+d*(.5+.5*Math.sin(q*1.6-ph*.25))**2}color=mix(a,b,.5+.5*Math.sin(q*.4));break;
  case 'figure8':pan+=(p.panAmplitude??.04)*Math.sin(q*.7+ph);tilt+=(p.tiltAmplitude??.02)*Math.sin(2*(q*.7+ph));break;
+ // Path: Catmull-Rom through each fixture's saved positions, so it passes every point without stopping.
+ case 'path':{const pts=(p.points??[]).map(id=>show.points.find(x=>x.id===id)?.positions?.[f.id]).filter(Boolean),m=pts.length;if(m<2)break;
+  const u=(((time*speed/(p.lap??10))%1)+1)%1*m,k=Math.floor(u),s=u-k,P=j=>pts[((k+j)%m+m)%m],cr=(a,b,c,d)=>.5*(2*b+(c-a)*s+(2*a-5*b+4*c-d)*s*s+(3*b-a-3*c+d)*s*s*s);
+  pan=cr(P(-1).pan,P(0).pan,P(1).pan,P(2).pan);tilt=cr(P(-1).tilt,P(0).tilt,P(1).tilt,P(2).tilt);break}
  case 'ballyhoo':pan+=(p.panAmplitude??.05)*Math.sin(q*.55+ph);tilt+=(p.tiltAmplitude??.05)*Math.sin(q*1.3+ph*1.7);break;
  }
  if(p.pointA){const pa=show.points.find(x=>x.id===p.pointA)?.positions?.[f.id],pb=show.points.find(x=>x.id===p.pointB)?.positions?.[f.id];if(pa){const w=pb?(1-Math.cos(q*.8))/2:0;pan=pa.pan*(1-w)+(pb?.pan??pa.pan)*w;tilt=pa.tilt*(1-w)+(pb?.tilt??pa.tilt)*w;}}
@@ -63,6 +69,24 @@ export function layerEffect(st,f,i,n,type,p,t,show,layer,envelope=1,length=1e9){
  return out;
 }
 // Order mirrors live playback: base look, full tracks, look entries marked over (recorded changes), layer tracks.
+// Code effects (docs/CODE-EFFECTS.md): one sandbox call per frame for all of a track's fixtures. Each fixture takes the
+// attributes the code returned over what it shows; a failed frame leaves every fixture as it was.
+const rigs=new WeakMap(),argsCache=new WeakMap(),DARK={intensity:0,color:[1,1,1],white:0,pan:.5,tilt:.5,zoom:.5,focus:.5,frost:0,gobo:0,prism:0,prismRotation:0};
+function codeRig(show,ids){
+ let r=rigs.get(ids);if(r?.fixtures===show.fixtures)return r;
+ const byId=fixtureIndex(show),list=ids.map(id=>byId.get(id)).filter(Boolean),n=list.length,scale=a=>{const c=list.map(f=>f.position[a]),lo=Math.min(...c),hi=Math.max(...c);return v=>hi>lo?+((v-lo)/(hi-lo)).toFixed(4):.5},[u,v,w]=[0,1,2].map(scale);
+ r={fixtures:show.fixtures,ids:list.map(f=>f.id),json:JSON.stringify(list.map((f,i)=>({id:f.id,i,n,phase:n>1?i/(n-1):0,x:f.position[0],y:f.position[1],z:f.position[2],u:u(f.position[0]),v:v(f.position[1]),w:w(f.position[2]),profile:f.profile,moving:!!PROFILE_DEFS[f.profile]?.moving,home:{pan:f.calibration.home[0],tilt:f.calibration.home[1]}})))};
+ rigs.set(ids,r);return r;
+}
+export function codeEffect(show,ids,params,time,stateOf,set,{duration=1e9,bpm=120,envelope=1,label}={}){
+ const rig=codeRig(show,ids);if(!rig.ids.length)return false;
+ let p=argsCache.get(params);if(!p){p=codeArgs(params);argsCache.set(params,p)}
+ const below=rig.ids.map(id=>stateOf(id)),c={time,duration,progress:clamp(time/Math.max(.001,duration)),bpm,beat:time*bpm/60,step:params.step??-1,sinceStep:params.step===undefined?0:Math.max(0,time-(params.stepAt??0))};
+ const out=runCodeEffect(params.code,{t:time*(params.speed??1),b:below.map(st=>st??DARK),p,c},{label,fJson:rig.json});if(!out)return false;
+ rig.ids.forEach((id,i)=>{const o=out[i],st=below[i];if(!o||!st)return;const next={...st,...o};if(o.color){delete next.colorWheel;delete next.colorWheel2}
+  if(o.intensity!==undefined&&params.brightness!==undefined)next.intensity=o.intensity*params.brightness;set(id,envelope>=1?next:blendState(st,next,envelope))});
+ return true;
+}
 export function compose(show,cue,seconds){
  const states=Object.fromEntries(show.fixtures.map(f=>[f.id,baseState(f)]));
  const look=over=>{for(const entry of cue?.look??[]){if(!!entry.over!==over||!states[entry.id])continue;Object.assign(states[entry.id],entry.values);if(entry.values.color)states[entry.id].color=rgb(entry.values.color)}};
@@ -70,6 +94,7 @@ export function compose(show,cue,seconds){
   const ids=trackFixtures(show,tr),t=seconds-tr.start,byId=fixtureIndex(show);
   // A fade of 0 is a cut: no ramp at all, so a tick landing right on a cue start or loop point is never caught mid-ramp.
   const ramp=(x,f)=>f>0?smooth(x/f):1,envelope=tr.effect==='fade'?1:ramp(t,tr.fadeIn??.5)*ramp(tr.duration-t,tr.fadeOut??.5);
+  if(tr.effect==='code'){codeEffect(show,ids,tr.params,t,id=>states[id],(id,st)=>{states[id]=st},{duration:tr.duration,bpm:cue.bpm??120,envelope,label:cue.name});continue}
   ids.forEach((id,i)=>{const f=byId.get(id);if(!f||!states[id])return;
    if(layered)states[id]=layerEffect(states[id],f,i,ids.length,tr.effect,tr.params,t,show,tr.layer,envelope,tr.duration);
    else{Object.assign(states[id],effectPose(f,i,ids.length,tr.effect,tr.params,t,show,tr.duration));states[id].intensity*=envelope}});

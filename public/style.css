@@ -407,6 +407,10 @@ body.grid-view .pill-drawer,body.grid-view .group-pills,body.grid-view #ledButto
 .tile-dots i{width:13px;height:13px;border-radius:50%;background:#2c3b4c;transition:background .2s}
 .tile-dots em{font-size:11px;color:var(--muted);font-style:normal;align-self:center}
 .tile-foot{display:flex;align-items:center;gap:10px}
+.tile-kill{margin-left:2px;padding:4px 10px;border-radius:999px;border:1px solid var(--line2);font-size:12px;font-weight:700;letter-spacing:.3px;color:var(--muted);cursor:pointer}
+.tile-kill:hover{color:var(--text,#fff);border-color:#e85a5a}
+.tile-kill.on{background:#e85a5a;border-color:#e85a5a;color:#fff}
+.group-tile.killed{border-color:#e85a5a;opacity:.75}
 .pill.tinted{border-color:color-mix(in srgb,var(--g) 70%,transparent);background:color-mix(in srgb,var(--g) 14%,transparent)}.pill.tinted::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--g);margin-right:6px;display:inline-block}.pill.tinted.active{background:color-mix(in srgb,var(--g) 32%,transparent);border-color:var(--g);box-shadow:0 0 12px color-mix(in srgb,var(--g) 45%,transparent)}
 .group-tile.tinted{border-color:color-mix(in srgb,var(--g) 55%,transparent);background:linear-gradient(160deg,color-mix(in srgb,var(--g) 16%,transparent),transparent 60%)}.group-tile.tinted.active{border-color:var(--g);box-shadow:0 0 0 1px var(--g),0 0 18px color-mix(in srgb,var(--g) 35%,transparent)}.group-tile.tinted .tile-head strong{color:color-mix(in srgb,var(--g) 55%,#fff)}
 .group-swatches{display:flex;flex-wrap:wrap;gap:10px;margin:4px 0 14px}.group-swatch{width:36px;height:36px;border-radius:50%;border:2px solid transparent;background:var(--g);cursor:pointer;padding:0}.group-swatch.active{border-color:#fff;box-shadow:0 0 0 2px var(--g)}.group-swatch.custom{background:conic-gradient(#ff5d5d,#ffd166,#7bd88f,#4cc9f0,#9b5de5,#f15bb5,#ff5d5d);position:relative;overflow:hidden}.group-swatch.custom input{opacity:0;position:absolute;inset:0;width:100%;height:100%;cursor:pointer}
@@ -492,6 +496,12 @@ dialog.wide{width:min(1080px,calc(100vw - 32px))}
 .save-button{display:flex;align-items:center;gap:8px;padding:12px 18px;border-radius:var(--pill);border:1px solid var(--line2);background:var(--card);font-weight:600;font-size:15px}
 .save-button.active{border-color:var(--go);color:var(--go)}
 .save-options{display:flex;flex-direction:column;gap:10px;margin-top:12px}
+/* What to save (Hog record masks): whole look or just the changes, and which parts. */
+.save-what{display:flex;flex-direction:column;gap:8px;margin-top:10px;padding:10px 12px;border:1px solid var(--line2);border-radius:12px;background:var(--card2)}
+.save-parts{display:flex;flex-wrap:wrap;gap:6px}
+.chip-check{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border-radius:999px;border:1px solid var(--line2);font-size:13px;font-weight:600;cursor:pointer}
+.chip-check:has(input:checked){border-color:var(--accent,#8bc9d0);background:color-mix(in srgb,var(--accent,#8bc9d0) 18%,transparent)}
+.save-what .hint{margin:0}
 .save-option{display:flex;gap:14px;align-items:flex-start;text-align:left;padding:14px;border-radius:var(--r);background:var(--card2);border:2px solid transparent;width:100%}
 button.save-option:hover{border-color:var(--go)}
 .save-option>.i{width:24px;height:24px;color:var(--go);margin-top:2px}
@@ -771,6 +781,8 @@ body.locked .build-only,body.locked [data-lib-delete],body.locked #sheetDelete,b
 .switch span::after{content:"";position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;background:var(--muted);transition:transform .15s,background .15s}
 .switch input:checked+span{background:#1d3a2a;border-color:var(--go)}.switch input:checked+span::after{transform:translateX(18px);background:var(--go)}
 .check-row{display:flex;align-items:center;gap:8px;font-size:13px}
+.page-head .page-release{margin-left:8px}
+.mp-tempo{display:grid;grid-template-columns:1fr 92px;gap:10px;align-items:end;padding-top:10px;border-top:1px solid var(--line)}
 .versions{max-height:260px;overflow-y:auto}
 
 /* APC40 mkII editor: the board drawn from the profile's control table */
@@ -830,3 +842,67 @@ button.show-name:hover{color:var(--text);background:var(--card2)}
 .file-main strong{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .file-main em{font-style:normal;font-size:11px;color:var(--muted);font-weight:500;margin-left:6px}
 #openSearch{width:100%}
+
+/* UX pass 2026-11-14: the GO bar fits at laptop widths (1280–1600) instead of pushing Blackout off screen. */
+.now-next{grid-template-columns:minmax(0,1.3fr) minmax(0,1fr)}
+.now,.next{min-width:0}
+@media(max-width:1600px){.gobar{gap:12px;padding:10px 14px}.go-button{padding:0 28px}.release-button,.save-button,.blackout{padding:11px 14px}.master{width:150px}.tempo-tools{display:none}}
+@media(max-width:1380px){.save-button span:not([data-icon]),.find-button span:not([data-icon]),#releaseButton span:not([data-icon]){display:none}.master{width:126px}.go-buttons{gap:8px}}
+/* Now: elapsed and time left beside the play state */
+.now-head{display:flex;align-items:baseline;gap:8px;min-width:0}
+.now-time{font-size:11px;font-weight:600;color:var(--muted);font-variant-numeric:tabular-nums;white-space:nowrap}
+/* Cue names wrap to two lines in the cue list instead of being cut after a few words */
+.cue-main strong{white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;line-height:1.2;overflow-wrap:anywhere}
+/* Errors stay red in the toast and the message log */
+#toast.error{background:var(--live);color:#fff}
+.msg-list{display:flex;flex-direction:column;gap:4px;max-height:52vh;overflow-y:auto;margin-top:8px}
+.msg-row{display:grid;grid-template-columns:70px 1fr;gap:10px;padding:6px 10px;border-radius:8px;background:var(--card2);font-size:13px}
+.msg-row time{color:var(--muted);font-variant-numeric:tabular-nums}
+.msg-row.error{border-left:3px solid var(--live)}.msg-row.error span{color:#ffc4c4}
+.msg-row b{color:var(--warm)}
+.msg-pre{max-height:30vh;overflow:auto;font-size:12px;white-space:pre-wrap}
+/* Keyboard shortcut sheet */
+.shortcut-sheet{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:6px 22px}
+.shortcut-sheet h3{margin:10px 0 6px;font-size:12px;letter-spacing:1px;text-transform:uppercase;color:var(--muted)}
+.sc-row{display:grid;grid-template-columns:110px 1fr;gap:10px;align-items:center;padding:4px 0;font-size:13px;border-bottom:1px solid var(--line)}
+.sc-keys{display:flex;gap:4px;flex-wrap:wrap;align-items:center}.sc-keys i{color:var(--muted);font-style:normal}
+kbd{display:inline-block;min-width:22px;padding:2px 7px;border-radius:6px;border:1px solid var(--line2);border-bottom-width:2px;background:var(--card);font:600 12px/1.4 Barlow,-apple-system,sans-serif;text-align:center;color:var(--text)}
+/* Go to cue by number */
+.goto-hud{position:absolute;top:56px;left:50%;transform:translateX(-50%);z-index:7;display:flex;align-items:center;gap:12px;padding:10px 16px;border:1px solid var(--warm);border-radius:14px;background:color-mix(in srgb,var(--rail) 92%,transparent);box-shadow:0 6px 24px #0008}
+.goto-hud small{font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--muted)}
+.goto-hud strong{font-size:26px;color:var(--warm);font-variant-numeric:tabular-nums}
+.goto-hud span{max-width:320px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+/* Killed groups: red pills, and a top-bar chip while anything is killed or parked */
+.pill.killed{border-color:var(--live);color:#ffb3b3;box-shadow:inset 0 0 0 1px var(--live)}
+.pill.killed.active{background:var(--live);color:#fff}
+.hold-chip{display:flex;align-items:center;gap:6px;padding:7px 12px;border-radius:var(--pill);border:1px solid #f0a35c;color:#f8c48f;font-weight:700;font-size:12px;background:#f0a35c1a}
+.hold-chip.kill{border-color:var(--live);color:#ffb3b3;background:#ff5b5b1f}
+.hold-chip .i{width:14px;height:14px}
+/* Code effect presets */
+.code-badge{position:absolute;top:4px;right:4px;padding:1px 5px;border-radius:5px;background:var(--accent);color:var(--accent-ink);font-size:9px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;line-height:1.4}
+.fx-tile,.preset{position:relative}
+.fx-args{margin-top:10px;padding-top:8px;border-top:1px solid var(--line)}
+.fx-args h5{margin:0 0 4px;font-size:11px;letter-spacing:1px;text-transform:uppercase;color:var(--muted)}
+.mini.arg output{margin-left:6px;color:var(--text);font-variant-numeric:tabular-nums}
+/* Keyboard focus is always visible on the controls used mid-show */
+:where(button,[role=button],input,select,summary,.lib-tile,.master-slot):focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+/* An error arrived since the message log was last opened */
+#menuButton{position:relative}#menuButton.alert::after{content:"";position:absolute;top:3px;right:3px;width:9px;height:9px;border-radius:50%;background:var(--live);box-shadow:0 0 0 2px var(--rail)}
+.badge{white-space:nowrap}
+@media(max-width:1380px){.stage-bottom .preview-label{display:none}}
+/* Output armed but packets are not getting out (runtime.output.failing): warning colour, on the bar and the pill */
+.output-hint.failing{background:#2e2410e6;border-color:var(--warm)}
+.output-hint.failing strong{color:var(--warm)}.output-hint.failing small{color:var(--text)}
+body.output-failing .output-pill{background:var(--warm);border-color:var(--warm);color:#2a1a04}
+body.output-failing .output-pill i{background:#2a1a04}
+/* The show could not be saved to disk (runtime.showFile.error) */
+.show-name .save-warn{display:inline-flex;color:var(--warm)}.show-name .save-warn .i{width:14px;height:14px}
+button.show-name.save-failed{color:var(--warm)}
+/* Toast action (Undo / Redo after a delete or a show undo) */
+#toast.has-action{display:flex;align-items:center;gap:14px}
+#toast .toast-action{padding:5px 12px;border-radius:var(--pill);background:#0b121b;color:var(--text);font-weight:700;font-size:13px}
+#toast .toast-action:hover{background:#1c2938}
+/* Settings → Desk keys */
+.desk-keys{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:8px}
+.desk-key{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px 10px;border-radius:10px;background:var(--card2);font-size:13px;font-weight:600}
+.desk-key .chip-button{min-width:84px;justify-content:center}
