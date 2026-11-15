@@ -45,6 +45,16 @@ Code presets (`effect: "code"`, optional `layer`, `params.code` + `params.args`)
 
 UI: the Blind pill beside Show/Build; a violet BLIND banner with Live/Blind source, Record, Apply live and leave; the Programmer, Clear count and fixture chips read the blind buffer while it is on.
 
+## Right-click menus (2026-11-14)
+
+Right-click (long-press on touch) works on pages, cue rows and library cues, in Show and Build:
+
+- **Page**: open, GO first cue, rename (or double-click the page, or its title in Show), colour, duplicate (same library cues, new entries), new page, delete. Right-click empty rail space for New page; in Build a New page tile ends the list.
+- **Cue row**: GO now, stop, preview, rename on this page, edit cue content, duplicate cue (a library copy added below), move up/down, remove from page.
+- **Library cue**: preview, run now, rename, edit, duplicate, add to the open page, put on a master, delete.
+
+Each item is an existing command (`page.save`, `page.delete`, `cue.save`, `cue.delete`, `page.go`, `preview.cue`, `cue.release`), so agents do the same through MCP. In a narrow side panel (360 px or less) the preview and edit buttons leave the cue row for the menu so the name stays readable.
+
 ## Commands (all exposed as MCP tools `lights_*`)
 
 `page.save`, `page.delete`, `page.go`, `page.back`, `preview.cue`, `preview.stop`, `preview.go_live`, `blind.set`, `blind.apply`, `override.release`, `effect.apply`, `media.import`, `media.delete`, `ledwall.set`, `point.delete`, `group.delete`, `palette.delete`; `point.recall` gains optional `ids`; `look.capture` gains optional `page`/`fade`; `cue.play` gains optional `fade`. Readback: `status.runtime.stack`, `.transition`, `.release`; `schema.presets`, `schema.media`.

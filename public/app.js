@@ -11,6 +11,8 @@ import {icon,ICONS} from './icons.js?v=ui-2';
 import {goboIcon,goboName,GOBOS} from './gobos.js?v=ui-2';
 import {keyOf,keyLabel,reservedReason} from './keys.js';
 import {fmtSeconds,cueTime,isTyping,createMessageLog,entryByNumber,shortcutRows,presetLayer,argControls,argLabel,outputBar,undoText} from './desk-ux.js';
+import {mountAssistant} from './assistant.js?v=ui-2';
+let assistant=null;
 const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const store={get(k,d){try{return localStorage.getItem('lights.'+k)??d}catch{return d}},set(k,v){try{localStorage.setItem('lights.'+k,v)}catch{}}};
@@ -66,6 +68,9 @@ function drawPages(){
  pagesRunKey=null;drawRailTabs();if(railTab==='scenes')return drawScenes();
  $('#pageList').innerHTML=show.pages.map(p=>`<button class="page-tile ${p.id===pageId?'selected':''}" data-page="${esc(p.id)}" style="--page:${esc(p.color??'#8bc9d0')}"><i></i><span><strong>${esc(p.name)}</strong><small>${p.cues.length} cue${p.cues.length===1?'':'s'}</small></span><b class="live-dot" title="Running"></b></button>`).join('')||`<p class="empty">No pages yet.${mode==='build'?'':' Switch to Build to create one.'}</p>`;
  $$('[data-page]').forEach(b=>b.onclick=()=>{pageId=b.dataset.page;store.set('page',pageId);standby=null;editingEntry=null;if(mode==='build')side='cues';else if(side!=='override')side='cues';drawPages();drawSide();paint(runtime)});
+ $$('[data-page]').forEach(b=>{onMenu(b,(x,y)=>openPageMenu(b.dataset.page,x,y));b.ondblclick=()=>{const p=show.pages.find(p=>p.id===b.dataset.page);if(p)renamePage(p)}});
+ if(mode==='build'){$('#pageList').insertAdjacentHTML('beforeend',`<button class="page-tile new-page-tile" id="newPageTile"><span data-icon="plus"></span><span>New page</span></button>`);fillIcons($('#pageList'));$('#newPageTile').onclick=newPage}
+ $('#pageList').oncontextmenu=e=>{if(e.target.closest('[data-page],[data-scene]'))return;e.preventDefault();$('#ctxMenu').innerHTML=ctxItem('new','plus','New page');showCtxMenu(e.clientX,e.clientY);runCtx({new:newPage})};
 }
 
 function drawRailTabs(){$$('[data-rail]').forEach(b=>{const on=b.dataset.rail===railTab;b.classList.toggle('active',on);b.setAttribute('aria-selected',String(on))});$('#newPage').style.display=railTab==='pages'?'':'none'}
@@ -339,6 +344,67 @@ function entryEditor(p,e,i){
  ${entrySendsHTML(e)}<div class="editor-actions"><button class="round-button small" data-move="-1" ${i===0?'disabled':''} aria-label="Move up" data-icon="up"></button><button class="round-button small" data-move="1" ${i===p.cues.length-1?'disabled':''} aria-label="Move down" data-icon="down"></button><button class="text-button" id="editCueContent"><span data-icon="edit"></span>Edit cue content</button><button class="round-button small danger" id="removeEntry" aria-label="Remove from page" data-icon="trash"></button></div></div>`;
 }
 const savePage=p=>command('page.save',{page:p});
+// ── Right-click menus for pages, cue rows and library cues (long-press on touch) ──
+// Every action is an existing engine command (page.save, page.delete, cue.save, cue.delete, page.go, preview.cue…),
+// so agents can do the same through MCP.
+function onMenu(el,open){
+ el.oncontextmenu=e=>{e.preventDefault();e.stopPropagation();open(e.clientX,e.clientY)};
+ let timer;el.addEventListener('pointerdown',e=>{if(e.pointerType!=='touch')return;timer=setTimeout(()=>{el.dataset.longPress='1';open(e.clientX,e.clientY)},550)});
+ const cancel=()=>clearTimeout(timer);el.addEventListener('pointerup',cancel);el.addEventListener('pointerleave',cancel);el.addEventListener('pointermove',e=>{if(Math.abs(e.movementX)+Math.abs(e.movementY)>4)cancel()});
+}
+const ctxItem=(act,ic,label,{disabled=false,danger=false,hint=''}={})=>`<button role="menuitem" data-ctx="${act}" ${disabled?'disabled':''} class="${danger?'danger':''}"><span data-icon="${ic}"></span>${label}${hint?`<small>${esc(hint)}</small>`:''}</button>`;
+function runCtx(run){$$('#ctxMenu [data-ctx]').forEach(b=>b.onclick=()=>{closeMenu();run[b.dataset.ctx]?.()})}
+// One small dialog for every rename: Enter saves, Escape closes.
+function renameDialog(title,value,save,placeholder=''){
+ dialog(title,`<div class="inline-form"><input id="renameInput" type="text" maxlength="100" value="${esc(value)}" placeholder="${esc(placeholder)}" aria-label="Name"><button id="renameSave" class="primary">Save</button></div>`);
+ const input=$('#renameInput');input.focus();input.select();
+ const go=async()=>{const name=input.value.trim();if(!name&&!placeholder)return toast('Type a name first.');try{await save(name);$('#dialog').close()}catch{}};
+ $('#renameSave').onclick=go;input.onkeydown=e=>{if(e.key==='Enter')go()};
+}
+const renamePage=p=>renameDialog('Rename page',p.name,name=>savePage({...structuredClone(p),name}));
+async function duplicatePage(p){
+ const id=uid('page'),copy={...structuredClone(p),id,name:(p.name+' copy').slice(0,100),cues:p.cues.map(e=>({...structuredClone(e),id:uid('entry')}))};
+ await quiet(savePage(copy));pageId=id;store.set('page',id);drawAll();toast(`“${copy.name}” made. Its entries use the same library cues.`);
+}
+function deletePage(p){confirmDialog(`Delete “${p.name}”?`,'The page and its cue list are removed. Cues stay in the library.','Delete page',async()=>{await command('page.delete',{id:p.id});if(pageId===p.id)pageId=show.pages.find(x=>x.id!==p.id)?.id??null;drawAll()})}
+function openPageMenu(id,x,y){
+ const p=show.pages.find(p=>p.id===id);if(!p)return;
+ $('#ctxMenu').innerHTML=`<div class="ctx-title">${esc(p.name)}</div>`+ctxItem('open','pages','Open')+ctxItem('go','go','GO first cue',{disabled:!p.cues.length})+'<hr>'+ctxItem('rename','edit','Rename…',{hint:'double-click'})+
+  `<div class="ctx-colors" role="group" aria-label="Page colour">${PAGE_COLORS.map(c=>`<button class="dot ${c===p.color?'active':''}" data-ctx-color="${c}" style="background:${c}" aria-label="Colour ${c}"></button>`).join('')}</div>`+
+  ctxItem('duplicate','copy','Duplicate page')+ctxItem('new','plus','New page')+'<hr>'+ctxItem('delete','trash','Delete page',{danger:true});
+ showCtxMenu(x,y);
+ $$('#ctxMenu [data-ctx-color]').forEach(b=>b.onclick=()=>{closeMenu();quiet(savePage({...structuredClone(p),color:b.dataset.ctxColor}))});
+ runCtx({open:()=>{pageId=id;store.set('page',id);standby=null;editingEntry=null;side='cues';drawPages();drawSide();paint(runtime)},
+  go:()=>{pageId=id;store.set('page',id);drawPages();drawSide();quiet(command('page.go',{id,requestId:uid('ui')}))},
+  rename:()=>renamePage(p),duplicate:()=>duplicatePage(p),new:newPage,delete:()=>deletePage(p)});
+}
+function openEntryMenu(entryId,x,y){
+ const p=page(),i=p?.cues.findIndex(e=>e.id===entryId)??-1;if(i<0)return;const e=p.cues[i],cue=cueOf(e),name=entryName(e);
+ const running=(runtime?.running??[]).some(r=>r.id===e.cue),previewing=runtime?.preview?.page===p.id&&runtime?.preview?.entry===e.id;
+ $('#ctxMenu').innerHTML=`<div class="ctx-title">${esc(name)}</div>`+ctxItem('go','go','GO now')+(running?ctxItem('stop','stop','Stop this cue'):'')+ctxItem('preview','eye',previewing?'Stop preview':'Preview (not live)')+'<hr>'+
+  ctxItem('rename','edit','Rename on this page…')+ctxItem('edit','sliders','Edit cue content…',{disabled:!cue})+ctxItem('duplicate','copy','Duplicate cue',{disabled:!cue})+
+  ctxItem('up','up','Move up',{disabled:i===0})+ctxItem('down','down','Move down',{disabled:i===p.cues.length-1})+'<hr>'+ctxItem('remove','trash','Remove from page',{danger:true});
+ showCtxMenu(x,y);
+ const update=fn=>{const next=structuredClone(p);fn(next,next.cues.findIndex(x=>x.id===e.id));return quiet(savePage(next))};
+ runCtx({go:()=>go(e.id),stop:()=>quiet(command('cue.release',{id:e.cue})),preview:()=>previewing?stopPreview():previewCue({page:p.id,entry:e.id}),
+  rename:()=>renameDialog('Rename on this page',e.label??'',label=>update((n,k)=>{if(label)n.cues[k].label=label;else delete n.cues[k].label}),cue?.name??''),
+  edit:()=>editCue(e.cue),
+  duplicate:async()=>{const id=uid('cue');await command('cue.save',{cue:{...structuredClone(cue),id,name:(cue.name+' copy').slice(0,100)}});await update((n,k)=>n.cues.splice(k+1,0,{...structuredClone(e),id:uid('entry'),cue:id,...(e.label?{label:(e.label+' copy').slice(0,100)}:{})}));toast(`“${cue.name} copy” added below.`)},
+  up:()=>update((n,k)=>{[n.cues[k-1],n.cues[k]]=[n.cues[k],n.cues[k-1]]}),down:()=>update((n,k)=>{[n.cues[k+1],n.cues[k]]=[n.cues[k],n.cues[k+1]]}),
+  remove:()=>update((n,k)=>{n.cues.splice(k,1);if(editingEntry===e.id)editingEntry=null})});
+}
+function openLibraryMenu(id,x,y){
+ const c=show.cues.find(c=>c.id===id);if(!c)return;const pg=page(),pages=show.pages.filter(p=>p.cues.some(e=>e.cue===id));
+ $('#ctxMenu').innerHTML=`<div class="ctx-title">${esc(c.name)}</div>`+ctxItem('preview','eye','Preview (not live)')+ctxItem('play','play','Run now')+'<hr>'+ctxItem('rename','edit','Rename…')+ctxItem('edit','sliders','Edit cue content…')+ctxItem('duplicate','copy','Duplicate')+
+  ctxItem('add','plus',pg?`Add to “${pg.name}”`:'Add to a page',{disabled:!pg})+ctxItem('master','masters','Put on a master…')+'<hr>'+ctxItem('delete','trash','Delete cue',{danger:true,hint:pages.length?`on ${pages.length} page${pages.length===1?'':'s'}`:''});
+ showCtxMenu(x,y);
+ runCtx({preview:()=>peekCue(id),play:()=>quiet(command('cue.play',{id,requestId:uid('ui')})),rename:()=>renameDialog('Rename cue',c.name,name=>command('cue.save',{cue:{...structuredClone(c),name}})),edit:()=>editCue(id),
+  duplicate:async()=>{const nid=uid('cue');await quiet(command('cue.save',{cue:{...structuredClone(c),id:nid,name:(c.name+' copy').slice(0,100)}}));libCue=nid;drawAll();toast(`“${c.name} copy” made.`)},
+  add:async()=>{const next=structuredClone(pg);next.cues.push({id:uid('entry'),cue:id,fade:2,follow:'manual'});await quiet(savePage(next));toast(`Added to “${pg.name}”.`)},
+  master:()=>masterPicker(id),
+  delete:()=>confirmDialog(`Delete “${c.name}”?`,pages.length?`It is removed from the library and from ${pages.map(p=>'“'+p.name+'”').join(', ')}. Masters that hold it are cleared.`:'It is removed from the library. Masters that hold it are cleared.','Delete cue',async()=>{await command('cue.delete',{id});if(libCue===id)libCue=null;drawAll()})});
+}
+
 function bindCueList(){
  if($('#emptyNewPage'))$('#emptyNewPage').onclick=newPage;
  if($('#pageRelease'))$('#pageRelease').onclick=()=>{const p=page();quiet(command('page.release',{id:p.id}).then(r=>toast(r.created.released.length?`Released ${r.created.released.length} cue${r.created.released.length===1?'':'s'} on ${p.name}.`:`Nothing on ${p.name} is running.`)))};
@@ -350,6 +416,8 @@ function bindCueList(){
  entryControlsKey=null;
  $$('[data-preview-entry]').forEach(b=>b.onclick=()=>{const r=runtime.preview;if(r&&r.page===p.id&&r.entry===b.dataset.previewEntry)stopPreview();else previewCue({page:p.id,entry:b.dataset.previewEntry})});
  $$('[data-edit-entry]').forEach(b=>b.onclick=()=>{editingEntry=editingEntry===b.dataset.editEntry?null:b.dataset.editEntry;drawSide()});
+ $$('[data-entry]').forEach(b=>onMenu(b,(x,y)=>openEntryMenu(b.dataset.entry,x,y)));
+ const title=$('.page-head.show h2');if(title){title.title='Double-click to rename · right-click a page for more';title.ondblclick=()=>renamePage(p);onMenu(title,(x,y)=>openPageMenu(p.id,x,y))}
  if($('#pageName'))$('#pageName').onchange=e=>{const name=e.target.value.trim();if(name)quiet(savePage({...structuredClone(p),name}))};
  $$('[data-page-color]').forEach(b=>b.onclick=()=>quiet(savePage({...structuredClone(p),color:b.dataset.pageColor})));
  if($('#deletePage'))$('#deletePage').onclick=()=>confirmDialog(`Delete “${p.name}”?`,'The page and its cue list are removed. Cues stay in the library.','Delete page',async()=>{await command('page.delete',{id:p.id});undoToast(`Deleted page “${p.name}”. Its cues are still in the Library.`);pageId=show.pages[0]?.id??null;drawAll()});
@@ -706,7 +774,7 @@ function drawLibraryGrid(){
   ||`<div class="panel-empty small"><p>${show.cues.length?'No cue matches.':'No cues yet. Record a look or make an effect cue.'}</p></div>`;
  fillIcons(el);libKey='';if(runtime)paintLibrary(runtime);
  $$('[data-lib-cue]').forEach(t=>{t.onclick=e=>{if(e.target.closest('button'))return;libCue=t.dataset.libCue;$$('[data-lib-cue]').forEach(x=>x.classList.toggle('selected',x===t));drawSide()};t.onkeydown=e=>{if(e.key==='Enter')t.click()};
-  dragCueFrom(t,t.dataset.libCue)});
+  dragCueFrom(t,t.dataset.libCue);onMenu(t,(x,y)=>openLibraryMenu(t.dataset.libCue,x,y))});
  $$('[data-lib-preview]').forEach(b=>b.onclick=()=>peekCue(b.dataset.libPreview));
 }
 // Dragging a cue onto a master uses pointer events, not HTML drag and drop: the desktop shell (Tauri) takes native drops
@@ -1309,7 +1377,7 @@ function armDialog(){if(runtime.output.armed)return confirmDialog('Turn output o
 // ── 10 Hz paint: readback only, no structural redraws ──
 function paint(r){
  if(!r)return;paintOutputHint(r);paintOutputState();paintRunning(r);
- runtime=r;paintAgentStatus(r);paintMasters(r);paintLibrary(r);paintHolds(r);paintFailures(r);paintUndo(r);if(show){paintScene(r);paintTempo(r);paintLock(r);paintResume(r);paintHits(r);paintShowFile(r)}
+ runtime=r;paintAgentStatus(r);assistant?.paint(r);paintMasters(r);paintLibrary(r);paintHolds(r);paintFailures(r);paintUndo(r);if(show){paintScene(r);paintTempo(r);paintLock(r);paintResume(r);paintHits(r);paintShowFile(r)}
  if(show&&r.selection&&r.selection.revision>selectionRevision){const first=!selectionRevision;selectionRevision=r.selection.revision;if(!first||r.selection.ids.length)applySelection(r.selection.ids,r.selection.group)}if(!engineReady){engineReady=true;$('#engineStatus').innerHTML='<i></i>Engine ready'}document.body.classList.toggle('live',r.output.armed);
  setText($('.preview-label'),stage?.mode==='reference'?'Reference render · not live lighting':r.output.armed?'Live view · output on':'Live view · output off');drawPreviewBanner(r);
  stage?.setLedPlaying(!r.output.armed);
@@ -1494,6 +1562,7 @@ addEventListener('blur',releaseAllMasters);document.addEventListener('visibility
 async function start(){
  fillIcons();document.body.dataset.mode=mode;$$('.mode-switch [data-mode]').forEach(b=>b.setAttribute('aria-selected',String(b.dataset.mode===mode)));
  try{({token,build}=await fetch('/api/session').then(r=>r.json()));schema=await fetch('/api/schema').then(r=>r.json());await refresh();
+  assistant=mountAssistant({command,esc,icon,fillIcons,toast,store});
   stage=new Stage($('#viewport'),show.fixtures,selectFixture);stage.select(selected);syncLedWall();stage.update(runtime.frames);applyStageView();
   $$('[data-stage-view]').forEach(b=>b.onclick=()=>{if(b.dataset.stageView==='stage'&&visOut()){visWin.focus();return toast('The visualizer is in its own window. Use the dock button to bring it back.')}stageView=b.dataset.stageView;store.set('stageView',stageView);applyStageView()});
   $('#popoutButton').onclick=popOutVisualizer;

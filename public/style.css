@@ -906,3 +906,139 @@ button.show-name.save-failed{color:var(--warm)}
 .desk-keys{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:8px}
 .desk-key{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px 10px;border-radius:10px;background:var(--card2);font-size:13px;font-weight:600}
 .desk-key .chip-button{min-width:84px;justify-content:center}
+/* Built-in assistant (docs/ASSISTANT.md): a chat panel floating over the right of the workspace. */
+.assistant-button{display:flex;align-items:center;gap:7px;padding:8px 14px;border-radius:var(--pill);border:1px solid var(--line2);font-weight:600;font-size:13px;color:var(--text);position:relative}
+.assistant-button [data-icon]{color:var(--accent)}
+.assistant-button:hover{background:var(--card)}
+.assistant-button[aria-pressed=true]{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.assistant-button[aria-pressed=true] [data-icon]{color:var(--accent-ink)}
+.assistant-button.busy::after{content:"";position:absolute;top:4px;right:4px;width:8px;height:8px;border-radius:50%;background:var(--warm);box-shadow:0 0 8px var(--warm);animation:as-pulse 1s ease-in-out infinite}
+.assistant-panel{position:fixed;right:12px;top:76px;bottom:140px;width:min(420px,calc(100vw - 24px));z-index:60;display:flex;flex-direction:column;background:var(--rail);border:1px solid var(--line2);border-radius:var(--r-lg);box-shadow:0 20px 60px #000a;overflow:hidden}
+.as-head{display:flex;align-items:center;gap:8px;padding:12px 12px 12px 16px;border-bottom:1px solid var(--line)}
+.as-mark{width:30px;height:30px;border-radius:50%;background:#7fd3dc22;color:var(--accent);flex-shrink:0}
+.as-title{flex:1;min-width:0}
+.as-title small{display:block;color:var(--muted);font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.as-head .round-button.active{background:var(--raise);border-color:var(--accent)}
+.as-body{flex:1;overflow-y:auto;padding:14px 14px 6px;display:flex;flex-direction:column;gap:10px;min-height:0}
+.as-empty{display:flex;flex-direction:column;gap:14px;color:var(--muted);font-size:14px;padding:6px 2px}
+.as-empty .primary{align-self:flex-start}
+.as-suggest{display:flex;flex-direction:column;gap:8px}
+.as-chip{text-align:left;padding:10px 12px;border-radius:12px;border:1px solid var(--line2);background:var(--card);color:var(--text);font-size:13px}
+.as-chip:hover{background:var(--raise)}
+.as-msg{font-size:14px;line-height:1.45;max-width:100%;overflow-wrap:anywhere}
+.as-msg p{margin:0 0 6px}.as-msg p:last-child{margin-bottom:0}
+.as-msg ul{margin:4px 0 6px;padding-left:20px}
+.as-msg code{font-family:ui-monospace,Menlo,monospace;font-size:12px;background:#0b121b;border:1px solid var(--line);border-radius:6px;padding:1px 5px}
+.as-msg.user{align-self:flex-end;background:var(--card2);border:1px solid var(--line2);border-radius:16px 16px 4px 16px;padding:9px 13px;max-width:88%}
+.as-msg.bot{align-self:stretch}
+.as-msg.note{align-self:center;color:var(--faint);font-size:12px}
+.as-msg.error{display:flex;gap:8px;align-items:flex-start;color:var(--danger);background:#ef8b8f14;border:1px solid #ef8b8f44;border-radius:12px;padding:9px 12px;font-size:13px}
+.as-tools{display:flex;flex-direction:column;gap:4px;margin-bottom:8px}
+.as-tool{border:1px solid var(--line);border-radius:10px;background:#0e1823;font-size:12px}
+.as-tool summary{display:flex;align-items:center;gap:7px;padding:5px 9px;cursor:pointer;list-style:none;color:var(--muted)}
+.as-tool summary::-webkit-details-marker{display:none}
+.as-tool summary code{background:none;border:0;padding:0;color:var(--text)}
+.as-tool.ok summary [data-icon]{color:var(--go)}
+.as-tool.bad summary [data-icon]{color:var(--danger)}
+.as-tool.run summary [data-icon]{color:var(--warm);animation:as-pulse 1s ease-in-out infinite}
+.as-tool pre{margin:0;padding:6px 9px;border-top:1px solid var(--line);white-space:pre-wrap;word-break:break-all;font:11px/1.4 ui-monospace,Menlo,monospace;color:var(--muted);max-height:160px;overflow:auto}
+.as-tool pre.res{color:var(--text)}
+.as-typing{display:flex;align-items:center;gap:4px;color:var(--muted);font-size:12px}
+.as-typing i{width:6px;height:6px;border-radius:50%;background:var(--accent);animation:as-pulse 1s ease-in-out infinite}
+.as-typing i:nth-child(2){animation-delay:.15s}.as-typing i:nth-child(3){animation-delay:.3s}
+.as-typing span{margin-left:6px}
+@keyframes as-pulse{0%,100%{opacity:.35}50%{opacity:1}}
+.as-compose{display:flex;gap:8px;align-items:flex-end;padding:10px 12px 4px;border-top:1px solid var(--line)}
+.as-compose textarea{resize:none;min-height:44px;max-height:140px;font-size:14px}
+.as-send{flex-shrink:0;width:42px;height:42px;background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.as-send:hover:not(:disabled){background:var(--accent);filter:brightness(1.1)}
+.as-send.stop{background:var(--card2);color:var(--text);border-color:var(--line2)}
+.as-foot{font-size:11px;color:var(--faint);padding:2px 14px 10px}
+.as-settings{gap:18px}
+.as-settings section{display:flex;flex-direction:column;gap:8px}
+.as-settings .segmented{margin-left:0;align-self:flex-start;flex-wrap:wrap}
+.as-settings .hint{margin-top:0}
+.as-settings .ghost-button{align-self:flex-start;margin-top:0}
+.as-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.as-row input{flex:1;min-width:160px}
+.as-check{font-size:12px;color:var(--muted)}
+.as-check.ok{color:var(--go)}.as-check.bad{color:var(--danger)}
+.as-toggle{display:flex;gap:12px;align-items:flex-start;justify-content:space-between;cursor:pointer}
+.as-toggle small{display:block;margin-top:4px}
+@media(max-width:900px){.assistant-button span:last-child{display:none}}
+.as-effort button{padding:6px 10px}
+#asModel{flex:1;min-width:0}
+/* Responsive desk (2026-11-14). The page is one grid column; minmax(0,1fr) keeps it the window's width, so a bar that
+   cannot shrink no longer widens the whole desk past the window (the right edge was cut off on smaller screens).
+   Below, the top bar and GO bar drop labels in steps so every control stays reachable down to ~900 px and short
+   laptop screens. */
+body{grid-template-columns:minmax(0,1fr)}
+.topbar,.gobar,.top-actions{min-width:0}
+.topbar>*,.top-actions>*,.gobar>*{flex-shrink:0}
+.gobar .now-next{flex-shrink:1}
+@media(max-width:1380px){
+ .topbar{gap:14px;padding:0 14px}.top-actions{gap:8px}
+ #engineStatus{font-size:0;gap:0;padding:8px}#engineStatus i{margin:0}
+ .gobar{gap:12px;padding:10px 14px}
+}
+@media(max-width:1180px) and (min-width:901px){
+ .brand span{display:none}
+ .mode-switch{margin-left:0}.mode-switch button{padding:7px 12px}
+ .lock-pill span:not([data-icon]):not(.hold-fill),.blind-pill span:last-child{display:none}
+ .lock-pill,.blind-pill{padding:8px 10px}
+ .workspace,body[data-mode=build] .workspace,body[data-mode=library] .workspace{grid-template-columns:var(--rail-w,140px) minmax(0,1fr) var(--side-w,300px)}
+ .go-button{height:52px;padding:0 20px;font-size:20px}
+ .master{width:96px}
+ .gobar{gap:10px}
+}
+@media(max-width:1040px) and (min-width:901px){
+ .mode-switch button{font-size:0;gap:0;padding:8px 11px}.mode-switch button [data-icon]{font-size:15px}
+ .assistant-button span:last-child{display:none}.assistant-button{padding:8px 10px}
+ .agent-chip span:last-child{display:none}
+ .output-pill{padding:8px 11px}
+ .workspace,body[data-mode=build] .workspace,body[data-mode=library] .workspace{grid-template-columns:var(--rail-w,120px) minmax(0,1fr) var(--side-w,280px)}
+ .tap-button{min-width:0;padding:8px 10px}
+ .master{width:76px}.master output{display:none}
+}
+/* Short screens (13" laptops, scaled displays): slimmer top bar and GO bar so the stage keeps its room. */
+@media(max-height:760px) and (min-width:901px){
+ body{grid-template-rows:52px minmax(0,1fr) auto}
+ .brand img{width:26px;height:26px}
+ .gobar{padding-top:8px;padding-bottom:8px}
+ .go-button{height:48px}
+ .save-button,.release-button,.blackout{padding:9px 14px}
+}
+@media(max-width:1180px) and (min-width:901px){.rail-tabs button{padding:5px 8px;font-size:10px;letter-spacing:.4px}.rail-head{gap:4px}}
+/* UX cleanup (2026-11-14): right-click menus, page rename, narrow panels. */
+.ctx-colors{display:flex;flex-wrap:wrap;gap:7px;padding:6px 12px 8px}
+.ctx-colors .dot{width:20px;height:20px;cursor:pointer}
+.new-page-tile{justify-content:center;color:var(--muted);border:1px dashed var(--line2);font-weight:600;font-size:13px;gap:6px}
+.new-page-tile:hover{color:var(--text);background:var(--card)}
+.page-head.show h2{cursor:text;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* Build page header: name and delete on the first row, colours on their own row, so the name is never crushed. */
+.page-head:not(.show){flex-wrap:wrap;row-gap:6px}
+.page-head:not(.show) input{flex:1 1 120px}
+.page-head:not(.show) .page-colors{order:3;flex-basis:100%;padding-left:8px;flex-wrap:wrap}
+/* Quick levels wrap instead of running off the panel. */
+.quick-levels{flex-wrap:wrap}
+.quick-levels .pill{min-width:44px;padding-inline:6px}
+.output-hint{width:max-content}
+/* Narrow side panel: keep the cue name readable. Preview and edit move to the right-click menu (and a click on the row
+   opens the editor in Build), so only GO / pause / stop stay on the row. */
+.side-panel{container-type:inline-size;container-name:side}
+@container side (max-width:360px){
+ .row-actions .eye,.row-actions [data-edit-entry]{display:none}
+ body[data-mode=show] .cue-row,body[data-mode=build] .cue-row{padding-right:56px}
+ .cue-item.live .cue-row,.cue-item.paused .cue-row{padding-right:92px}
+ .cue-row{gap:9px;padding-left:10px}
+ .page-head.show h2{font-size:18px}
+}
+/* Narrow pages rail: the New page tile at the end of the list replaces the + in the header. */
+.pages-rail{container-type:inline-size;container-name:rail}
+@container rail (max-width:180px){
+ #newPage{display:none!important}
+ .rail-tabs{flex:1}.rail-tabs button{flex:1;padding-inline:4px}
+}
+.side-tabs button{white-space:nowrap;min-width:0}
+@container side (max-width:360px){.side-tabs{padding-inline:8px}.side-tabs button{padding:10px 9px;gap:6px;font-size:14px}}
+@container side (max-width:360px){.cue-state{display:none}.cue-item.live .cue-row,.cue-item.paused .cue-row{padding-right:84px}}

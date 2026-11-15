@@ -59,6 +59,8 @@ async function readBody(req){
 }
 // A file stream that fails part-way (file removed, disk error) ends that response, never the engine.
 const pipeFile=(stream,res)=>{stream.on('error',()=>res.destroy());stream.pipe(res)};
+// The built-in assistant runs its commands through the same queue as the desk, one at a time (docs/ASSISTANT.md).
+engine.assistant.exec=(name,args)=>execute(name,args,{lean:true});
 const json=(res,status,body)=>{res.writeHead(status,{'content-type':'application/json','cache-control':'no-store','x-content-type-options':'nosniff'});res.end(JSON.stringify(body))};
 const origins=new Set([`http://127.0.0.1:${port}`,`http://localhost:${port}`]);
 const types={'.html':'text/html','.js':'text/javascript','.mjs':'text/javascript','.css':'text/css','.png':'image/png','.woff2':'font/woff2','.svg':'image/svg+xml','.json':'application/json','.txt':'text/plain','.jpg':'image/jpeg','.jpeg':'image/jpeg','.webp':'image/webp','.gif':'image/gif','.mp4':'video/mp4','.m4v':'video/mp4','.webm':'video/webm','.mov':'video/quicktime'};
@@ -79,7 +81,8 @@ const server=http.createServer(async(req,res)=>{
   if(req.method==='POST'&&url.pathname==='/api/command'){
    if(req.headers['x-lights-token']!==token)return json(res,403,{error:'Missing session token'});
    const body=await readBody(req);let parsed;try{parsed=JSON.parse(body)}catch{return json(res,400,{error:'The request body is not valid JSON'})}
-   const {command,args={}}=parsed??{};return json(res,200,await execute(command,args));
+   const {command,args={}}=parsed??{};// assistant.* never waits in the command queue (a provider call can take seconds; the queue carries GOs).
+   return json(res,200,typeof command==='string'&&command.startsWith('assistant.')?await engine.command(command,args):await execute(command,args));
   }
   if(req.method==='POST'&&url.pathname==='/api/choose-folder'){
    // The Finder's folder picker for Save / Open show. Outside the command queue: it waits on the operator, never on the engine.

@@ -101,6 +101,7 @@ const P={
  checklist:'<path d="M9 6h11M9 12h11M9 18h11"/><path d="m3.5 6 1.5 1.5L7.5 5M3.5 12l1.5 1.5L7.5 11M3.5 18l1.5 1.5L7.5 17"/>',
  wave:'<path d="M3 12h2l2-6 3 12 3-9 2 5 2-2h4"/>',
  midi:'<circle cx="12" cy="12" r="9"/><circle cx="8" cy="10" r=".8"/><circle cx="16" cy="10" r=".8"/><circle cx="9.5" cy="14.5" r=".8"/><circle cx="14.5" cy="14.5" r=".8"/><circle cx="12" cy="16" r=".8"/>',
+ send:'<path d="M4 12l16-8-6 16-2.5-6.5z"/><path d="M11.5 13.5L20 4"/>',
  restore:'<path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v4h4"/><path d="M12 8v4l3 2"/>'
 };
 export function icon(name,cls=''){return `<svg class="i ${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${P[name]??P.spark}</svg>`}

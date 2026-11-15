@@ -14,6 +14,7 @@ import {Versions,LiveState,writeAtomic} from './safety.mjs';
 import {ShowFiles,showHash} from './show-files.mjs';
 import {render,compose,applyOverrides,finish,blend,blendState,encode,layerEffect,trackFixtures,codeEffect,baseState} from './render.mjs';
 import {Output,validateNetwork,checkConnection} from './output.mjs';
+import {Assistant} from './assistant.mjs';
 const copy=x=>structuredClone(x);
 // Show in Finder: select the file, or open the folder. Never waits on Finder.
 const reveal=(p,file)=>{if(process.platform!=='darwin')throw Error('Show in Finder works on macOS only: the file is at '+p);import('node:child_process').then(({spawn})=>spawn('open',file?['-R',p]:[p],{stdio:'ignore',detached:true}).unref())};
@@ -61,6 +62,8 @@ export class Engine{
   // Show files: savedRevision is the revision last saved to or opened from the current file; any other revision is unsaved.
   this.files=new ShowFiles(dataDir,showsDir);this.savedRevision=this.files.current?.hash===showHash(this.show)?this.revision:-1;const prev=this.live.read();this.locked=!!prev?.locked;
   this.resume=prev&&!prev.clean&&(prev.armed||prev.scene||prev.stack)?prev:null;if(this.resume)this.log('The engine restarted unexpectedly during a show: offering to resume.');
+  // The built-in assistant (docs/ASSISTANT.md). Its key lives in <data>/assistant.json, never in the show.
+  this.assistant=new Assistant({dir:dataDir,engine:this});
  }
  // A full or read-only disk must not stop a show edit from taking effect: the show in memory is the one playing. The
  // failure is logged once and shown in runtime.showFile.error until a save works again.
@@ -488,7 +491,7 @@ export class Engine{
  }
  // Agents count as connected while their MCP server keeps saying hello (every 10 s).
  connectedAgents(){const now=this.clock();for(const [k,a] of this.agents)if(now-a.lastSeen>30)this.agents.delete(k);return [...this.agents.values()].map(a=>({client:a.client,version:a.version,connectedFor:Math.round(now-a.connectedAt)}))}
- runtime(){return {agents:this.connectedAgents(),showFile:this.showFileStatus(),selection:copy(this.selection),lampCommands:Object.fromEntries([...this.lampCommands].map(([id,p])=>[id,{action:p.action,remaining:Math.max(0,p.until-this.clock())}])),revision:this.revision,running:this.runningStatus(),highlight:this.highlight,find:this.findStatus(),parked:(this.show.parked??[]).map(p=>p.id),kills:this.killStatus(),tempo:this.tempoStatus(),programmerUndo:{available:this.undo.filter(u=>u.blind===this.blind).length},showUndo:this.undoShow?.revision===this.revision?{label:this.undoShow.label}:null,effectErrors:effectErrors(),engineError:this.engineError&&Date.now()-Date.parse(this.engineError.at)<30000?this.engineError:null,locked:this.locked,resume:this.resumeStatus(),...(this.mods?.live()??{}),scene:this.scene?{id:this.scene.id,name:this.scene.name}:null,masters:this.mastersStatus(),playback:this.playback?{id:this.playback.cue.id,name:this.playback.cue.name,duration:this.playback.cue.duration,loop:this.playback.cue.loop,hold:!!this.playback.cue.hold,paused:this.playback.paused,elapsed:Math.min(this.elapsed()% (this.playback.cue.loop?this.playback.cue.duration:Infinity),this.playback.cue.duration)}:null,stack:this.stackStatus(),net:{in:this.net.count.in,out:this.net.count.out,rejected:this.net.count.rejected,listening:!!this.net.listener.listening,last:this.net.in[0]?.address??null},preview:this.previewStatus(),fx:this.fx.map(x=>this.fxSummary(x)),fxPreview:this.fxSummary(this.fxPreview),blind:{enabled:this.blind,fixtures:Object.keys(this.blindOverrides),overrides:this.blindOverrides,release:this.blindRelease?{fixtures:Object.keys(this.blindRelease.frames),progress:Math.min(1,(this.clock()-this.blindRelease.start)/Math.max(.001,this.blindRelease.duration))}:null},previewFrames:this.previewFrames,transition:this.transition?{from:this.transition.from.cue?.id??null,duration:this.transition.duration,progress:Math.min(1,(this.clock()-this.transition.start)/Math.max(.001,this.transition.duration))}:null,release:this.release?{fixtures:Object.keys(this.release.frames),progress:Math.min(1,(this.clock()-this.release.start)/Math.max(.001,this.release.duration))}:null,master:this.master,blackout:this.blackout,overrides:this.overrides,frames:this.frames,output:this.output.status(),tickCount:this.tickCount,slowFrames:this.dropped,logs:this.logs.slice(-15)}}
+ runtime(){return {agents:this.connectedAgents(),assistant:this.assistant.live(),showFile:this.showFileStatus(),selection:copy(this.selection),lampCommands:Object.fromEntries([...this.lampCommands].map(([id,p])=>[id,{action:p.action,remaining:Math.max(0,p.until-this.clock())}])),revision:this.revision,running:this.runningStatus(),highlight:this.highlight,find:this.findStatus(),parked:(this.show.parked??[]).map(p=>p.id),kills:this.killStatus(),tempo:this.tempoStatus(),programmerUndo:{available:this.undo.filter(u=>u.blind===this.blind).length},showUndo:this.undoShow?.revision===this.revision?{label:this.undoShow.label}:null,effectErrors:effectErrors(),engineError:this.engineError&&Date.now()-Date.parse(this.engineError.at)<30000?this.engineError:null,locked:this.locked,resume:this.resumeStatus(),...(this.mods?.live()??{}),scene:this.scene?{id:this.scene.id,name:this.scene.name}:null,masters:this.mastersStatus(),playback:this.playback?{id:this.playback.cue.id,name:this.playback.cue.name,duration:this.playback.cue.duration,loop:this.playback.cue.loop,hold:!!this.playback.cue.hold,paused:this.playback.paused,elapsed:Math.min(this.elapsed()% (this.playback.cue.loop?this.playback.cue.duration:Infinity),this.playback.cue.duration)}:null,stack:this.stackStatus(),net:{in:this.net.count.in,out:this.net.count.out,rejected:this.net.count.rejected,listening:!!this.net.listener.listening,last:this.net.in[0]?.address??null},preview:this.previewStatus(),fx:this.fx.map(x=>this.fxSummary(x)),fxPreview:this.fxSummary(this.fxPreview),blind:{enabled:this.blind,fixtures:Object.keys(this.blindOverrides),overrides:this.blindOverrides,release:this.blindRelease?{fixtures:Object.keys(this.blindRelease.frames),progress:Math.min(1,(this.clock()-this.blindRelease.start)/Math.max(.001,this.blindRelease.duration))}:null},previewFrames:this.previewFrames,transition:this.transition?{from:this.transition.from.cue?.id??null,duration:this.transition.duration,progress:Math.min(1,(this.clock()-this.transition.start)/Math.max(.001,this.transition.duration))}:null,release:this.release?{fixtures:Object.keys(this.release.frames),progress:Math.min(1,(this.clock()-this.release.start)/Math.max(.001,this.release.duration))}:null,master:this.master,blackout:this.blackout,overrides:this.overrides,frames:this.frames,output:this.output.status(),tickCount:this.tickCount,slowFrames:this.dropped,logs:this.logs.slice(-15)}}
  snapshot(){return {show:copy(this.show),runtime:this.runtime()}}
  // status {only, ids}: one part of the show or runtime at a time, so an agent never has to take the whole show to read a cue.
  status({only,ids}={}){
@@ -512,6 +515,36 @@ export class Engine{
    effects:{builtIn:Object.keys(EFFECT_PRESETS),custom:s.presets.map(p=>({id:p.id,name:p.name,effect:p.effect,layer:p.layer??EFFECTS[p.effect].layer,...(p.effect==='code'?{args:p.params.args??{}}:{})}))},
    palettes:s.palettes.map(p=>({id:p.id,name:p.name,color:p.color})),positions:s.points.map(p=>({id:p.id,name:p.name,fixtures:Object.keys(p.positions).length})),beamPresets:(s.beamPresets??[]).map(p=>({id:p.id,name:p.name,for:p.profiles})),
    next:'status {only:[part], ids?} reads one part in full (cues, groups, fixtures, frames, runtime...). schema {only:["effects","presets","code"]} lists effects and how to write a code effect. Build looks with fixture.set / palette.apply / fx.apply and save them with cue.record; check before going live with preview.cue or blind.set.'};
+ }
+ // A compact read of the whole show for planning (agents and the built-in assistant): far smaller than status.
+ showSummary(){
+  const s=this.show,idx=fixtureIndex(s),on=s.fixtures.filter(f=>f.enabled),count=list=>list.reduce((m,k)=>(m[k]=(m[k]??0)+1,m),{});
+  return {name:s.name,
+   fixtures:{total:s.fixtures.length,enabled:on.length,profiles:count(on.map(f=>f.profile)),movingProfiles:MOVING},
+   groups:s.groups.map(g=>({id:g.id,name:g.name,count:g.fixtures.length,profiles:[...new Set(g.fixtures.map(id=>idx.get(id)?.profile).filter(Boolean))]})),
+   zones:(s.zones??[]).map(z=>({id:z.id,name:z.name,role:z.role,groups:z.groups??[]})),
+   palettes:s.palettes.map(p=>({id:p.id,name:p.name,color:p.color})),
+   positions:(s.points??[]).map(p=>({id:p.id,name:p.name,fixtures:Object.keys(p.positions??{}).length})),
+   effects:Object.fromEntries(Object.entries(EFFECTS).map(([k,v])=>[k,{name:v.name,layer:v.layer??null,description:v.description}])),
+   presets:Object.entries(this.allPresets()).map(([id,p])=>({id,name:p.name,effect:p.effect,category:p.category,custom:p.custom})),
+   cues:s.cues.map(c=>({id:c.id,name:c.name,duration:c.duration,loop:c.loop,...(c.hold?{hold:true}:{}),...(c.bpm?{bpm:c.bpm}:{}),tracks:c.tracks.length,effects:[...new Set(c.tracks.map(t=>t.effect))],groups:[...new Set(c.tracks.map(t=>t.group).filter(Boolean))],look:c.look?.length??0})),
+   pages:s.pages.map(p=>({id:p.id,name:p.name,cues:p.cues.map(e=>({id:e.id,cue:e.cue,...(e.label?{label:e.label}:{}),fade:e.fade,follow:e.follow}))})),
+   scenes:(s.scenes??[]).map(x=>({id:x.id,name:x.name,fixtures:x.look.length})),
+   masters:{assigned:(s.masters?.slots??[]).map((m,i)=>({n:i+1,id:m.id,key:m.key??null,cue:m.cue??null,action:m.action,label:m.label??null})).filter(m=>m.cue),slots:s.masters?.slots?.length??0},
+   live:{armed:!!this.output.armed,master:this.master,blackout:this.blackout,blind:!!this.blind,highlight:this.highlight,locked:this.locked,scene:this.scene?{id:this.scene.id,name:this.scene.name}:null,running:this.runningStatus(),fx:this.fx.map(f=>this.fxSummary(f)),selection:{group:this.selection.group,count:this.selection.ids.length},tempo:this.tempo.bpm,lit:this.frames.filter(f=>f.intensity>.01).length}};
+ }
+ assistantCommand(name,args){
+  const a=this.assistant;
+  switch(name){
+   case 'assistant.status':return a.status();
+   case 'assistant.configure':{
+    if(args.instructions!==undefined){if(this.locked)throw Error('The performance lock is on: unlock it to change the show.');this.update(s=>{s.settings.assistant={...s.settings.assistant,instructions:args.instructions}})}
+    return a.configure(args);}
+   case 'assistant.models':return a.models(args.provider);
+   case 'assistant.send':return a.send(args.message);
+   case 'assistant.stop':return a.stop();
+   case 'assistant.clear':return a.clear();
+  }
  }
  showFileStatus(){const c=this.files.current;return {name:c?.name??null,savedAt:c?.at??null,dirty:this.revision!==this.savedRevision,...(this.saveError?{error:this.saveError}:{})}}
  // Opening and importing replace the whole show; this Mac's network settings stay and the old show is kept as a version.
@@ -611,6 +644,8 @@ export class Engine{
   // Sound trigger tuning (channel, band, sensitivity, hold, gap) is a live adjustment like a fader, so it stays open.
   const soundTuning=name==='masters.assign'&&Object.keys(args).every(k=>['slot','sound','clearSound'].includes(k));
   if(this.locked&&SHOW_EDITS.has(name)&&!soundTuning)throw Error('The performance lock is on: unlock it to change the show.');
+  if(name==='show.summary')return this.showSummary();
+  if(name.startsWith('assistant.'))return this.assistantCommand(name,args);
   if(name==='show.versions')return {versions:this.versions.list()};if(name==='show.files')return {folder:this.files.folder,current:this.showFileStatus(),files:this.files.list(args.query)};if(name==='show.check')return this.showCheck(args);if(name==='modules.status')return this.modulesStatus();if(name==='sound.inputs')return {inputs:this.show.audioInputs??[]};
   if(['sound.status','midi.status'].includes(name)){const m=this.mods?.[name.split('.')[0]];if(!m)throw Error(this.moduleOff(name.split('.')[0]));return m.status()}
   if(name==='agent.hello'){const known=this.agents.get(args.session);this.agents.set(args.session,{session:args.session,client:args.client,version:args.version??'',connectedAt:known?.connectedAt??this.clock(),lastSeen:this.clock()});if(!known)this.log(`Agent connected · ${args.client}${args.version?' '+args.version:''}`);return {ok:true}}
@@ -972,5 +1007,5 @@ export class Engine{
  }
  start(){this.live.write(this.liveSnapshot());this.syncModules().catch(e=>this.log('Modules: '+e.message));this.timer=setInterval(()=>this.safeTick(),1000/30)}
  // Stopping the engine blacks out the rig first, unless show.playback.holdOnStop is false: by default the last packets stand (docs/SHOW-SAFETY.md).
- async close(){clearInterval(this.timer);this.keepAwake(false);this.live.close(this.liveSnapshot());await this.mods?.close();this.mods=null;if(this.show.playback.holdOnStop!==false&&this.output.armed){this.log('Engine stopped · output left at the last look (keep the last look on stop)');this.output.close()}else await this.disarm();const audit=this.audit;this.audit=null;await new Promise(r=>audit?audit.end(r):r())}
+ async close(){clearInterval(this.timer);this.keepAwake(false);await this.assistant.close();this.live.close(this.liveSnapshot());await this.mods?.close();this.mods=null;if(this.show.playback.holdOnStop!==false&&this.output.armed){this.log('Engine stopped · output left at the last look (keep the last look on stop)');this.output.close()}else await this.disarm();const audit=this.audit;this.audit=null;await new Promise(r=>audit?audit.end(r):r())}
 }
