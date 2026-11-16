@@ -7,6 +7,7 @@ import {createLiveControl} from './live-controls.js';
 import {masterColor,padColor} from './pad-colors.js';
 import {uid} from './ids.js';
 import {mergeRuntime} from './stream.js';
+import {syncWall} from './wall-video.js';
 import {visibleFixtures,hiddenFixtureIds} from './visibility.js';
 import {icon,ICONS} from './icons.js?v=ui-2';
 import {goboIcon,goboName,GOBOS} from './gobos.js?v=ui-2';
@@ -1443,7 +1444,7 @@ function paint(r){
  // Chips show the blind buffer while blind (what the operator is editing), else the live frames.
  const chipFrames=new Map((r.blind?.enabled&&r.previewFrames?r.previewFrames:r.frames).map(f=>[f.id,f])),chipOverrides=progOverrides(r);
  for(const el of $$('[data-fixture]')){const f=chipFrames.get(el.dataset.fixture);if(!f)continue;const fx=fixture(f.id);paintDot(el,el.querySelector('i'),hexOf(outputRGB(fx?.profile,f.color,f.white,fx,f)),f.intensity,9,!!chipOverrides[f.id])}
- stage?.update(viewSource==='preview'&&r.previewFrames?r.previewFrames:r.frames);if(document.body.classList.contains('grid-view'))paintGroupGrid(viewSource==='preview'&&r.previewFrames?r.previewFrames:r.frames);
+ stage?.update(viewSource==='preview'&&r.previewFrames?r.previewFrames:r.frames,r.at);wallView=syncWall(wallView,stage,r,$('#viewport'),command);if(document.body.classList.contains('grid-view'))paintGroupGrid(viewSource==='preview'&&r.previewFrames?r.previewFrames:r.frames);
  $$('[data-preview-entry]').forEach(b=>b.classList.toggle('active',!!r.preview&&r.preview.page===p?.id&&r.preview.entry===b.dataset.previewEntry));
  const state=progFrames(r).find(f=>f.id===selected[0]);
  if(state)for(const el of $$('[data-attr]')){if(document.activeElement===el||performance.now()-(+el.dataset.editedAt||0)<180)continue;const k=el.dataset.attr,f=fixture(selected[0]),wheel=k.startsWith('colorWheel')&&f&&WHEEL.includes(f.profile)?fixtureWheel(f,state):null,v=progOverrides(r)[selected[0]]?.[k]??(k==='intensity'?(r.master?state.intensity/r.master:0):wheel?(k==='colorWheel'?wheel.value:wheel.secondary):state[k]);if(typeof v!=='number')continue;el.value=v*(['pan','tilt'].includes(k)?255:1);setText($(`[data-read="${k}"]`),attrRead(k,v))}
@@ -1452,7 +1453,7 @@ function paint(r){
  if(show&&r.revision!==rev)quiet(refresh());
 }
 
-let engineReady=false,pagesRunKey=null,undoKey=null;
+let engineReady=false,pagesRunKey=null,undoKey=null,wallView=null;
 function paintUndo(r){const label=r.showUndo?.label??'';if(label===undoKey)return;undoKey=label;const b=$('[data-menu=undo]');if(!b)return;const u=undoText(label);b.disabled=!u;setText($('#undoLabel'),u?u.menu:'Undo last show edit');b.title=u?(u.redo?`Puts back: ${u.words}.`:`Puts the show back as it was before: ${u.words}. Press again to redo.`):'Nothing to undo yet'}
 // runtime.effectErrors (a code effect failed; its fixtures keep the look underneath) and runtime.engineError (a frame could
 // not be built; the engine keeps the last good one): each new failure is toasted once as an error and lands in Messages.

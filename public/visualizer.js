@@ -2,10 +2,11 @@ import {Stage} from './stage.js?v=ui-2';
 import {icon} from './icons.js?v=ui-3';
 import {visibleFixtures} from './visibility.js';
 import {mergeRuntime} from './stream.js';
+import {syncWall} from './wall-video.js';
 // Pop-out visualizer: a second window (e.g. on another screen) with its own 3D stage, fed by the same
 // engine stream. It is a view only; selection goes through selection.set like the main window.
 const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
-let show,runtime,schema,token,stage,rev=0,selectionRevision=-1;
+let show,runtime,schema,token,stage,wall=null,rev=0,selectionRevision=-1;
 // 'live' | 'preview' as chosen in the main window; null until it tells us (or with no main window).
 let source=null;
 const opener=()=>{try{return window.opener&&!window.opener.closed?window.opener:null}catch{return null}};
@@ -22,7 +23,7 @@ async function refresh(){
  stage.setFixtures(visibleFixtures(show));stage.setLedWall(show.ledWall,mediaList().find(m=>m.id===show.ledWall?.media));selectionRevision=-1;paint(v.runtime);
 }
 function paint(r){
- runtime=r;const shown=frames(r),preview=shown!==r.frames;stage.update(shown);stage.setLedPlaying(!r.output.armed);
+ runtime=r;const shown=frames(r),preview=shown!==r.frames;stage.update(shown,r.at);stage.setLedPlaying(!r.output.armed);wall=syncWall(wall,stage,r,$('#viewport'),command);
  const label=preview?(r.blind?.enabled?'Blind':'Preview'):r.output.armed?'Live output':'Live · output off';
  if($('#visSource').textContent!==label)$('#visSource').textContent=label;
  document.body.classList.toggle('live',r.output.armed);document.body.classList.toggle('viewing-preview',preview);

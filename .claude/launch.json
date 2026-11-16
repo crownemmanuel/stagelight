@@ -49,6 +49,21 @@
         "server.mjs"
       ],
       "port": 1475
+    },
+    {
+      "name": "stagelight-wall",
+      "runtimeExecutable": "env",
+      "runtimeArgs": [
+        "LIGHTS_PORT=1486",
+        "LIGHTS_OSC_PORT=1487",
+        "LIGHTS_WALL_PORT=1488",
+        "LIGHTS_DATA_DIR=/private/tmp/claude-501/-Users-emmanuelcrown-Documents-Projects-stagelight--claude-worktrees-wall-video-receiver-1b5515/ead2f66a-0e98-43fd-ac86-0e2f8107b132/scratchpad/walldata",
+        "LIGHTS_SHOWS_DIR=/private/tmp/claude-501/-Users-emmanuelcrown-Documents-Projects-stagelight--claude-worktrees-wall-video-receiver-1b5515/ead2f66a-0e98-43fd-ac86-0e2f8107b132/scratchpad/wallshows",
+        "LIGHTS_IO_BIN=tests/fixtures/fake-io.mjs",
+        "node",
+        "server.mjs"
+      ],
+      "port": 1486
     }
   ]
 }

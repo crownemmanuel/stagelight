@@ -17,6 +17,9 @@ export const PROVIDERS={
 // schema is left out because it is very large (the tools are the commands, and the code-effect contract is in the system
 // prompt). status is allowed only one part at a time (only / ids): see run().
 export const HUMAN_ONLY=new Set(['agent.hello','output.arm','resume.apply','resume.dismiss','show.import','show.open','show.folder.set','show.restore','performance.lock','output.configure','network.configure','schema','modules.reload','show.reveal','show.autosave','controller.reset']);
+// Left out of the assistant's tools only (MCP agents keep them): the wall video link's calibration (docs/WALL-VIDEO.md)
+// is rehearsal plumbing, not show operation, and providers accept at most 128 tools. wall.video.status stays.
+const NOT_OFFERED=new Set(['wall.video.offset','wall.video.probe']);
 // The code-effect contract, from the same source the MCP schema serves (engine/code-effects.mjs CODE_DOC).
 const list=o=>Object.entries(o).map(([k,v])=>`  ${k}: ${v}`).join('\n');
 const CODE_HELP=`Code effects: any effect the built-in list lacks\n${CODE_DOC.summary}\nSignature: ${CODE_DOC.signature}\nInputs:\n${list(CODE_DOC.inputs)}\nReturns (any of):\n${list(CODE_DOC.returns)}\nHelpers in scope:\n${list(CODE_DOC.helpers)}\nRules:\n${CODE_DOC.rules.map(r=>'  - '+r).join('\n')}\nExamples:\n${CODE_DOC.examples.slice(0,4).map(x=>`  ${x.name} (args ${JSON.stringify(x.args)}):\n    ${x.code.replaceAll('\n','\n    ')}`).join('\n')}`;
@@ -64,7 +67,7 @@ function sanitize(schema){
  return out;
 }
 export function assistantTools(){
- return Object.keys(COMMANDS).filter(k=>!COMMANDS[k].internal&&!HUMAN_ONLY.has(k)&&!isAssistantCommand(k)).map(k=>({key:k,name:toolName(k),description:COMMANDS[k].description+(COMMANDS[k].live?' Changes the live rig when output is armed.':''),schema:sanitize(COMMANDS[k].schema)}));
+ return Object.keys(COMMANDS).filter(k=>!COMMANDS[k].internal&&!HUMAN_ONLY.has(k)&&!NOT_OFFERED.has(k)&&!isAssistantCommand(k)).map(k=>({key:k,name:toolName(k),description:COMMANDS[k].description+(COMMANDS[k].live?' Changes the live rig when output is armed.':''),schema:sanitize(COMMANDS[k].schema)}));
 }
 const clip=(s,n)=>s.length>n?s.slice(0,n)+'…':s;
 const short=v=>{try{return JSON.stringify(v)}catch{return String(v)}};

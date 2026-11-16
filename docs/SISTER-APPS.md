@@ -82,6 +82,10 @@ The overall look summary is the intensity-weighted color of every lit fixture (o
 ### Example: LiveStage video marker
 A time marker on a clip sends `/stagelight/go/cue "Act 1" 4` (or `/stagelight/trigger "lion.leap"`) to 127.0.0.1:1461 at the exact frame; StageLight GOes cue 4 and its auto-follow chain runs. With *announce* on a LiveStage target, LiveStage hears `/stagelight/cue/live …` back.
 
+## Wall video (LiveStage preview → visualizer)
+
+LiveStage can stream its **preview** picture to StageLight's virtual LED wall while the operator rehearses. It connects a WebSocket to `ws://<host>:1455/wall/in` (`LIGHTS_WALL_PORT`), sending JPEG frames stamped with its clock. The visualizer delays its lights by each frame's latency so cues land with their frame. It is rehearsal only, never drawn while output is armed, and costs nothing when unused. Protocol, calibration and the MCP tools (`lights_wall_video_status`, `_offset`, `_probe`) are in [WALL-VIDEO.md](WALL-VIDEO.md).
+
 ## Readback and testing
 
 `lights_network_status` (and the Recent messages list) shows the listener, the allowlist, every inbound message with sender, result and handling time in ms, and every outbound send. Measured on a MacBook (same machine, loopback): a GO sent over UDP is handled in ≈1 ms and its announcement arrives back in ≈2 ms median.

@@ -103,6 +103,11 @@ main{display:flex;flex-direction:column;min-width:0;min-height:0;position:relati
 .haze-control input{width:70px}
 .stage-bottom{position:absolute;inset:auto 12px 12px;display:flex;align-items:flex-end;gap:12px;z-index:5;pointer-events:none}
 .stage-bottom>*{pointer-events:auto}
+/* Wall video link readout (public/wall-video.js): small, under the top bar, only while LiveStage is connected. */
+.wall-readout{position:absolute;top:56px;left:50%;transform:translateX(-50%);z-index:5;display:flex;align-items:center;gap:10px;max-width:calc(100% - 24px);padding:4px 6px 4px 12px;border-radius:var(--pill);background:#0e1823c0;border:1px solid var(--line2);color:var(--muted);font-size:12px;font-weight:600;white-space:nowrap}
+.wall-readout.live{color:#c9dae8}.wall-readout .wall-text{overflow:hidden;text-overflow:ellipsis}
+.wall-readout label{display:flex;align-items:center;gap:4px;color:var(--muted)}.wall-readout input{width:54px;padding:2px 4px;font:inherit;border-radius:8px;background:#0b121b;border:1px solid var(--line);color:var(--text);text-align:right}
+.wall-readout[hidden]{display:none}
 .preview-label{background:#0e1823c0;color:#c9dae8;padding:5px 11px;border-radius:var(--pill);font-size:12px;font-weight:600}
 body.live .preview-label{background:var(--live);color:#fff}
 .stage-bottom .preview-label{flex:1 0 0;align-self:center;max-width:max-content}

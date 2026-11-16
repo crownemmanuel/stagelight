@@ -14,10 +14,11 @@ function diff(prev,next){
  return d;
 }
 // Every other top-level field goes only when it changed (gone: fields that disappeared, e.g. runtime.sound when the input
-// closes). tickCount rides along; output's packet counters change every frame while armed and never cause a message
+// closes). tickCount and at (the StageLight clock time, epoch ms, of the engine tick that computed the frames; the wall
+// video link delays lights by it, docs/WALL-VIDEO.md) ride along; output's packet counters change every frame while armed and never cause a message
 // by themselves (the old stream re-sent everything ten times a second during a show because of them).
 const steady=({packets,bytes,lastSent,...o})=>o;
-const keys=rest=>{const o={};for(const k in rest)if(k!=='tickCount')o[k]=JSON.stringify(k==='output'&&rest.output?steady(rest.output):rest[k]);return o};
+const keys=rest=>{const o={};for(const k in rest)if(k!=='tickCount'&&k!=='at')o[k]=JSON.stringify(k==='output'&&rest.output?steady(rest.output):rest[k]);return o};
 export class RuntimeStream{
  constructor(){this.last=null}
  // The message to broadcast for this runtime, or null when nothing worth sending changed.
@@ -26,7 +27,7 @@ export class RuntimeStream{
   if(!last)return {k:'full',...rest,frames:f,previewFrames:p};
   const fd=diff(last.f,f);if(!fd)return {k:'full',...rest,frames:f,previewFrames:p};
   const changed=Object.keys(ks).filter(k=>ks[k]!==last.ks[k]),gone=Object.keys(last.ks).filter(k=>!(k in ks));
-  const msg={k:'delta',tickCount:rest.tickCount,fd,...Object.fromEntries(changed.map(k=>[k,rest[k]])),...(gone.length?{gone}:{})},nf=Object.keys(fd).length;let pchanged=false;
+  const msg={k:'delta',tickCount:rest.tickCount,at:rest.at,fd,...Object.fromEntries(changed.map(k=>[k,rest[k]])),...(gone.length?{gone}:{})},nf=Object.keys(fd).length;let pchanged=false;
   if(!p){if(last.p){msg.previewFrames=null;pchanged=true}}
   else{const pd=diff(last.p,p);if(pd){if(Object.keys(pd).length){msg.pd=pd;pchanged=true}}else{msg.previewFrames=p;pchanged=true}}
   return nf||pchanged||changed.length||gone.length?msg:null;

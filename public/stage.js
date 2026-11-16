@@ -121,32 +121,46 @@ export class Stage{
  setFixtures(fixtures){
  const keep=new Set(fixtures.map(f=>f.id));for(const [id,n] of this.nodes){if(keep.has(id))continue;for(const obj of [n.root,...n.beams,n.spot]){this.scene.remove(obj);this.dispose(obj)}for(const slot of this.lights)if(slot.node===n)slot.node=null;this.nodes.delete(id)}this.targets=this.targets.filter(t=>keep.has(t.userData.id));
  this.fixtures=fixtures;for(const f of fixtures){const n=this.nodes.get(f.id);if(n){n.f=f;n.frame=null;n.lit=f.enabled&&!['reveE3','pendant4'].includes(f.profile);n.root.position.fromArray(f.position);const floor=isFloorMounted(f);n.housing.position.y=floor?-.56:0;n.head.position.y=floor?-.33:-.23;n.label.position.y=floor?.18:.32}else this.makeFixture(f)}this.dirty=true}
- update(frames){this.frames=frames;this.dirty=true}
+ // While the wall video link draws a stream (public/wall-video.js sets this.wall), engine frames go to its history and
+ // it sets this.frames itself, delayed to each video frame's stamp. Without a stream this is the whole path, as before.
+ update(frames,at){if(this.wall){this.wall.lights(frames,at);return}this.frames=frames;this.dirty=true}
  select(ids){this.selected=ids;for(const [id,n] of this.nodes){n.label.material.opacity=ids.includes(id)?1:.5;n.root.children[0].material.emissive.set(ids.includes(id)?(n.isMoving?0x996022:0x20384d):(n.isMoving?0x563000:0x000000))}this.dirty=true}
  // wall: show.ledWall; item: the media entry it names (or undefined for off).
  setLedWall(wall,item){
   if(!this.ledPlane)return;const plane=this.ledPlane,key=JSON.stringify([wall?.media,item?.src,wall?.fit]);
-  plane.material.color.setScalar(wall?.brightness??.85);this.dirty=true;if(key===this.ledKey)return;this.ledKey=key;
+  plane.material.color.setScalar(wall?.brightness??.85);this.streamPlane?.material.color.copy(plane.material.color);this.ledFit=wall?.fit;this.dirty=true;if(key===this.ledKey)return;this.ledKey=key;
   this.ledVideo?.pause();this.ledVideo?.removeAttribute('src');this.ledVideo=null;plane.material.map?.dispose();plane.material.map=null;plane.visible=false;
   if(!item||wall.media==='off'){this.screen.material.map=null;this.screen.material.color.set(0x070b10);this.screen.material.needsUpdate=true;return}
   this.screen.material.map=null;this.screen.material.color.set(0x000000);this.screen.material.needsUpdate=true;
   const place=(texture,w,h)=>{if(this.ledKey!==key){texture.dispose();return}texture.colorSpace=THREE.SRGBColorSpace;plane.material.map=texture;plane.material.needsUpdate=true;this.fitLed(texture,w,h,wall.fit);plane.visible=true;this.dirty=true};
-  if(item.kind==='video'){const v=document.createElement('video');Object.assign(v,{muted:true,loop:true,playsInline:true,preload:'auto',src:item.src});this.ledVideo=v;v.addEventListener('loadedmetadata',()=>place(new THREE.VideoTexture(v),v.videoWidth,v.videoHeight),{once:true});if(this.ledPlaying)v.play().catch(()=>{});return}
+  if(item.kind==='video'){const v=document.createElement('video');Object.assign(v,{muted:true,loop:true,playsInline:true,preload:'auto',src:item.src});this.ledVideo=v;v.addEventListener('loadedmetadata',()=>place(new THREE.VideoTexture(v),v.videoWidth,v.videoHeight),{once:true});if(this.ledPlaying&&!this.streaming)v.play().catch(()=>{});return}
   // Rasterize images (including SVG) through a canvas so every WebGL context accepts them.
   const img=new Image();img.onload=()=>{const w=img.naturalWidth||1600,h=img.naturalHeight||400,k=Math.min(1,4096/Math.max(w,h)),c=document.createElement('canvas');c.width=Math.round(w*k);c.height=Math.round(h*k);c.getContext('2d').drawImage(img,0,0,c.width,c.height);place(new THREE.CanvasTexture(c),w,h)};img.src=item.src;
  }
- fitLed(texture,w,h,fit='cover'){
-  const W=14.2,H=3.6,ar=w/h,wall=W/H;this.ledPlane.scale.set(W,H,1);texture.repeat.set(1,1);texture.offset.set(0,0);
-  if(fit==='contain'){if(ar>wall)this.ledPlane.scale.set(W,W/ar,1);else this.ledPlane.scale.set(H*ar,H,1)}
+ fitLed(texture,w,h,fit='cover',plane=this.ledPlane){
+  const W=14.2,H=3.6,ar=w/h,wall=W/H;plane.scale.set(W,H,1);texture.repeat.set(1,1);texture.offset.set(0,0);
+  if(fit==='contain'){if(ar>wall)plane.scale.set(W,W/ar,1);else plane.scale.set(H*ar,H,1)}
   else if(fit==='cover'){if(ar>wall){const r=wall/ar;texture.repeat.set(r,1);texture.offset.set((1-r)/2,0)}else{const r=ar/wall;texture.repeat.set(1,r);texture.offset.set(0,(1-r)/2)}}
  }
  // Video decoding is preview-only work; the UI pauses it while physical output is armed.
- setLedPlaying(on){this.ledPlaying=on;if(!this.ledVideo)return;if(on&&!this.paused)this.ledVideo.play().catch(()=>{});else this.ledVideo.pause()}
+ // Wall video link: a decoded stream frame replaces the LED wall picture (one reused canvas texture on its own plane just
+ // in front of the media plane). The chosen media is paused underneath and comes back with wallEnd().
+ wallFrame(bitmap,w,h){
+  if(!this.ledPlane){bitmap.close?.();return}let p=this.streamPlane;
+  if(!p){const c=document.createElement('canvas'),t=new THREE.CanvasTexture(c);t.colorSpace=THREE.SRGBColorSpace;t.generateMipmaps=false;t.minFilter=THREE.LinearFilter;
+   p=this.streamPlane=new THREE.Mesh(new THREE.PlaneGeometry(1,1),new THREE.MeshBasicMaterial({map:t,color:0xffffff,toneMapped:false,fog:false}));p.position.copy(this.ledPlane.position);p.position.z+=.004;p.material.color.copy(this.ledPlane.material.color);p.userData.ctx=c.getContext('2d');p.visible=false;this.scene.add(p)}
+  const t=p.material.map,c=t.image;
+  if(c.width!==w||c.height!==h||p.userData.fit!==this.ledFit){if(c.width!==w||c.height!==h){c.width=w;c.height=h;t.dispose()}p.userData.fit=this.ledFit;this.fitLed(t,w,h,this.ledFit,p)}
+  p.userData.ctx.drawImage(bitmap,0,0,w,h);bitmap.close?.();t.needsUpdate=true;
+  if(!this.streaming){this.streaming=true;p.visible=true;this.ledVideo?.pause()}this.dirty=true;
+ }
+ wallEnd(){if(!this.streaming)return;this.streaming=false;if(this.streamPlane)this.streamPlane.visible=false;if(this.ledVideo&&this.ledPlaying&&!this.paused)this.ledVideo.play().catch(()=>{});this.dirty=true}
+ setLedPlaying(on){this.ledPlaying=on;if(!this.ledVideo)return;if(on&&!this.paused&&!this.streaming)this.ledVideo.play().catch(()=>{});else this.ledVideo.pause()}
  setView(mode){this.mode=mode;document.querySelector('#stagePhoto').hidden=mode!=='reference';if(!this.camera)return;const poses={front:[0,7,21],orbit:[14,10,17],top:[0,24,.01]};if(poses[mode]){this.camera.position.set(...poses[mode]);this.controls.target.set(0,2.6,0);this.controls.update()}this.dirty=true}
  resize(){if(!this.renderer)return;const w=this.container.clientWidth,h=this.container.clientHeight;this.camera.aspect=w/h;this.camera.updateProjectionMatrix();this.renderer.setSize(w,h);this.dirty=true}
  // Paused = no animation frames at all (not just skipped draws), so a hidden visualizer costs nothing.
  setPaused(p){if(!this.renderer||this.paused===p)return;this.paused=p;
-  if(this.ledVideo){if(p)this.ledVideo.pause();else if(this.ledPlaying)this.ledVideo.play().catch(()=>{})}
+  if(this.ledVideo){if(p)this.ledVideo.pause();else if(this.ledPlaying&&!this.streaming)this.ledVideo.play().catch(()=>{})}
   if(p){cancelAnimationFrame(this.animation);this.animation=null}else{this.resize();this.last=performance.now();this.dirty=true;this.animate()}}
  // Render resolution follows measured frame time: down a step after ~2 s of long frames, back up after 8 s at 60 fps or
  // better. A step up that has to be undone within 10 s blocks further tries for a minute, so it cannot oscillate during a show.
@@ -173,7 +187,7 @@ export class Stage{
   for(const slot of this.lights){const n=slot.node,light=slot.light;if(!n){light.intensity=0;continue}
    const ramp=Math.min(1,(now-slot.since)/250);light.position.copy(n.lightOrigin);light.target.position.copy(n.lightOrigin).addScaledVector(n.lightDirection,10);light.color.copy(n.color);light.intensity=ramp*n.lightIntensity*(n.f.profile==='colorado'||n.f.profile==='q120'?5:4);light.angle=n.lightAngle}
  }
- animate(){if(this.paused){this.animation=null;return}this.animation=requestAnimationFrame(()=>this.animate());const now=performance.now(),rawDt=(now-this.last)/1000,dt=Math.min(.1,rawDt);this.last=now;const blend=1-Math.exp(-dt*14);
+ animate(){if(this.paused){this.animation=null;return}this.animation=requestAnimationFrame(()=>this.animate());const now=performance.now(),rawDt=(now-this.last)/1000,dt=Math.min(.1,rawDt);this.last=now;const blend=this.snap?1:1-Math.exp(-dt*14);if(this.wall)this.wall.present();
   let moving=false;const candidates=[];
   if(this.alignmentPreview!==this.lastAlignment||this.haze!==this.lastHaze){this.lastAlignment=this.alignmentPreview;this.lastHaze=this.haze;this.dirty=true}
   for(const s of this.frames??[]){const n=this.nodes.get(s.id);if(!n)continue;const cur=n.current;if(n.frame!==s)this.resolveFrame(n,s);

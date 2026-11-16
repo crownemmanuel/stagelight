@@ -14,6 +14,8 @@ import {validateShow} from './engine/spec.mjs';
 import {performance} from 'node:perf_hooks';
 import {RuntimeStream} from './engine/stream.mjs';
 import {watchDesk} from './engine/desk-build.mjs';
+import {WallLink} from './engine/wall.mjs';
+import {refuse} from './engine/ws.mjs';
 const root=path.dirname(fileURLToPath(import.meta.url));
 const port=Number(process.env.LIGHTS_PORT??1460);
 const dataDir=process.env.LIGHTS_DATA_DIR??path.join(root,'data');
@@ -180,15 +182,33 @@ engine.sendHook=async(target,packet)=>{
  let body=null;try{const t=await r.text();body=t&&t.length<200000?JSON.parse(t):null}catch{}
  if(!r.ok)throw Error('HTTP '+r.status+(typeof body?.summary==='string'?' · '+body.summary.slice(0,200):''));return body;
 };
-server.on('error',e=>{console.error(e.message);process.exitCode=1;try{osc?.close()}catch{}clearInterval(streamTimer);Promise.resolve().then(()=>engine.close()).catch(err=>console.error(err.message)).finally(()=>process.exit(1))});
-server.listen(port,'127.0.0.1',()=>{engine.start();console.log(`LIGHTS_READY http://127.0.0.1:${port} · preview only · data ${dataDir}`)});
+// Wall video link (docs/WALL-VIDEO.md): LiveStage's preview picture arrives on LIGHTS_WALL_PORT (default 1455, `off` to
+// disable) at /wall/in and is relayed to this desk's own windows on /api/wall (this server, 127.0.0.1 only). While a
+// window draws the stream, the delta runtime stream follows every engine tick (30 Hz) instead of 10 Hz, so the
+// windows can delay lights to each frame's stamp; the rest of the time nothing about the stream changes.
+const wallPort=process.env.LIGHTS_WALL_PORT??'1455';let wall=null;
+const pumpDelta=()=>{if(!deltaClients.size)return;const m=stream.next(engine.runtime());if(m)write(deltaClients,'data: '+JSON.stringify(m)+'\n\n')};
+if(wallPort!=='off'&&Number.isInteger(Number(wallPort))){
+ const lan=a=>{const cfg=engine.show.settings.osc??{},ip=a.replace(/^::ffff:/,'');return cfg.bind==='lan'&&!!(cfg.allow?.includes('*')||cfg.allow?.includes(ip))};
+ wall=new WallLink({port:Number(wallPort),version,dataDir,armed:()=>engine.output.armed,allowed:lan,log:m=>engine.log(m),onLive:on=>{engine.afterTick=on?pumpDelta:null},onSource:info=>{engine.wallSource=info}});engine.wall=wall;
+}
+server.on('upgrade',(req,socket,head)=>{
+ try{
+  if(![`localhost:${port}`,`127.0.0.1:${port}`].includes(req.headers.host))return refuse(socket,'403 Forbidden','Local host only');
+  if(req.headers.origin&&!origins.has(req.headers.origin))return refuse(socket,'403 Forbidden','Cross-origin request refused');
+  if(new URL(req.url,`http://127.0.0.1:${port}`).pathname!=='/api/wall'||!wall)return refuse(socket,'404 Not Found','Not found');
+  wall.view(req,socket,head);
+ }catch(e){report('Wall video view',e);try{socket.destroy()}catch{}}
+});
+server.on('error',e=>{console.error(e.message);process.exitCode=1;try{osc?.close()}catch{}try{wall?.close()}catch{}clearInterval(streamTimer);Promise.resolve().then(()=>engine.close()).catch(err=>console.error(err.message)).finally(()=>process.exit(1))});
+server.listen(port,'127.0.0.1',()=>{engine.start();wall?.listen().then(w=>{if(w.listening)console.log(`Wall video ingest ws://0.0.0.0:${w.port}/wall/in`)});console.log(`LIGHTS_READY http://127.0.0.1:${port} · preview only · data ${dataDir}`)});
 listenOSC(engine.show.settings.osc);
 // 10 Hz runtime stream. A settled look repeats the same payload, so unchanged frames are not re-sent: idle desks then parse and paint nothing.
 // The tick counter alone does not count as a change; it is read from the diagnostics dialog when something else moves.
 const write=(set,data)=>{for(const client of set){if(client.destroyed||client.writableLength>500000){client.end();set.delete(client)}else client.write(data)}};
 let lastStream='';const streamTimer=setInterval(()=>{try{if(!clients.size&&!deltaClients.size)return;const runtime=engine.runtime();
- if(deltaClients.size){const m=stream.next(runtime);if(m)write(deltaClients,'data: '+JSON.stringify(m)+'\n\n')}
- if(clients.size){const key=JSON.stringify(runtime,(k,v)=>k==='tickCount'?undefined:v);if(key!==lastStream){lastStream=key;write(clients,'data: '+JSON.stringify(runtime)+'\n\n')}}}catch(e){engine.log('Runtime stream: '+e.message)}},100);
+ if(deltaClients.size&&!engine.afterTick){const m=stream.next(runtime);if(m)write(deltaClients,'data: '+JSON.stringify(m)+'\n\n')}
+ if(clients.size){const key=JSON.stringify(runtime,(k,v)=>k==='tickCount'||k==='at'?undefined:v);if(key!==lastStream){lastStream=key;write(clients,'data: '+JSON.stringify(runtime)+'\n\n')}}}catch(e){engine.log('Runtime stream: '+e.message)}},100);
 let quitting=false;
-async function shutdown(){if(quitting)return;quitting=true;clearInterval(streamTimer);desk.stop();setTimeout(()=>process.exit(0),3000).unref();try{await engine.close()}catch(e){console.error('Shutdown: '+e.message)}for(const c of [...clients,...deltaClients])c.end();try{osc?.close()}catch{}server.close(()=>process.exit(0));setTimeout(()=>process.exit(0),2000).unref()}
+async function shutdown(){if(quitting)return;quitting=true;clearInterval(streamTimer);desk.stop();engine.afterTick=null;try{wall?.close()}catch{}setTimeout(()=>process.exit(0),3000).unref();try{await engine.close()}catch(e){console.error('Shutdown: '+e.message)}for(const c of [...clients,...deltaClients])c.end();try{osc?.close()}catch{}server.close(()=>process.exit(0));setTimeout(()=>process.exit(0),2000).unref()}
 process.on('SIGINT',shutdown);process.on('SIGTERM',shutdown);

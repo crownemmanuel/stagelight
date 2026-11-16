@@ -207,7 +207,7 @@ test('delta messages carry only changed runtime fields and drop the ones that di
  const {RuntimeStream}=await import('../engine/stream.mjs');const {mergeRuntime}=await import('../public/stream.js');const s=new RuntimeStream();
  const base={tickCount:1,master:1,sound:{input:-20},output:{armed:true,packets:1,lastSent:'a',interfaces:[]},frames:[{id:'1',intensity:0}],previewFrames:null};
  let desk=mergeRuntime(null,s.next(base));const m=s.next({...base,tickCount:2,master:.5,output:{...base.output,packets:2,lastSent:'b'}});
- assert.deepEqual(Object.keys(m).sort(),['fd','k','master','tickCount']);desk=mergeRuntime(desk,m);assert.equal(desk.master,.5);assert.deepEqual(desk.sound,{input:-20});
+ assert.deepEqual(Object.keys(m).sort(),['at','fd','k','master','tickCount']);desk=mergeRuntime(desk,m);assert.equal(desk.master,.5);assert.deepEqual(desk.sound,{input:-20});
  const {sound,...nosound}=base;desk=mergeRuntime(desk,s.next({...nosound,master:.5}));assert.equal('sound' in desk,false,'removed field is removed');
 });
 
