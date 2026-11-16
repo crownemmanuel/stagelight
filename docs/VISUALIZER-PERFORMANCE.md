@@ -76,6 +76,17 @@ and dimmer heads is dropped, which is not visible beside their beams.
   replaced. Strobe effects with a spatial axis cache their extent per profile instead of scanning the patch
   for every fixture.
 
+## Runtime stream deltas — 2026-11-01
+
+`/api/events` sent the whole runtime, about 40 kB of which 95% is frames, ten times a second. While output is armed the packet counter changes every frame, so it never settled during a show: 397 KB/s per desk on the 2026-11-01 show. The desk and the pop-out visualizer now use `/api/events?delta=1` (`engine/stream.mjs`).
+
+- **Frames.** Only the attributes that changed since the last message go out, rounded to 6 decimals.
+- **Other fields.** Other runtime fields go only when they change, and `gone` lists fields that disappeared. `tickCount` and the output packet counters ride along but never cause a message.
+- **Merging.** `public/stream.js` merges each message into the desk's runtime and keeps unchanged frame objects, so the stage skips re-resolving them.
+- **Late joiners.** Every desk gets the same messages; a desk that connects later starts from the last broadcast state as one full message.
+- **Result.** 22 KB/s with a chase running, and nothing while settled. `tests/perf.test.mjs` budgets the encode.
+- **Compatibility.** Plain `/api/events` still sends whole runtimes for other clients.
+
 ## Measuring
 
 In the desk, the quickest honest numbers come from a `requestAnimationFrame` loop timing frame gaps (a

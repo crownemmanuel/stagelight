@@ -22,6 +22,7 @@ Masters are square slots under the stage. Each holds one library cue and an acti
   | Release | stops the running cue (over the fade) | – |
 
   - A flash only lets go of a cue it started. A cue already running from the cue list is left alone.
+  - A flash over a cue that is already running bumps it to full and to the top while held (since 2026-11-01). This holds whoever started the cue: its own fader, another master holding the same cue, or the cue list. Let go and the cue goes back to that master's level. Before, a flash on a cue another master held did nothing at all.
   - A flash never retires the cues underneath it, even when it covers every one of their fixtures. When you let go, they show again.
 - **Firing.** Master keys work in Show, Build and Library, whether the pane is open or not. They are ignored while typing in a field or while a dialog is open.
   - Holding a key does not repeat.
@@ -59,7 +60,7 @@ A scene is a saved look that stays on underneath every cue, like a Hog scene. On
   - The active scene shows under Now in the GO bar, and Stop's tooltip says it fades back to it.
 - **Safety.**
   - The active scene is **not** restored when the app starts.
-  - Arming output with a scene active sends the scene straight away (changed 2026-10-31 at the operator's request: re-arming after a problem must not go dark). The arm dialog names the scene that will go out. Arming is still refused while a cue runs or overrides are set; the desk stops cues first.
+  - Arming output with a scene active sends the scene straight away (changed 2026-10-31 at the operator's request: re-arming after a problem must not go dark). The arm dialog names the scene that will go out. With a cue running or overrides set, arming needs `keepLook:true`, which sends that look as it is; the desk offers **Arm with this look** or **Stop everything, then arm** (2026-11-01).
   - Disarming blacks the rig out but keeps the scene: the preview shows it again, and re-arming sends it.
 
 Saved in the show as `show.scenes = [{id, name, color?, look:[{id, values}]}]`. The active scene is transient (`runtime.scene`).
@@ -107,3 +108,14 @@ Recording a new cue (Save → Save as new cue, Record look, `cue.record`, `look.
 ## Fader to zero releases — 2026-11-01
 
 Pulling a master's fader (or `masters.level`) to 0 releases the cue that master started, whether its key, pad or fader started it, like a Hog playback fader. A cue started some other way, such as a page GO, is never released by a fader. A toggle or go master pressed while its level is 0 comes up at full, so it never runs invisibly holding its lights at zero (operator report 2026-11-01: Energy chase on master 8 at fader 0 blacked out the Praise heads).
+
+## Masters that share a cue — 2026-11-01
+
+On 2026-11-01, *Back Light up* was on master 2 (kick), master 3 (lead, follow) and master 5 (tom). While the lead rode it at a low level, kicks showed nothing: a flash over another master's cue did nothing. Now a flash bumps the running cue to full while held (above). While one master holds a shared cue at **full**, though, a flash on another still cannot make it brighter.
+
+- **Warnings.** The master's ⚙ warns when its cue is also on other masters, and offers **Give it its own copy**. Library tiles show "N masters", and the cue sheet repeats the warning. The pre-show check lists shared cues.
+- **Agents.** `masters.status` (`lights_masters_status`) reads every slot (number, key, cue and name, action, sound trigger, level, held, running, `sharedWith`) and `shared`, the cues on several masters with a warning. `masters.own {slot, id?, name?}` (`lights_masters_own`) copies the slot's cue as `<cue>-<slot>`, named "<cue> · M<n>", and points the slot at it. It is a show edit, so the performance lock refuses it.
+
+## Intensity limits — 2026-11-01
+
+`limit.set {group, max}` (`lights_limit_set`, **Limit intensity…** in a group's right-click menu) caps a group's output at `max`. The cap applies after the grand master, park and kills, over every cue, scene, master, the programmer, Highlight and the preview. Blackout and kills still reach zero, and a fixture in several limited groups takes the lowest limit. Leave out `max` to remove it. Limits are saved as `show.limits` and listed in the pre-show check. The face lights (`face-lights`, and `face-unpatched` for 42–44) start at 12%, the operator's rule (docs/PRODUCTION-READINESS.md).

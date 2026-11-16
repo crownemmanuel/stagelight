@@ -17,8 +17,9 @@ export class ShowFiles{
   const cur=saved.current;
   this.folder=(typeof saved.folder==='string'&&saved.folder?saved.folder:null)??folder??(dataDir?defaultShowsFolder():null);
   this.current=cur&&typeof cur==='object'&&typeof cur.name==='string'&&SHOW_NAME.test(cur.name)?{name:cur.name,hash:typeof cur.hash==='string'?cur.hash:null,at:typeof cur.at==='string'?cur.at:null}:null;
+  this.autosave=saved.autosave!==false;
  }
- persist(){if(!this.file)return;writeAtomic(this.file,JSON.stringify({folder:this.folder,current:this.current},null,2))}
+ persist(){if(!this.file)return;writeAtomic(this.file,JSON.stringify({folder:this.folder,current:this.current,...(this.autosave?{}:{autosave:false})},null,2))}
  dir(){if(!this.folder)throw Error('No shows folder: set one with show.folder.set {path}.');return this.folder}
  name(raw){const n=String(raw??'').trim().replace(/\.json$/i,'');if(!SHOW_NAME.test(n))throw Error('Show names are 1–80 characters, without / \\ : * ? " < > | and not starting with a dot.');return n}
  pathOf(name){return path.join(this.dir(),this.name(name)+'.json')}

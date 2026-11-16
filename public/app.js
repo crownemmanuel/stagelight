@@ -6,6 +6,7 @@ import {mountJoystick} from './joystick.js';
 import {createLiveControl} from './live-controls.js';
 import {masterColor,padColor} from './pad-colors.js';
 import {uid} from './ids.js';
+import {mergeRuntime} from './stream.js';
 import {visibleFixtures,hiddenFixtureIds} from './visibility.js';
 import {icon,ICONS} from './icons.js?v=ui-2';
 import {goboIcon,goboName,GOBOS} from './gobos.js?v=ui-2';
@@ -20,7 +21,7 @@ const MOVERS=['rogue','mh7','beam200','beam7r'],WHEEL=['beam200','beam7r'];
 const PAGE_COLORS=['#8bc9d0','#eac28a','#c99ae8','#7fc79a','#ee8f8f','#7da6f0','#f0b46b','#d8d8d8'];
 // UI state. Engine state (show, runtime) is read back; nothing here is authoritative.
 // build: the engine's code fingerprint from /api/session; reconnecting to a different one reloads the desk.
-let show,runtime,schema,token,build,stage,toastTimer,rev=0;
+let show,runtime,schema,token,build,deskBuild,stage,toastTimer,rev=0;
 let mode=store.get('mode','show'),pageId=store.get('page',null),standby=null,selected=[],group=null;
 let railTab=store.get('railTab','pages'),pane=store.get('bottomPane',store.get('fixtureChips','shown')==='hidden'?'none':'fixtures'),sceneKey='';
 let fxMode=store.get('fxMode','preview'),ovTab='props',stageView=store.get('stageView','stage'),viewSource='live',selectionRevision=0,side='cues',progTab='look',editingEntry=null,ledOpen=false,positionMode='joystick',joystickSpeed=.1,destroyJoystick=null,aligning=null,liveKey='';
@@ -212,13 +213,13 @@ function drawSelectionBar(){
 function openGroupMenu(id,x,y){
  const g=show.groups.find(g=>g.id===id),sel=selected.length,item=(act,ic,label,dis=false,danger=false)=>`<button role="menuitem" data-ctx="${act}" ${dis?'disabled':''} class="${danger?'danger':''}"><span data-icon="${ic}"></span>${label}</button>`;
  const inGroup=g?selected.filter(x=>g.fixtures.includes(x)).length:0,finding=!!runtime?.find?.active&&selected.length>0,members={fixtures:finding?selected:idsForGroup(id)},pAll=parkedAll(members),pSome=parkedSome(members),findOn=runtime?.find?.active&&(runtime.find.group??'all')===id;
- $('#ctxMenu').innerHTML=`<div class="ctx-title">${esc(g?g.name:'All fixtures')}</div>`+(g?item('kill','close',runtime?.kills?.some(k=>k.group===id)?'Bring back (unkill)':'Kill · off over everything',false,!runtime?.kills?.some(k=>k.group===id))+'<hr>':'')+item('select','target','Select')+item('add-select','plus','Add to selection')+'<hr>'+item('find','search',findOn?'Stop finding':'Find · one at a time (← →)')+(finding?item('park','lock',`${pAll?'Unpark':'Park'} selected · ${selected.length===1?esc(selected[0]):selected.length+' fixtures'}`):item('park','lock',pAll?'Unpark':pSome?'Park all (some parked)':'Park · hold this look'))+(g?item('color','palette','Change color…'):'')+(g?item('copylook','copy',sel?`Copy look from selection · ${sel} → ${esc(g.name)}`:'Copy look from selection (select fixtures first)',!sel):'')+'<hr>'+
+ $('#ctxMenu').innerHTML=`<div class="ctx-title">${esc(g?g.name:'All fixtures')}</div>`+(g?item('kill','close',runtime?.kills?.some(k=>k.group===id)?'Bring back (unkill)':'Kill · off over everything',false,!runtime?.kills?.some(k=>k.group===id))+'<hr>':'')+item('select','target','Select')+item('add-select','plus','Add to selection')+'<hr>'+item('find','search',findOn?'Stop finding':'Find · one at a time (← →)')+(finding?item('park','lock',`${pAll?'Unpark':'Park'} selected · ${selected.length===1?esc(selected[0]):selected.length+' fixtures'}`):item('park','lock',pAll?'Unpark':pSome?'Park all (some parked)':'Park · hold this look'))+(g?item('color','palette','Change color…')+item('limit','sliders',limitOf(id)?`Intensity limit · ${Math.round(limitOf(id)*100)}%…`:'Limit intensity…'):'')+(g?item('copylook','copy',sel?`Copy look from selection · ${sel} → ${esc(g.name)}`:'Copy look from selection (select fixtures first)',!sel):'')+'<hr>'+
   (g?(g.children?item('open','chevron-right',openGroups.has(id)?'Close · hide its groups':`Open · its ${g.children.length} groups`):'')+item('nest','group',parentOf(id)?`Move to another group… (in ${esc(parentOf(id).name)})`:'Move into a group…')+(parentOf(id)?item('unnest','close',`Take out of ${esc(parentOf(id).name)}`):'')+item('parent','plus','New parent group with this…')+'<hr>'+
    (g.children?'':item('add','plus',`Add ${sel} selected to group`,!sel||inGroup===sel)+item('remove','close',`Remove ${inGroup} selected from group`,!inGroup||inGroup===g.fixtures.length))+item('replace','group',`Set group to the ${sel} selected`,!sel)+'<hr>'+item('rename','edit','Rename…')+item('edit','sliders','Edit fixtures…')+'<hr>'+item('delete','trash','Delete group',false,true)+item('purge','trash',`Remove its ${g.fixtures.length} fixtures from the show…`,false,true)
    :item('new','plus',`New group from ${sel} selected`,!sel));
  showCtxMenu(x,y);
  const run={open:()=>toggleOpen(id),nest:()=>nestDialog(g),unnest:()=>quiet(command('group.nest',{id})),parent:()=>newParentDialog(g),
-  find:()=>quiet(command(findOn?'find.stop':'find.start',findOn?{}:{group:id})),park:()=>{const who=finding?(selected.length===1?'fixture '+selected[0]:selected.length+' fixtures'):g?g.name:'all fixtures';quiet(command('park.set',finding?{ids:selected,parked:!pAll}:{group:id,parked:!pAll}).then(()=>toast(pAll?`Unparked ${who}.`:`Parked ${who}: it holds this look over every cue.`)))},color:()=>groupColor(g),copylook:()=>quiet(command('look.copy',{from:{ids:selected},to:{group:id}}).then(r=>{const n=x=>Array.isArray(x)?x.length:x??0,c=n(r.created?.copied),k=n(r.created?.skipped);toast(`Copied the look onto ${c} fixture${c===1?'':'s'} of ${g.name}${k?` · ${k} skipped (no matching parts)`:''}. It is in the programmer: Save or Clear.`)})),kill:()=>quiet(command('kill.set',{group:id}).then(r=>toast(r.created.killed?`${g.name} killed: off over every cue until you bring it back.`:`${g.name} is back.`))),
+  find:()=>quiet(command(findOn?'find.stop':'find.start',findOn?{}:{group:id})),park:()=>{const who=finding?(selected.length===1?'fixture '+selected[0]:selected.length+' fixtures'):g?g.name:'all fixtures';quiet(command('park.set',finding?{ids:selected,parked:!pAll}:{group:id,parked:!pAll}).then(()=>toast(pAll?`Unparked ${who}.`:`Parked ${who}: it holds this look over every cue.`)))},color:()=>groupColor(g),limit:()=>groupLimit(g),copylook:()=>quiet(command('look.copy',{from:{ids:selected},to:{group:id}}).then(r=>{const n=x=>Array.isArray(x)?x.length:x??0,c=n(r.created?.copied),k=n(r.created?.skipped);toast(`Copied the look onto ${c} fixture${c===1?'':'s'} of ${g.name}${k?` · ${k} skipped (no matching parts)`:''}. It is in the programmer: Save or Clear.`)})),kill:()=>quiet(command('kill.set',{group:id}).then(r=>toast(r.created.killed?`${g.name} killed: off over every cue until you bring it back.`:`${g.name} is back.`))),
   select:()=>selectGroup(id),'add-select':()=>{const ids=[...new Set([...selected,...idsForGroup(id)])];applySelection(ids);quiet(command('selection.set',{ids}))},
   add:()=>quiet(command('group.edit',{id,add:selected}).then(()=>toast(`Added to ${g.name}.`))),remove:()=>quiet(command('group.edit',{id,remove:selected.filter(x=>g.fixtures.includes(x))})),
   replace:()=>quiet(command('group.save',{id,name:g.name,fixtures:selected})),rename:()=>renameGroup(g),edit:()=>groupEditor(id),new:()=>groupEditor(null),
@@ -264,6 +265,13 @@ function bindGroupMenu(el,id){
 }
 // Group colour (group.edit color): tints the group's pill and card so it is easy to spot.
 const GROUP_COLORS=['#ff5d5d','#ff9f43','#ffd166','#7bd88f','#2ec4b6','#4cc9f0','#4361ee','#9b5de5','#f15bb5','#e9ecef'];
+// Intensity limit (limit.set): the most any fixture of the group may output, after the grand master, over everything.
+const limitOf=id=>(show.limits??[]).find(l=>l.group===id)?.max;
+function groupLimit(g){
+ const cur=limitOf(g.id);dialog(`Intensity limit · ${esc(g.name)}`,`<p class="hint">Its fixtures never go above this, whatever a cue, scene, master, Highlight or manual change asks for. Blackout and kills still go to zero. Saved in the show.</p><label class="mini"><span>At most · %</span><input id="limitPct" type="number" min="0" max="100" step="1" value="${cur===undefined?100:Math.round(cur*100)}"></label><div class="dialog-actions">${cur!==undefined?'<button class="ghost-button" id="limitOff">Remove the limit</button>':''}<button class="primary" id="limitSave">Save limit</button></div>`);
+ const set=async max=>{await command('limit.set',max>=1?{group:g.id}:{group:g.id,max});$('#dialog').close();toast(max>=1?`${g.name}: no limit.`:`${g.name}: at most ${Math.round(max*100)}%.`)};
+ $('#limitSave').onclick=()=>{const v=+$('#limitPct').value;if(!Number.isFinite(v)||v<0||v>100)return toast('Use 0 to 100%.');set(Math.round(v)/100)};if($('#limitOff'))$('#limitOff').onclick=()=>set(1);
+}
 function groupColor(g){
  dialog(`Color · ${esc(g.name)}`,`<div class="group-swatches">${GROUP_COLORS.map(c=>`<button class="group-swatch ${g.color===c?'active':''}" data-gcolor="${c}" style="--g:${c}" title="${c}" aria-label="${c}"></button>`).join('')}<label class="group-swatch custom" title="Any colour"><input type="color" id="gcolorPick" value="${esc(g.color??'#4cc9f0')}"></label></div><button class="ghost-button small" data-gcolor="">No color</button>`);
  const set=async c=>{await command('group.edit',{id:g.id,color:c});$('#dialog').close()};
@@ -445,14 +453,21 @@ function bindCueList(){
  if($('#sendTarget'))$('#sendTarget').onchange=()=>{if($('#sendMessage').value==='preset')askPresets()};
  if($('#sendPresetRefresh'))$('#sendPresetRefresh').onclick=askPresets;
 }
-async function go(entry){
+// Blind means nothing reaches the stage: GO (and Space) previews the next entry (preview.cue) instead of playing it, and
+// the GO button says PREVIEW. Send to live in the banner, or Shift+Space, plays it (operator report 2026-11-01: GO in
+// Blind went live). Masters, sound triggers and OSC/MCP page.go stay live.
+async function go(entry,live=false){
  const p=page();if(!p)return toast('Choose a page first.');
+ if(runtime?.blind?.enabled&&!live){const pv=runtime.preview,from=pv?.page===p.id?p.cues.findIndex(e=>e.id===pv.entry):-1,at=runtime.stack?.page===p.id?runtime.stack.index:-1,id=entry??p.cues[Math.max(from,at)+1]?.id;
+  if(!id)return toast('End of the cue list.');await previewCue({page:p.id,entry:id});standby=p.cues[p.cues.findIndex(e=>e.id===id)+1]?.id??null;paint(runtime);return}
  try{cancelAlignment();ensureStageView();await command('page.go',{id:p.id,...(entry?{entry}:{}),requestId:uid('ui')});standby=null;paint(runtime)}catch{}
 }
 // Preview playback lives in the engine (preview.cue); the stage just chooses which frames to draw.
 async function previewCue(args){try{ensureStageView();await command('preview.cue',args);viewSource='preview';paint(runtime)}catch{}}
 async function stopPreview(){viewSource='live';try{await command('preview.stop')}catch{}paint(runtime)}
 async function sendPreviewLive(){try{await command('preview.go_live',{requestId:uid('ui')});viewSource='live';standby=null;paint(runtime)}catch{}}
+// Shift+Space in Blind: what is previewed goes live, else the next entry plays live.
+function goLive(){if(runtime?.preview?.saved)sendPreviewLive();else go(standby,true)}
 // One banner for both: Preview (amber) shows a cue that is not live; Blind (violet) shows edits that are not live.
 function drawPreviewBanner(r){
  const banner=$('#previewBanner'),p=r.preview,b=r.blind?.enabled,changed=r.blind?.fixtures.length??0,fxp=r.fxPreview;
@@ -466,7 +481,7 @@ function drawPreviewBanner(r){
  document.body.classList.toggle('viewing-preview',!!(p||b)&&viewSource==='preview');document.body.classList.toggle('blind',!!b);banner.hidden=!(p||b);if(!(p||b))return;
  const name=p?(p.page?entryName(show.pages.find(x=>x.id===p.page)?.cues.find(e=>e.id===p.entry))??p.name:p.name):'Over the live look';
  const key=[p?.id,p?.entry,p?.saved,b,changed>0,viewSource].join('|');if(banner.dataset.key!==key){banner.dataset.key=key;
-  banner.innerHTML=`<span class="pv-tag ${b?'blind':''}">${icon(b?'blind':'eye')}${b?'Blind':'Preview'}</span><span class="pv-name"><strong>${esc(name)}</strong><small id="pvMeta"></small></span><div class="segmented small"><button data-source="live" class="${viewSource==='live'?'active':''}">Live</button><button data-source="preview" class="${viewSource==='preview'?'active':''}">${b?'Blind':'Preview'}</button></div>${b&&page()?`<button class="chip-button" id="pvRecord" title="Record the blind look into ${esc(page().name)}">${icon('record')}Record</button>`:''}${b?`<button class="chip-button go" id="pvApply" ${changed?'':'disabled'} title="Fade the blind changes onto the live lights">${icon('go')}Apply live</button>`:p?.saved?`<button class="chip-button go" id="pvLive">${icon('go')}Send to live</button>`:''}<button class="round-button small" id="pvClose" aria-label="${b?'Leave blind':'Stop preview'}" title="${b?'Leave blind (changes are kept)':'Stop preview'}">${icon('close')}</button>`;
+  banner.innerHTML=`<span class="pv-tag ${b?'blind':''}">${icon(b?'blind':'eye')}${b?'Blind':'Preview'}</span><span class="pv-name"><strong>${esc(name)}</strong><small id="pvMeta"></small></span><div class="segmented small"><button data-source="live" class="${viewSource==='live'?'active':''}">Live</button><button data-source="preview" class="${viewSource==='preview'?'active':''}">${b?'Blind':'Preview'}</button></div>${b&&page()?`<button class="chip-button" id="pvRecord" title="Record the blind look into ${esc(page().name)}">${icon('record')}Record</button>`:''}${b&&p?.saved?`<button class="chip-button go" id="pvLive" title="Play the previewed cue live (Shift+Space)">${icon('go')}Send to live</button>`:''}${b?`<button class="chip-button go" id="pvApply" ${changed?'':'disabled'} title="Fade the blind changes onto the live lights">${icon('go')}Apply live</button>`:p?.saved?`<button class="chip-button go" id="pvLive">${icon('go')}Send to live</button>`:''}<button class="round-button small" id="pvClose" aria-label="${b?'Leave blind':'Stop preview'}" title="${b?'Leave blind (changes are kept)':'Stop preview'}">${icon('close')}</button>`;
   $$('[data-source]').forEach(x=>x.onclick=()=>{viewSource=x.dataset.source;paint(runtime)});
   if($('#pvLive'))$('#pvLive').onclick=sendPreviewLive;if($('#pvRecord'))$('#pvRecord').onclick=recordDialog;
   if($('#pvApply'))$('#pvApply').onclick=()=>quiet(command('blind.apply',{}).then(()=>toast(show.playback.blindFade?`Blind changes fading onto the live lights over ${show.playback.blindFade} s.`:'Blind changes are live.')));
@@ -770,7 +785,7 @@ function drawLibraryGrid(){
  const keep=c=>({unused:()=>!pagesOf(c.id).length&&!mastersOf(c.id).length&&!triggersOf(c.id).length,masters:()=>mastersOf(c.id).length>0,page:()=>!!p?.cues.some(e=>e.cue===c.id),effects:()=>c.tracks.length>0,looks:()=>!c.tracks.length}[libFilter]??(()=>true))();
  const list=show.cues.filter(c=>(!q||c.name.toLowerCase().includes(q)||(c.description??'').toLowerCase().includes(q))&&keep(c));setText($('#libCount'),list.length===show.cues.length?`${list.length} cues`:`${list.length} of ${show.cues.length}`);
  el.innerHTML=list.map(c=>{const pgs=pagesOf(c.id),ms=mastersOf(c.id),tr=triggersOf(c.id);
-  return `<div class="lib-tile ${c.id===libCue?'selected':''}" data-lib-cue="${esc(c.id)}" tabindex="0" title="${esc(c.description??c.name)}"><div class="lt-top"><span class="pill-icon" data-icon="${c.tracks.length?'spark':'palette'}"></span><b class="live-dot" title="Running"></b><button class="round-button small eye" data-lib-preview="${esc(c.id)}" title="Preview on the stage (not live)" aria-label="Preview ${esc(c.name)}" data-icon="eye"></button></div><strong>${esc(c.name)}</strong><small>${cueKind(c)} · ${format(c.duration)} · ${c.loop?'loop':c.hold?'hold':'once'}</small><span class="lib-tags">${ms.map(m=>`<span class="tag key" title="Master ${slotIndex(m.id)+1} · ${ACTIONS[m.action][1]}">${m.key?esc(keyLabel(m.key)):'M'+(slotIndex(m.id)+1)}</span>`).join('')}${pgs.map(pg=>`<span class="tag" style="--page:${esc(pg.color??'#8bc9d0')}" title="On ${esc(pg.name)}">${esc(pg.name)}</span>`).join('')}${tr.length?`<span class="tag" title="Named triggers">${tr.length} trigger${tr.length===1?'':'s'}</span>`:''}${pgs.length||ms.length||tr.length?'':'<span class="tag muted">unused</span>'}</span></div>`}).join('')
+  return `<div class="lib-tile ${c.id===libCue?'selected':''}" data-lib-cue="${esc(c.id)}" tabindex="0" title="${esc(c.description??c.name)}"><div class="lt-top"><span class="pill-icon" data-icon="${c.tracks.length?'spark':'palette'}"></span><b class="live-dot" title="Running"></b><button class="round-button small eye" data-lib-preview="${esc(c.id)}" title="Preview on the stage (not live)" aria-label="Preview ${esc(c.name)}" data-icon="eye"></button></div><strong>${esc(c.name)}</strong><small>${cueKind(c)} · ${format(c.duration)} · ${c.loop?'loop':c.hold?'hold':'once'}</small><span class="lib-tags">${ms.map(m=>`<span class="tag key" title="Master ${slotIndex(m.id)+1} · ${ACTIONS[m.action][1]}">${m.key?esc(keyLabel(m.key)):'M'+(slotIndex(m.id)+1)}</span>`).join('')}${pgs.map(pg=>`<span class="tag" style="--page:${esc(pg.color??'#8bc9d0')}" title="On ${esc(pg.name)}">${esc(pg.name)}</span>`).join('')}${tr.length?`<span class="tag" title="Named triggers">${tr.length} trigger${tr.length===1?'':'s'}</span>`:''}${ms.length>1?`<span class="tag warn" title="On ${ms.length} masters: while one holds it up at full, the others' flashes show no change. Open a master's ⚙ to give it its own copy.">${icon('warning')}${ms.length} masters</span>`:''}${pgs.length||ms.length||tr.length?'':'<span class="tag muted">unused</span>'}</span></div>`}).join('')
   ||`<div class="panel-empty small"><p>${show.cues.length?'No cue matches.':'No cues yet. Record a look or make an effect cue.'}</p></div>`;
  fillIcons(el);libKey='';if(runtime)paintLibrary(runtime);
  $$('[data-lib-cue]').forEach(t=>{t.onclick=e=>{if(e.target.closest('button'))return;libCue=t.dataset.libCue;$$('[data-lib-cue]').forEach(x=>x.classList.toggle('selected',x===t));drawSide()};t.onkeydown=e=>{if(e.key==='Enter')t.click()};
@@ -809,6 +824,7 @@ function cueSheet(){
  return `<div class="cue-sheet"><div class="sheet-head"><span class="pill-icon" data-icon="${c.tracks.length?'spark':'palette'}"></span><div><input id="sheetName" value="${esc(c.name)}" aria-label="Cue name" maxlength="100"><small>${cueKind(c)} · ${fx.size} fixtures${running?' · <b class="go-text">running</b>':''}</small></div></div>
   <div class="sheet-actions"><button class="chip-button" id="sheetPreview"><span data-icon="eye"></span>Preview</button><button class="chip-button" id="sheetMaster"><span data-icon="masters"></span>Put on a master</button><button class="chip-button" id="sheetAdd" ${page()?'':'disabled'}><span data-icon="plus"></span>Add to ${esc(page()?.name??'page')}</button><button class="chip-button danger" id="sheetDelete"><span data-icon="trash"></span>Delete</button></div>
   <div class="sheet-body">${sec('How it plays',`<dl class="sheet-dl"><dt>Length</dt><dd>${format(c.duration)} (${+c.duration.toFixed(2)} s)</dd><dt>At the end</dt><dd>${cueEnds(c)}</dd><dt>Fixtures</dt><dd>${fx.size}${look.length?` · ${lit} lit in its look`:''}</dd>${c.description?`<dt>Notes</dt><dd>${esc(c.description)}</dd>`:''}</dl><p class="hint">Fade and follow are set where the cue is used: per page entry (fade, auto-follow, sends) and per master (action and fade).</p>`)}
+  ${ms.length>1?`<p class="warning">${icon('warning')}<span>On masters ${ms.map(m=>slotIndex(m.id)+1).join(', ')}: while one of them holds this cue up at full, the others' flashes show no change. Open a master's ⚙ and choose <b>Give it its own copy</b>.</span></p>`:''}
   ${sec('Fired by',used?`<ul class="sheet-list">${used}</ul>`:'<p class="hint">Nothing fires this cue yet. Add it to a page, put it on a master, or name a trigger for it in Network &amp; triggers.</p>',pgs.length+ms.length+tr.length)}
   ${sec('Remote control',`<ul class="sheet-list"><li><span class="tag">OSC</span><span><code>/stagelight/play ${esc(c.id)}</code></span><small>Plays it outside any page, from LiveStage or another app (port ${show.settings.osc?.port??1461}).</small></li><li><span class="tag">MCP</span><span><code>lights_cue_play {id:"${esc(c.id)}"}</code></span><small>Cue ID for agents and triggers.</small></li></ul>`)}
   ${c.tracks.length?sec('Effects',`<ul class="sheet-list">${tracks}</ul>`,c.tracks.length):''}
@@ -907,10 +923,13 @@ function learnKey(e){
  drawMasters();
 }
 function resolveConflict(how){const c=conflict;conflict=null;if(c&&how!=='cancel')quiet(command('masters.key',{slot:c.slot,key:c.key,conflict:how}));drawMasters()}
+// Other masters that hold the same cue (masters.status sharedWith).
+const sharedWith=m=>m?.cue?slots().filter(x=>x.id!==m.id&&x.cue===m.cue):[];
 function openMasterPop(id,anchor){
  const m=slotOf(id),cue=slotCue(m),pop=$('#masterPop');if(!m)return;learning=null;
  pop.innerHTML=`<div class="mp-head"><strong>Master ${slotIndex(id)+1}</strong><button class="m-key ${m.key?'':'none'}" id="mpKey" title="Click, then press a key">${m.key?esc(keyLabel(m.key)):'+ key'}</button><button class="round-button small" id="mpClose" aria-label="Close" data-icon="close"></button></div>
   <label class="field-label">Cue</label><button class="chip-button wide mp-cue" id="mpCue"><span data-icon="${cue?.tracks?.length?'spark':'palette'}"></span><span>${cue?esc(cue.name):'Choose a cue…'}</span>${cue?'<small>Change</small>':''}</button>
+  ${cue&&sharedWith(m).length?`<p class="warning mp-shared">${icon('warning')}<span>${esc(cue.name)} is also on master${sharedWith(m).length>1?'s':''} ${sharedWith(m).map(x=>slotIndex(x.id)+1).join(', ')}. While one of them holds it up at full, this master's flash shows no change. <button class="chip-button small" id="mpOwn">Give it its own copy</button></span></p>`:''}
   <label class="field-label">When the key is pressed</label><div class="segmented mp-actions">${Object.entries(ACTIONS).map(([a,[ic,label,hint]])=>`<button data-mp-action="${a}" class="${m.action===a?'active':''}" title="${esc(hint)}"><span data-icon="${ic}"></span>${label}</button>`).join('')}</div><p class="hint" id="mpHint">${ACTIONS[m.action][2]}</p>
   <div class="mp-row"><label class="mini"><span>Fade · s</span><input id="mpFade" type="number" min="0" max="60" step=".5" value="${m.fade??0}"></label><label class="mini"><span>Label</span><input id="mpLabel" type="text" maxlength="40" value="${esc(m.label??'')}" placeholder="${esc(cue?.name??'Cue name')}"></label></div>
   <div class="mp-row"><label class="mini"><span>Pad colour</span><input id="mpColor" type="color" value="${esc(masterColor(show,m))}"></label><label class="mini"><span>MIDI note out (ProPresenter)</span><input id="mpNote" type="number" min="0" max="127" placeholder="none" value="${m.midi?.note??''}"></label></div>
@@ -922,6 +941,8 @@ function openMasterPop(id,anchor){
  pop.hidden=false;fillIcons(pop);
  const place=()=>{const r=anchor.getBoundingClientRect(),pr=pop.getBoundingClientRect();pop.style.left=Math.max(8,Math.min(r.left,innerWidth-pr.width-8))+'px';pop.style.top=Math.max(8,Math.min(r.top-pr.height-10,innerHeight-pr.height-8))+'px'};place();popPlace=place;
  if(!popObserver){popObserver=new ResizeObserver(()=>{if(!pop.hidden)popPlace?.()});popObserver.observe(pop)}
+ // masters.own copies the shared cue for this master, so its flashes and fader never meet the other masters' (2026-11-01).
+ if($('#mpOwn'))$('#mpOwn').onclick=()=>quiet(command('masters.own',{slot:id}).then(r=>{toast(`Master ${slotIndex(id)+1} now has its own copy: ${show.cues.find(c=>c.id===r.created.cue)?.name??r.created.cue}.`);openMasterPop(id,anchor)}));
  $('#mpClose').onclick=closeMasterPop;$('#mpKey').onclick=()=>startLearning(id);$('#mpCue').onclick=()=>{closeMasterPop();cuePicker(id)};
  $$('[data-mp-action]').forEach(b=>b.onclick=()=>{$$('[data-mp-action]').forEach(x=>x.classList.toggle('active',x===b));setText($('#mpHint'),ACTIONS[b.dataset.mpAction][2]);quiet(command('masters.assign',{slot:id,action:b.dataset.mpAction}))});
  $('#mpFade').onchange=e=>quiet(command('masters.assign',{slot:id,fade:Math.max(0,Math.min(60,+e.target.value||0))}));
@@ -1131,9 +1152,11 @@ function paintScene(r){
 let tempoKey='';
 function paintTempo(r){
  const t=r.tempo??{},bpm=t.bpm??t.cue;setText($('#bpmValue'),bpm?String(Math.round(bpm*10)/10):'—');setText($('#bpmSource'),t.bpm?(t.source==='tap'?'TAP':'BPM'):t.cue?'CUE':'BPM');
- $('#tempo').classList.toggle('live',!!t.bpm);$('[data-tempo="reset"]').disabled=!t.bpm;const tapTitle=(t.bpm?`Live tempo ${t.bpm} BPM${t.cue?` (cue ${t.cue})`:''}: tap on the beat (T)`:t.cue?`The cue's own tempo, ${t.cue} BPM: tap on the beat (T) to follow the band`:'Tap tempo (T): tap on the beat')+' · right-click: half, double, reset';if($('#tapButton').title!==tapTitle)$('#tapButton').title=tapTitle;
- const key=bpm+'|'+(t.anchorAgo===null?'':Math.round((Date.now()-t.anchorAgo*1000)/250));if(key===tempoKey)return;tempoKey=key;
- const dot=$('#tapButton .beat-dot');dot.style.animation='none';if(!bpm)return;void dot.offsetWidth;const p=60/bpm;dot.style.animation=`beat ${p}s linear ${-((t.anchorAgo??0)%p)}s infinite`;
+ $('#tempo').classList.toggle('live',!!t.bpm);$('[data-tempo="reset"]').disabled=!t.bpm;$('#tapButton').title=t.bpm?`Live tempo ${t.bpm} BPM${t.cue?` (cue ${t.cue})`:''}: tap on the beat (T). Shift+T or ↺ goes back to the cue's own tempo.`:t.cue?`The cue's own tempo, ${t.cue} BPM: tap on the beat (T) to follow the band`:'Tap tempo (T): tap on the beat';
+ // A live tempo far from the cue's own (a stray tap: 58 BPM on 2026-11-01) shows amber with the speed it plays the cues at.
+ $('#tempo').classList.toggle('far',!!t.far);if(t.far){setText($('#bpmSource'),`×${t.ratio}`);$('#tapButton').title=`Live tempo ${t.bpm} BPM against the cue's ${t.cue??'own'} BPM: cues play at ×${t.ratio}. Shift+T or ↺ goes back to the cue's own tempo.`}
+ const key=bpm+'|'+(t.anchorAt??'');if(key===tempoKey)return;tempoKey=key;
+ const dot=$('#tapButton .beat-dot');dot.style.animation='none';if(!bpm)return;void dot.offsetWidth;const p=60/bpm;dot.style.animation=`beat ${p}s linear ${-(((Date.now()-(t.anchorAt??Date.now()))/1000)%p)}s infinite`;
 }
 // Sound hits blink their master (runtime.sound.hits), so even a hit shorter than a desk frame is seen.
 const lastHits={};
@@ -1150,12 +1173,20 @@ function paintLock(r){
  b.onpointerdown=e=>{downLocked=!!runtime?.locked;if(!downLocked)return;e.preventDefault();b.classList.add('holding');hold=setTimeout(()=>{hold=null;b.classList.remove('holding');quiet(command('performance.lock',{enabled:false}).then(()=>toast('Unlocked: the show can be edited.')))},1000)};
  b.onpointerup=b.onpointerleave=b.onpointercancel=()=>{if(hold){clearTimeout(hold);hold=null;b.classList.remove('holding');toast('Hold the padlock for a second to unlock.')}};
  b.onclick=()=>{if(downLocked){downLocked=false;return}if(!runtime?.locked)quiet(command('performance.lock',{enabled:true}).then(()=>toast('Locked for the show. A version was saved. Hold the padlock to unlock.')))}}
+// Desk code changed on disk while the engine kept running (runtime.desk, engine/desk-build.mjs): offer a reload, never
+// force one, since a reload mid-show lets go of held keys. Shown with the health banner.
+const deskUpdate=r=>r.desk?.build&&deskBuild&&r.desk.build!==deskBuild?[{id:'desk',level:'warn',message:'The desk was updated on this Mac. Reload when you have a moment (held keys are let go).',reload:true}]:[];
+// runtime.health: problems the operator must see during a show, worst first. Redrawn only when the list changes.
+let healthKey='';
+function paintHealth(r){const list=[...(r.health??[]),...deskUpdate(r)],key=JSON.stringify(list);if(key===healthKey)return;healthKey=key;const el=$('#healthBar');if(!el)return;el.hidden=!list.length;
+ el.innerHTML=list.map(h=>`<p class="${h.level==='error'?'error':''}">${icon('warning')}<span>${esc(h.message)}${h.reload?' <button class="chip-button small" id="deskReload">Reload the desk</button>':''}</span></p>`).join('');if($('#deskReload'))$('#deskReload').onclick=()=>location.reload()}
 // After an unexpected engine restart during a show (runtime.resume): one press puts it back; nothing happens on its own.
 let resumeKey='';
 function paintResume(r){
  const x=r.resume,key=x?JSON.stringify(x):'';if(key===resumeKey)return;resumeKey=key;const bar=$('#resumeBar');bar.hidden=!x;if(!x)return;
- const at=x.at?new Date(x.at).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}):'',parts=[x.armed?'arm output':null,x.scene?`scene ${esc(x.scene)}`:null,x.cue?`${esc(x.page)} cue ${x.cue.number} “${esc(x.cue.name)}”`:null,x.tempo?`${x.tempo} BPM`:null].filter(Boolean);
- bar.innerHTML=`${icon('warning')}<div><strong>The engine restarted${at?' at '+at:''} during the show.</strong><small>Resume puts it back: ${parts.join(' · ')||'nothing was live'}.${x.armed?' This arms physical output.':''}</small></div><button class="primary${x.armed?' danger':''}" id="resumeGo">Resume</button><button class="ghost-button" id="resumeNo">Dismiss</button>`;
+ const at=x.at?new Date(x.at).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}):'',cues=x.running?.length?`${x.running.length} running cue${x.running.length===1?'':'s'} (${x.running.map(esc).join(', ')})`:null;
+ const parts=[x.armed?'arm output':null,x.scene?`scene ${esc(x.scene)}`:null,x.cue?`${esc(x.page)} cue ${x.cue.number} “${esc(x.cue.name)}”`:null,cues,x.overrides||x.effects?`${x.overrides+x.effects} manual change${x.overrides+x.effects===1?'':'s'}`:null,x.kills?`${x.kills} kill${x.kills===1?'':'s'}`:null,x.blackout?'blackout':null,x.tempo?`${x.tempo} BPM`:null].filter(Boolean);
+ bar.innerHTML=`${icon('warning')}<div><strong>${x.reason==='restart'?`The engine was restarted${at?' at '+at:''} while the rig held its look.`:`The engine restarted${at?' at '+at:''} during the show.`}</strong><small>Resume puts it all back in one go, output last so nothing goes dark: ${parts.join(' · ')||'nothing was live'}.${x.armed?' This arms physical output.':''}</small></div><button class="primary${x.armed?' danger':''}" id="resumeGo">Resume</button><button class="ghost-button" id="resumeNo">Dismiss</button>`;
  $('#resumeGo').onclick=()=>quiet(command('resume.apply',x.armed?{confirmation:'ENABLE_PHYSICAL_OUTPUT'}:{}).then(()=>toast('Resumed where the show was.')));$('#resumeNo').onclick=()=>quiet(command('resume.dismiss',{}));
 }
 // Pre-show check (show.check): rig path, patch and safety in one list, plus rig check and lock.
@@ -1372,12 +1403,20 @@ function updatesDialog(){
  }
  checkUpdate(false).then(()=>draw()).catch(e=>draw(String(e)));
 }
-function armDialog(){if(runtime.output.armed)return confirmDialog('Turn output off?','The rig blacks out and stops receiving anything from this desk until you arm again. For a quick dark stage keep output on and use Blackout (B) instead.','Turn output off',()=>command('output.disarm').then(()=>toast('Output off. The rig is dark.')));dialog('Enable physical output?',`<p>This sends Art-Net to <strong>${esc(show.settings.target)}</strong>. Playback and overrides are stopped first. Verify the Hog handover.</p><p class="warning">${icon('warning')}${runtime.scene?`Scene <strong>${esc(runtime.scene.name)}</strong> goes out to the rig as soon as you arm.`:'Arming does not play a cue. You choose the next live action.'}</p><div class="dialog-actions"><button id="armCancel" class="ghost-button">Stay in preview</button><button id="armOutput" class="primary danger">Arm physical output</button></div>`);$('#armCancel').onclick=()=>$('#dialog').close();$('#armOutput').onclick=async()=>{await command('cue.stop',{fade:0});await new Promise(r=>setTimeout(r,80));await command('output.arm',{confirmation:'ENABLE_PHYSICAL_OUTPUT'});$('#dialog').close();toast(runtime.scene?`Output armed · scene ${runtime.scene.name} is live.`:'Output armed. Choose a cue to GO live.')}}
+// With cues, masters or manual changes running, the first choice arms with that look as it is (output.arm keepLook): after a
+// restart or a network fault the rig gets the same look back in one press, with no stop-and-replay gap (2026-11-01).
+function armDialog(){if(runtime.output.armed)return confirmDialog('Turn output off?','The rig blacks out and stops receiving anything from this desk until you arm again. For a quick dark stage keep output on and use Blackout (B) instead.','Turn output off',()=>command('output.disarm').then(()=>toast('Output off. The rig is dark.')));
+ const r=runtime,names=(r.running??[]).map(x=>x.name),manual=Object.keys(r.overrides??{}).length+(r.fx?.length??0),busy=names.length||manual;
+ const what=busy?`<p class="warning">${icon('warning')}<span>What the preview shows goes out as it is: ${names.length?`<strong>${names.map(esc).join(', ')}</strong>`:'no cue'}${manual?` · ${manual} manual change${manual===1?'':'s'}`:''}${r.scene?` · scene <strong>${esc(r.scene.name)}</strong>`:''}.</span></p>`:`<p class="warning">${icon('warning')}${r.scene?`Scene <strong>${esc(r.scene.name)}</strong> goes out to the rig as soon as you arm.`:'Arming does not play a cue. You choose the next live action.'}</p>`;
+ dialog('Enable physical output?',`<p>This sends Art-Net to <strong>${esc(show.settings.target)}</strong>. Verify the Hog handover.</p>${what}<div class="dialog-actions"><button id="armCancel" class="ghost-button">Stay in preview</button>${busy?'<button id="armStop" class="ghost-button">Stop everything, then arm</button>':''}<button id="armOutput" class="primary danger">${busy?'Arm with this look':'Arm physical output'}</button></div>`);
+ $('#armCancel').onclick=()=>$('#dialog').close();
+ if($('#armStop'))$('#armStop').onclick=async()=>{await command('cue.stop',{fade:0});await command('override.release',{fade:0});await new Promise(r=>setTimeout(r,80));await command('output.arm',{confirmation:'ENABLE_PHYSICAL_OUTPUT'});$('#dialog').close();toast(runtime.scene?`Output armed · scene ${runtime.scene.name} is live.`:'Output armed. Choose a cue to GO live.')};
+ $('#armOutput').onclick=async()=>{await command('output.arm',{confirmation:'ENABLE_PHYSICAL_OUTPUT',...(busy?{keepLook:true}:{})});$('#dialog').close();toast(busy?'Output armed with the look that was showing.':runtime.scene?`Output armed · scene ${runtime.scene.name} is live.`:'Output armed. Choose a cue to GO live.')}}
 
 // ── 10 Hz paint: readback only, no structural redraws ──
 function paint(r){
  if(!r)return;paintOutputHint(r);paintOutputState();paintRunning(r);
- runtime=r;paintAgentStatus(r);assistant?.paint(r);paintMasters(r);paintLibrary(r);paintHolds(r);paintFailures(r);paintUndo(r);if(show){paintScene(r);paintTempo(r);paintLock(r);paintResume(r);paintHits(r);paintShowFile(r)}
+ runtime=r;paintAgentStatus(r);assistant?.paint(r);paintMasters(r);paintLibrary(r);paintHolds(r);paintFailures(r);paintUndo(r);if(show){paintScene(r);paintTempo(r);paintLock(r);paintResume(r);paintHealth(r);paintHits(r);paintShowFile(r)}
  if(show&&r.selection&&r.selection.revision>selectionRevision){const first=!selectionRevision;selectionRevision=r.selection.revision;if(!first||r.selection.ids.length)applySelection(r.selection.ids,r.selection.group)}if(!engineReady){engineReady=true;$('#engineStatus').innerHTML='<i></i>Engine ready'}document.body.classList.toggle('live',r.output.armed);
  setText($('.preview-label'),stage?.mode==='reference'?'Reference render · not live lighting':r.output.armed?'Live view · output on':'Live view · output off');drawPreviewBanner(r);
  stage?.setLedPlaying(!r.output.armed);
@@ -1391,6 +1430,7 @@ function paint(r){
  setText($('#nextName'),next?entryName(next):onPage?'End of list':'—');
  setText($('#nextMeta'),next?(standby?'Standing by · ':'')+(onPage&&!standby&&stack.follow?`Auto in ${Math.ceil(stack.follow.remaining)}s`:next.fade>0?`Fade ${next.fade}s`:'Cut'):'');
  $('#goButton').disabled=!next;$('#backButton').disabled=!(stack&&stack.index>0);
+ const blindGo=!!r.blind?.enabled;if($('#goButton').classList.contains('blind-go')!==blindGo){$('#goButton').classList.toggle('blind-go',blindGo);$('#goButton').lastChild.textContent=blindGo?'PREVIEW':'GO';$('#goButton').title=blindGo?'Blind: GO previews the next cue, not live. Shift+Space or Send to live plays it.':''}
  // Cue list live / standby / done marks
  const key=[p?.id,stack?.entry,nextId,rev].join('|');
  if(key!==liveKey){liveKey=key;const liveIndex=onPage?stack.index:-1;$$('[data-entry-row]').forEach((row,i)=>{const id=row.dataset.entryRow;row.classList.toggle('live',onPage&&id===stack.entry);row.classList.toggle('standby',id===nextId);row.classList.toggle('done',liveIndex>=0&&i<liveIndex);setText(row.querySelector('.cue-state'),onPage&&id===stack.entry?'LIVE':id===nextId?'NEXT':'')})}
@@ -1522,12 +1562,13 @@ document.addEventListener('keydown',e=>{
  if(e.key==='Escape'&&runtime?.find?.active&&$('#masterPop').hidden){quiet(command('find.stop'));return}
  if(e.key==='Escape'){if(!$('#masterPop').hidden)closeMasterPop();else if(!$('#ctxMenu').hidden){closeMenu()}else if(runtime?.preview){stopPreview()}else if(aligning){cancelAlignment();drawSide()}else if(!$('#menu').hidden)$('#menu').hidden=true;else if(ledOpen){ledOpen=false;drawLedTray()}else if(selected.length){applySelection([]);quiet(command('selection.set',{ids:[]}))}return}
  if(e.key==='Enter'&&gotoText){e.preventDefault();runGoto();return}
- if(e.code==='Space'){e.preventDefault();if(!e.repeat)$('#goButton').click()}
+ if(e.code==='Space'){e.preventDefault();if(e.repeat)return;if(e.shiftKey&&runtime?.blind?.enabled)goLive();else $('#goButton').click()}
  else if(e.key==='Backspace'){e.preventDefault();if(gotoText)setGoto(gotoText.slice(0,-1));else if(!e.repeat)$('#backButton').click()}
  else if((e.key==='ArrowLeft'||e.key==='ArrowRight')&&!onRange&&paneShown()==='masters'){e.preventDefault();pageBank(e.key==='ArrowLeft'?-1:1)}
  else{const k=keyOf(e),desk=show?.masters?.desk;if(!k||!desk)return;
   if(k===desk.clear||k===desk.highlight||k===desk.blackout){e.preventDefault();if(!e.repeat)$(k===desk.clear?'#releaseButton':k===desk.highlight?'#highlightButton':'#blackout').click()}
   else if(k===desk.tap){e.preventDefault();if(!e.repeat)quiet(command('tempo.tap',{}))}
+  else if(desk.tap&&k==='shift+'+desk.tap&&!slots().some(x=>x.key===k)){e.preventDefault();quiet(command('tempo.set',{}).then(()=>toast('Back to each cue\'s own tempo.')))}
   else if(desk.stop&&k===desk.stop){e.preventDefault();if(!e.repeat)$('#stopButton').click()}
   else{const m=slots().find(x=>x.key===k);
    if(!m){
@@ -1561,14 +1602,14 @@ document.addEventListener('keyup',e=>{const id=heldKeys.get(e.code);if(id){heldK
 addEventListener('blur',releaseAllMasters);document.addEventListener('visibilitychange',()=>{if(document.hidden)releaseAllMasters()});
 async function start(){
  fillIcons();document.body.dataset.mode=mode;$$('.mode-switch [data-mode]').forEach(b=>b.setAttribute('aria-selected',String(b.dataset.mode===mode)));
- try{({token,build}=await fetch('/api/session').then(r=>r.json()));schema=await fetch('/api/schema').then(r=>r.json());await refresh();
+ try{({token,build,desk:deskBuild}=await fetch('/api/session').then(r=>r.json()));schema=await fetch('/api/schema').then(r=>r.json());await refresh();
   assistant=mountAssistant({command,esc,icon,fillIcons,toast,store});
   stage=new Stage($('#viewport'),show.fixtures,selectFixture);stage.select(selected);syncLedWall();stage.update(runtime.frames);applyStageView();
   $$('[data-stage-view]').forEach(b=>b.onclick=()=>{if(b.dataset.stageView==='stage'&&visOut()){visWin.focus();return toast('The visualizer is in its own window. Use the dock button to bring it back.')}stageView=b.dataset.stageView;store.set('stageView',stageView);applyStageView()});
   $('#popoutButton').onclick=popOutVisualizer;
   // Desktop app: look for a newer release a few seconds after start and every six hours. Nothing installs by itself.
   if(shell){$('[data-menu=update]').hidden=false;setTimeout(()=>checkUpdate(),5000);setInterval(()=>checkUpdate(),6*3600e3)}
-  const events=new EventSource('/api/events');events.onopen=async()=>{try{const s=await fetch('/api/session').then(r=>r.json());if(s.build&&s.build!==build)return location.reload();token=s.token;selectionRevision=0;await refresh()}catch(e){toast('Engine reconnect failed: '+e.message)}};events.onmessage=e=>{try{paint(JSON.parse(e.data))}catch(err){console.error('Desk frame failed',err)}};events.onerror=()=>{engineReady=false;$('#engineStatus').innerHTML='<i class="off"></i>Engine offline'};
+  let streamed=null;const events=new EventSource('/api/events?delta=1');events.onopen=async()=>{try{const s=await fetch('/api/session').then(r=>r.json());if(s.build&&s.build!==build)return location.reload();token=s.token;selectionRevision=0;await refresh()}catch(e){toast('Engine reconnect failed: '+e.message)}};events.onmessage=e=>{try{streamed=mergeRuntime(streamed,JSON.parse(e.data));paint(streamed)}catch(err){console.error('Desk frame failed',err)}};events.onerror=()=>{engineReady=false;$('#engineStatus').innerHTML='<i class="off"></i>Engine offline'};
  }catch(e){engineReady=false;$('#engineStatus').innerHTML='<i class="off"></i>Engine offline';
   // Started before the engine was up: try again until it answers (the 3D stage is only made once).
   if(!stage){toast('Waiting for the engine… '+e.message,'error');setTimeout(start,3000)}else toast('Could not connect to the engine: '+e.message,'error')}

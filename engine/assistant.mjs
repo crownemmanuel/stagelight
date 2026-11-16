@@ -16,7 +16,7 @@ export const PROVIDERS={
 // and output addresses, and the assistant's own set-up (so it can never widen its own permissions).
 // schema is left out because it is very large (the tools are the commands, and the code-effect contract is in the system
 // prompt). status is allowed only one part at a time (only / ids): see run().
-export const HUMAN_ONLY=new Set(['agent.hello','output.arm','resume.apply','resume.dismiss','show.import','show.open','show.folder.set','show.restore','performance.lock','output.configure','network.configure','schema']);
+export const HUMAN_ONLY=new Set(['agent.hello','output.arm','resume.apply','resume.dismiss','show.import','show.open','show.folder.set','show.restore','performance.lock','output.configure','network.configure','schema','modules.reload','show.reveal','show.autosave','controller.reset']);
 // The code-effect contract, from the same source the MCP schema serves (engine/code-effects.mjs CODE_DOC).
 const list=o=>Object.entries(o).map(([k,v])=>`  ${k}: ${v}`).join('\n');
 const CODE_HELP=`Code effects: any effect the built-in list lacks\n${CODE_DOC.summary}\nSignature: ${CODE_DOC.signature}\nInputs:\n${list(CODE_DOC.inputs)}\nReturns (any of):\n${list(CODE_DOC.returns)}\nHelpers in scope:\n${list(CODE_DOC.helpers)}\nRules:\n${CODE_DOC.rules.map(r=>'  - '+r).join('\n')}\nExamples:\n${CODE_DOC.examples.slice(0,4).map(x=>`  ${x.name} (args ${JSON.stringify(x.args)}):\n    ${x.code.replaceAll('\n','\n    ')}`).join('\n')}`;

@@ -10,6 +10,8 @@ Added 2026-10-29 for the operator's own venue. Agents build the cues; these are 
 - **Cue BPM.** Cues whose notes say "at 102.975 BPM" got that `bpm` once, by migration. Agents set it with `cue.save`.
 - **Saving.** The live tempo is not saved. The GO bar shows *CUE* while you are on the cue's own tempo, and *TAP* or *BPM* once a live tempo is set.
 - **MCP:** `lights_tempo_tap`, `lights_tempo_set {bpm?}`, `lights_tempo_scale {factor: .5|2}`, `lights_tempo_nudge {delta}`. Read the result back from `runtime.tempo`.
+- **A stray tap (2026-11-01).** A tap more than 40% off the beat starts a new count and changes nothing until the next tap confirms it, so one late tap can no longer leave the cues at 58 BPM.
+- **Far from the cue's tempo.** `runtime.tempo.far` and `ratio` flag a live tempo under 0.75× or over 1.33× the running cue's own. The BPM button turns amber and shows the rate (×0.48). **Shift+T** goes back to each cue's own tempo, as do ↺ and the APC40 Metronome button.
 - **Not yet:** realigning the beat phase to the band; for now a tap sets the speed only (see [ROADMAP.md](ROADMAP.md)).
 
 ## Master levels (faders)
@@ -40,6 +42,7 @@ Sound triggers and MIDI are **modules**, off by default. Switch them in Settings
     - *Follow cues.* A cue that a follow trigger is holding up lets go, as after 2 s of silence, in four cases: the helper stops, the input is lost, levels stop arriving for 2 s, or sound is switched off. An engine shutdown leaves it as it is (the last look holds).
     - *Bad helper output.* Lines that are not JSON objects, or that have the wrong shapes, are dropped. Only finite dBFS numbers and whole MIDI bytes are used. Nothing throws inside the stream handler, and the same helper message is logged at most once per 10 s.
     - *Metronome.* The Metronome LED blink is kept to 20–300 BPM, so a wild tempo cannot run a fast timer.
+  - **Reloading module code.** `modules.reload` (`lights_modules_reload`) re-imports `engine/modules/*.mjs` from disk and restarts the helper, so a module fix (or a new helper binary) takes effect without restarting the engine. Sound triggers and the APC40 drop for about a second, and follow cues are let go. `modules.status` gives `version`.
   - **Hot-plug (2026-10-30).** The helper rescans every 2 s, but CoreMIDI only updates a process's device list through the run loop that was current when the process made its first MIDI client. The helper therefore makes that first client on its own thread running `CFRunLoopRun`. Before this fix, a running helper never saw an APC40 plugged in after it started, and the desk said "not connected" even though macOS had found the controller.
 
 ## Sound triggers
@@ -49,6 +52,16 @@ A kick (or any drum) on an audio input flashes a master.
 1. Turn on **Sound triggers** in Settings → Modules and choose the input device: **Dante Virtual Soundcard**, or any interface, listed with its channel count.
 2. Open the master's ⚙ (for example a "Backlight hit" master). Under **Sound trigger**, pick the input channel the kick is on and the band: Kick, Snare, Hat or Full.
 3. Set **Sensitivity** against the live meter. Each hit that crosses the white line flashes the master. **Hold** is how long each hit holds the cue (default 80 ms), and **Gap** is the shortest time between hits (default 90 ms). **Test hit** fires it once.
+
+### When the input goes away — 2026-11-01
+
+On 2026-11-01 the network blip at 02:14 took Dante Virtual Soundcard away, and the helper kept the dead stream. Asked to open the same device again, it reused it, so the triggers stayed deaf until the engine restarted.
+
+- **Reopening.** On the helper's input error, or when its meter (about 15 messages a second while an input is open) stops for 3 s, the engine closes the input and opens it fresh every 2 s until it works. Every change is logged. The new helper also never reuses a stream that reported an error.
+- **Follow cues.** A follow trigger's cue is let go when no level arrives for 2 s (input or helper gone), when the module turns off, and when the trigger is switched off, removed or changed to another mode.
+- **Dead feed.** No audio at all on the whole input (every channel under −80 dBFS) for 20 s with triggers on raises a warning in `runtime.health`, the desk banner and the pre-show check: check Dante Controller and the console's Dante card.
+- **Device changes.** They are logged with both names (`Sound input device · A → B`). Choosing *System default input* warns, because it follows macOS, which can switch to the MacBook microphone by itself, and a switch underneath it is logged.
+- **Seeing the audio.** The sound panel shows the trigger's channel, the **whole input** (the loudest channel, so you can see audio is arriving even when the trigger's channel is quiet) and, with the new helper, a strip of every channel. A channel is green when it carries audio, and the trigger's channel is outlined. `sound.status` gives `input`, `silentFor`, `warnings` and, while metering, `channels`.
 
 ### Step on notes
 

@@ -4,7 +4,8 @@
 //        midi.virtual {name|null} · midi.open {id, input, output} · midi.close {id} · midi.send {port, bytes} · quit
 //   out: devices {audio:[{name, inputs}], midiIn, midiOut} · audio {ok, device, channels, rate | error} · hit {id, level}
 //        level {levels:{id: dBFS}} (follow-mode triggers, ~30 Hz)
-//        meter {input: dBFS, levels:{id: dBFS}} (~15 Hz while an input is open) · midi {port, bytes} · error {message}
+//        meter {input: dBFS, levels:{id: dBFS}, channels?: [dBFS per input channel, only while audio.meter is on]}
+//        (~15 Hz while an input is open) · midi {port, bytes} · error {message}
 // Audio runs in CoreAudio's callback; hits are sent the moment they are detected.
 mod detect;
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
@@ -14,12 +15,15 @@ use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::io::{BufRead, Write};
 use std::sync::mpsc::{channel, Sender};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-struct Shared { detectors: Vec<Detector>, meter: bool, since_meter: usize, since_level: usize, rate: f32, input: f32 }
+struct Shared { detectors: Vec<Detector>, meter: bool, since_meter: usize, since_level: usize, rate: f32, input: f32, peaks: Vec<f32> }
 
-struct Audio { device: String, stream: cpal::Stream, shared: Arc<Mutex<Shared>>, channels: usize }
+// alive goes false when CoreAudio reports an error on the stream (the device went away under it). A dead stream is never
+// reused: asked to open the same device again, the helper opens it fresh (2026-11-01: Dante came back, triggers stayed deaf).
+struct Audio { device: String, stream: cpal::Stream, shared: Arc<Mutex<Shared>>, channels: usize, alive: Arc<AtomicBool> }
 
 fn send(tx: &Sender<String>, v: Value) { let _ = tx.send(v.to_string()); }
 
@@ -57,6 +61,11 @@ fn process(shared: &Arc<Mutex<Shared>>, tx: &Sender<String>, data: &[f32], chann
     // The loudest sample on any channel, for the input meter that shows audio is arriving.
     let block_peak = data.iter().fold(0f32, |m, x| m.max(x.abs()));
     if block_peak > s.input { s.input = block_peak; }
+    // While the panel meters, every channel's peak too, so the operator can see which inputs carry audio.
+    if s.meter {
+        if s.peaks.len() != channels { s.peaks = vec![0.0; channels]; }
+        for f in 0..frames { for c in 0..channels { let v = data[f * channels + c].abs(); if v > s.peaks[c] { s.peaks[c] = v; } } }
+    }
     for d in s.detectors.iter_mut() {
         let ch = d.channel - 1;
         if ch >= channels { continue; }
@@ -78,11 +87,17 @@ fn process(shared: &Arc<Mutex<Shared>>, tx: &Sender<String>, data: &[f32], chann
         let input = ((20.0 * (s.input + 1e-9).log10()).max(-90.0) * 10.0).round() / 10.0;
         s.input = 0.0;
         let levels: serde_json::Map<String, Value> = s.detectors.iter_mut().map(|d| (d.id.clone(), json!((d.take_peak_db() * 10.0).round() / 10.0))).collect();
-        send(tx, json!({"ev": "meter", "input": input, "levels": levels}));
+        if s.meter && !s.peaks.is_empty() {
+            let chans: Vec<Value> = s.peaks.iter().map(|p| json!(((20.0 * (p + 1e-9).log10()).max(-90.0) * 10.0).round() / 10.0)).collect();
+            for p in s.peaks.iter_mut() { *p = 0.0; }
+            send(tx, json!({"ev": "meter", "input": input, "levels": levels, "channels": chans}));
+        } else {
+            send(tx, json!({"ev": "meter", "input": input, "levels": levels}));
+        }
     }
 }
 
-fn build<T>(device: &cpal::Device, config: &cpal::StreamConfig, shared: Arc<Mutex<Shared>>, tx: Sender<String>) -> Result<cpal::Stream, String>
+fn build<T>(device: &cpal::Device, config: &cpal::StreamConfig, shared: Arc<Mutex<Shared>>, tx: Sender<String>, alive: Arc<AtomicBool>) -> Result<cpal::Stream, String>
 where T: cpal::SizedSample, f32: cpal::FromSample<T> {
     let channels = config.channels as usize;
     let mut buf: Vec<f32> = Vec::new();
@@ -91,7 +106,7 @@ where T: cpal::SizedSample, f32: cpal::FromSample<T> {
         buf.clear();
         buf.extend(data.iter().map(|s| <f32 as cpal::FromSample<T>>::from_sample_(*s)));
         process(&shared, &tx, &buf, channels);
-    }, move |e| send(&err_tx, json!({"ev": "error", "message": format!("Audio input: {e}")})), None).map_err(|e| e.to_string())
+    }, move |e| { alive.store(false, Ordering::Relaxed); send(&err_tx, json!({"ev": "error", "message": format!("Audio input: {e}")})) }, None).map_err(|e| e.to_string())
 }
 
 fn open_audio(name: &str, triggers: &Value, tx: &Sender<String>) -> Result<Audio, String> {
@@ -105,18 +120,19 @@ fn open_audio(name: &str, triggers: &Value, tx: &Sender<String>) -> Result<Audio
     let format = supported.sample_format();
     let mut config: cpal::StreamConfig = supported.into();
     config.buffer_size = cpal::BufferSize::Fixed(128);
-    let shared = Arc::new(Mutex::new(Shared { detectors: detectors(triggers, rate.0 as f32), meter: false, since_meter: 0, since_level: 0, rate: rate.0 as f32, input: 0.0 }));
+    let shared = Arc::new(Mutex::new(Shared { detectors: detectors(triggers, rate.0 as f32), meter: false, since_meter: 0, since_level: 0, rate: rate.0 as f32, input: 0.0, peaks: Vec::new() }));
+    let alive = Arc::new(AtomicBool::new(true));
     let make = |config: &cpal::StreamConfig| match format {
-        cpal::SampleFormat::F32 => build::<f32>(&device, config, shared.clone(), tx.clone()),
-        cpal::SampleFormat::I16 => build::<i16>(&device, config, shared.clone(), tx.clone()),
-        cpal::SampleFormat::I32 => build::<i32>(&device, config, shared.clone(), tx.clone()),
-        cpal::SampleFormat::U16 => build::<u16>(&device, config, shared.clone(), tx.clone()),
+        cpal::SampleFormat::F32 => build::<f32>(&device, config, shared.clone(), tx.clone(), alive.clone()),
+        cpal::SampleFormat::I16 => build::<i16>(&device, config, shared.clone(), tx.clone(), alive.clone()),
+        cpal::SampleFormat::I32 => build::<i32>(&device, config, shared.clone(), tx.clone(), alive.clone()),
+        cpal::SampleFormat::U16 => build::<u16>(&device, config, shared.clone(), tx.clone(), alive.clone()),
         other => Err(format!("Unsupported sample format {other:?}")),
     };
     // Some devices refuse a fixed 128-frame buffer; fall back to the device's own size.
     let stream = make(&config).or_else(|_| { config.buffer_size = cpal::BufferSize::Default; make(&config) })?;
     stream.play().map_err(|e| e.to_string())?;
-    Ok(Audio { device: name.to_string(), stream, shared, channels: config.channels as usize })
+    Ok(Audio { device: name.to_string(), stream, shared, channels: config.channels as usize, alive })
 }
 
 fn find_port<T: midir::MidiIO>(io: &T, name: &str) -> Option<T::Port> { io.ports().into_iter().find(|p| io.port_name(p).map(|n| n == name).unwrap_or(false)) }
@@ -155,7 +171,7 @@ fn main() {
             "devices" => send(&tx, devices()),
             "audio.open" => {
                 let name = m["device"].as_str().unwrap_or("");
-                if let Some(a) = audio.as_ref().filter(|a| a.device == name) {
+                if let Some(a) = audio.as_ref().filter(|a| a.device == name && a.alive.load(Ordering::Relaxed)) {
                     let mut s = a.shared.lock().unwrap();
                     let rate = s.rate;
                     s.detectors = detectors(&m["triggers"], rate);

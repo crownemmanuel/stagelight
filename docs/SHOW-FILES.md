@@ -26,6 +26,10 @@ Added 2026-10-31. Shows can be saved as named files in a folder on this Mac and 
 - **Unsaved** means the show changed since it was last saved to or opened from its file. Playback, selection, master and other live state are not show changes. The state survives an engine restart (a hash of the saved show is kept).
 - **Import makes the show untitled**: the next ⌘S asks for a name.
 
+## Autosave — 2026-11-01
+
+While a show file is open and has unsaved changes, it is written for you once edits have been quiet for 10 s, at most every 2 minutes, and when the performance lock goes on. The log says `Show autosaved · <name>`. On 2026-11-01 the show stayed unsaved from 06:35 for the rest of the service. Turn it off with `show.autosave {enabled:false}` (`lights_show_autosave`); it is this Mac's setting, kept in `show-files.json`. `runtime.showFile.autosave` reads it back. `<data>/show.json` and the show versions are still written on every edit, autosave or not.
+
 ## MCP
 
 - `lights_show_files {query?}` lists `{name, file, modified, bytes, title, fixtures, cues, pages, valid}` plus `folder` and `current {name, savedAt, dirty}`. `runtime.showFile` carries `current` too.

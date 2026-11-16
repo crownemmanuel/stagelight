@@ -6,11 +6,11 @@ const BANDS=[['kick','Kick'],['snare','Snare'],['hat','Hat'],['full','Full']];
 const thresholdDb=s=>-6-54*(s??.5);
 const pct=db=>Math.max(0,Math.min(100,(db+60)/60*100));
 export function mountSoundPanel(el,{slot,command,quiet,esc,icon,fillIcons,slotOf,cueOf,getRuntime}){
- let alive=true,adding=false;
+ let alive=true,adding=false,names=new Map();
  // How long after the hold ends the cue's first light comes (0 when its saved look already lights something).
  const late=(m,s)=>{const c=cueOf?.(m?.cue);if(!c||(c.look??[]).some(e=>(e.values.intensity??0)>0))return 0;const first=Math.min(...c.tracks.map(t=>t.start),Infinity);return Number.isFinite(first)?Math.max(0,first-(s.holdMs??80)/1000):0};
  const draw=async()=>{
-  const st=await command('sound.status').catch(()=>null),names=new Map(((await command('sound.inputs').catch(()=>null))?.inputs??[]).map(a=>[a.channel,a.name]));if(!alive||!st)return;const m=slotOf(slot),s=m?.sound,follow=s?.mode==='follow',step=s?.mode==='step',dev=st.devices.find(d=>d.name===st.device);
+  const st=await command('sound.status').catch(()=>null);names=new Map(((await command('sound.inputs').catch(()=>null))?.inputs??[]).map(a=>[a.channel,a.name]));if(!alive||!st)return;const m=slotOf(slot),s=m?.sound,follow=s?.mode==='follow',step=s?.mode==='step',dev=st.devices.find(d=>d.name===st.device);
   // No trigger on this master: a set-up button. Nothing is saved until a channel is picked, and then it is saved off.
   if(!s&&!adding){
    el.innerHTML=`<h4>${icon('wave')}Sound trigger</h4><p class="hint">None yet. Set it up first (input, band, sensitivity): it stays off until you switch it on, so nothing fires while you set it up.</p><button class="chip-button" id="sdSetup"><span data-icon="plus"></span>Set up a sound trigger</button>`;
@@ -30,7 +30,7 @@ export function mountSoundPanel(el,{slot,command,quiet,esc,icon,fillIcons,slotOf
    <div class="segmented small" id="sdBand">${BANDS.map(([b,l])=>`<button data-band="${b}" class="${(s?.band??'kick')===b?'active':''}" ${s?'':'disabled'}>${l}</button>`).join('')}</div></div>
    ${s?`<div class="segmented small sd-mode"><button data-sdmode="hit" class="${follow||step?'':'active'}"><span data-icon="bolt"></span>Flash on hits</button><button data-sdmode="follow" class="${follow?'active':''}"><span data-icon="wave"></span>Follow the level</button><button data-sdmode="step" class="${step?'active':''}"><span data-icon="chase"></span>Step on notes</button></div>
    <p class="hint">${step?'Start the master with its key; then each note moves its Note step tracks on by one light. Play faster and they chase faster; hold a note and the light stays.':follow?'The lights breathe with the sound: brighter as it gets louder, fading as it fades. For guitar, keys, pads and vocals.':'Each hit flashes the master. For drums and rhythmic parts.'}</p>
-   <label class="mini"><span>${follow?'Sensitivity: the lights start at the line and are full at the second mark':'Sensitivity: hits above the line flash the master'}</span><input id="sdSens" type="range" min="0" max="1" step=".01" value="${s.sensitivity??.5}"></label><div class="sd-meter"><i></i><b></b>${follow?'<b class="full"></b>':''}<span>no signal</span></div>
+   <label class="mini"><span>${follow?'Sensitivity: the lights start at the line and are full at the second mark':'Sensitivity: hits above the line flash the master'}</span><input id="sdSens" type="range" min="0" max="1" step=".01" value="${s.sensitivity??.5}"></label><div class="sd-meter"><i></i><b></b>${follow?'<b class="full"></b>':''}<span>no signal</span></div><div class="sd-input" title="The loudest channel of the whole input: shows that audio is arriving even when this trigger's channel is quiet"><span>Whole input</span><i><u></u></i><em>…</em></div><div class="sd-channels" hidden></div>
    ${follow?`<div class="mp-row three"><label class="mini"><span>Range · dB</span><input id="sdRange" type="number" min="6" max="60" step="1" value="${s.rangeDb??24}"></label><label class="mini"><span>Attack · ms</span><input id="sdAttack" type="number" min="1" max="2000" step="5" value="${s.attackMs??30}"></label><label class="mini"><span>Release · ms</span><input id="sdRelease" type="number" min="10" max="5000" step="10" value="${s.releaseMs??300}"></label></div>`
     :`<div class="mp-row"><label class="mini"><span>Hold · ms</span><input id="sdHold" type="number" min="10" max="2000" step="10" value="${s.holdMs??80}"></label><label class="mini"><span>Gap between hits · ms</span><input id="sdGap" type="number" min="20" max="2000" step="10" value="${s.gapMs??90}"></label></div>`}
    ${!follow&&!step&&late(m,s)>0?`<p class="warning sd-late">${icon('warning')}<span>This cue's first light comes ${late(m,s).toFixed(2)} s in, after the ${s.holdMs??80} ms hold, so a hit may show nothing. Use a short look cue for hits, or raise Hold.</span></p>`:''}
@@ -55,6 +55,11 @@ export function mountSoundPanel(el,{slot,command,quiet,esc,icon,fillIcons,slotOf
  let ticks=0;const timer=setInterval(()=>{
   const bar=el.querySelector('.sd-meter');if(++ticks%200===0)quiet(command('sound.meter',{on:true}));if(!bar)return;const r=getRuntime(),db=r?.sound?.meter?.[slot];
   bar.querySelector('i').style.width=(db===undefined?0:pct(db))+'%';bar.classList.toggle('hit',!!r?.masters?.held?.includes(slot));bar.querySelector('span').textContent=db===undefined?'no signal':`${Math.round(db)} dB`;
+  // The whole input and, with a helper that sends them, every channel: which Dante inputs carry audio (2026-11-01, the
+  // operator could not tell whether Dante had audio at all while a trigger's own channel was silent).
+  const inp=el.querySelector('.sd-input'),idb=r?.sound?.input;if(inp){inp.querySelector('u').style.width=(idb==null?0:pct(idb))+'%';inp.querySelector('em').textContent=idb==null?'no input':idb<=-80?'silent':`${Math.round(idb)} dB`;inp.classList.toggle('dead',idb==null||idb<=-80)}
+  const ch=el.querySelector('.sd-channels'),levels=r?.sound?.channels;if(ch){ch.hidden=!levels;if(levels){if(ch.childElementCount!==levels.length)ch.innerHTML=levels.map((_,i)=>`<b title="${i+1} · ${esc(names.get(i+1)??'Input '+(i+1))}"><i></i><small>${i+1}</small></b>`).join('');
+   levels.forEach((v,i)=>{const c=ch.children[i],on=v>-60;c.firstChild.style.height=pct(v)+'%';c.classList.toggle('on',on);c.classList.toggle('mine',i+1===slotOf(slot)?.sound?.channel)})}}
  },100);
  return ()=>{alive=false;clearInterval(timer);quiet(command('sound.meter',{on:false}))};
 }

@@ -13,8 +13,9 @@ export function writeAtomic(file,text){
 }
 
 // Timestamped copies of the show in <data>/versions: at most one per five minutes of edits, and always before an import
-// or a restore and when the performance lock goes on. Keeps the newest 50 plus the last one of each older day.
-const KEEP=50,EVERY=300;
+// or a restore and when the performance lock goes on. Keeps the newest 50 plus the last one of each older day for 90
+// days, so the folder stops growing (it was one more ~300 kB file a day for ever).
+const KEEP=50,EVERY=300,DAYS=90;
 const stamp=d=>d.toISOString().replace(/[:.]/g,'-');
 const VERSION_ID=/^(\d{4}-\d\d-\d\d)T(\d\d)-(\d\d)-(\d\d)-(\d{3})Z-(.+)$/;
 export class Versions{
@@ -36,13 +37,13 @@ export class Versions{
    return [{id,at:m?`${m[1]}T${m[2]}:${m[3]}:${m[4]}.${m[5]}Z`:null,reason:m?.[6]??'',bytes:st.size,mtime:st.mtimeMs}]}).map(({mtime,...v})=>v);
  }
  read(id){const f=this.dir&&/^[\w.-]{1,120}$/.test(id)&&path.join(this.dir,id+'.json');if(!f||!fs.existsSync(f))throw Error('Unknown show version '+id);return JSON.parse(fs.readFileSync(f,'utf8'))}
- // Only StageLight's own version files are ever removed. The newest KEEP by name and the newest KEEP by modified time
+ // Only StageLight's own version files are ever removed, and day copies only for DAYS days. The newest KEEP by name and the newest KEEP by modified time
  // are kept (so a Mac clock set back cannot make the copies just written look old), and so is the one just written.
  prune(just){
   if(!this.dir)return;const all=this.list().filter(v=>v.at),keep=new Set(all.slice(0,KEEP).map(v=>v.id)),days=new Set();if(just)keep.add(just);
   const mtime=id=>{try{return fs.statSync(path.join(this.dir,id+'.json')).mtimeMs}catch{return 0}};
   for(const v of [...all].sort((a,b)=>mtime(b.id)-mtime(a.id)).slice(0,KEEP))keep.add(v.id);
-  for(const v of all.slice(KEEP)){const day=v.at.slice(0,10);if(!days.has(day)){days.add(day);keep.add(v.id)}}
+  const oldest=new Date(Date.now()-DAYS*864e5).toISOString().slice(0,10);for(const v of all.slice(KEEP)){const day=v.at.slice(0,10);if(day>=oldest&&!days.has(day)){days.add(day);keep.add(v.id)}}
   for(const v of all)if(!keep.has(v.id))try{fs.rmSync(path.join(this.dir,v.id+'.json'),{force:true})}catch{}
  }
 }

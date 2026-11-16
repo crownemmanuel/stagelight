@@ -62,3 +62,11 @@ A cue can carry `releaseFade` (seconds). Stop, or `cue.release` without a `fade`
 ## Release all on a page — 2026-11-01
 
 The stop button beside the page name in Show mode (and `page.release {id, fade?}` / `lights_page_release`) releases every running cue on that page, its looks and the effects layered on them, with a 1.5 s fade by default. Masters' held flashes and other pages' cues keep running.
+
+## Editing a running cue — 2026-11-01
+
+`cue.save` reaches every running copy of the cue at once: its look, tracks, tempo and speed. It keeps the copy's position, so the rig shows the edit without a re-GO and without a jump. A Note step chase keeps its light, and a saved preview of the cue updates too. Before, a running cue kept its old values until the next GO.
+
+## Blind GO previews — 2026-11-01
+
+Blind means nothing you do reaches the stage. In Blind, the desk's **GO** (and Space) previews the next entry of the cue list (`preview.cue {page, entry}`) instead of playing it, and the button reads **PREVIEW**. Each further GO previews the entry after it. **Send to live** in the banner, or **Shift+Space**, plays the previewed cue live (`preview.go_live`). Masters, sound triggers and `page.go` from OSC, MCP or Companion stay live; agents preview with `lights_preview_cue`. The operator expected Blind to keep GO off the stage (2026-11-01).
