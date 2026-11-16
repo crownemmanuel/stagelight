@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "name": "Your Great Name · Todd Dulaney",
+  "name": "Your Great Name \u00b7 Todd Dulaney",
   "fixtures": [
     {
       "id": "401",
@@ -508,7 +508,7 @@
     },
     {
       "id": "705",
-      "name": "MH7 705 · stage row 1",
+      "name": "MH7 705 \u00b7 stage row 1",
       "profile": "mh7",
       "universe": 6,
       "address": 1,
@@ -553,7 +553,7 @@
     },
     {
       "id": "706",
-      "name": "MH7 706 · stage row 4",
+      "name": "MH7 706 \u00b7 stage row 4",
       "profile": "mh7",
       "universe": 6,
       "address": 22,
@@ -598,7 +598,7 @@
     },
     {
       "id": "707",
-      "name": "MH7 707 · stage row 2",
+      "name": "MH7 707 \u00b7 stage row 2",
       "profile": "mh7",
       "universe": 6,
       "address": 43,
@@ -643,7 +643,7 @@
     },
     {
       "id": "708",
-      "name": "MH7 708 · stage row 3",
+      "name": "MH7 708 \u00b7 stage row 3",
       "profile": "mh7",
       "universe": 6,
       "address": 64,
@@ -688,7 +688,7 @@
     },
     {
       "id": "3101",
-      "name": "MH7 3101 · audience left?",
+      "name": "MH7 3101 \u00b7 audience left?",
       "profile": "mh7",
       "universe": 1,
       "address": 337,
@@ -733,7 +733,7 @@
     },
     {
       "id": "3102",
-      "name": "MH7 3102 · audience right?",
+      "name": "MH7 3102 \u00b7 audience right?",
       "profile": "mh7",
       "universe": 1,
       "address": 358,
@@ -764,7 +764,7 @@
     },
     {
       "id": "3103",
-      "name": "MH7 3103 · location provisional",
+      "name": "MH7 3103 \u00b7 location provisional",
       "profile": "mh7",
       "universe": 6,
       "address": 235,
@@ -795,7 +795,7 @@
     },
     {
       "id": "3104",
-      "name": "MH7 3104 · location provisional",
+      "name": "MH7 3104 \u00b7 location provisional",
       "profile": "mh7",
       "universe": 6,
       "address": 256,
@@ -826,7 +826,7 @@
     },
     {
       "id": "201",
-      "name": "Grid row 1 · 1",
+      "name": "Grid row 1 \u00b7 1",
       "profile": "q120",
       "universe": 4,
       "address": 1,
@@ -857,7 +857,7 @@
     },
     {
       "id": "202",
-      "name": "Grid row 1 · 2",
+      "name": "Grid row 1 \u00b7 2",
       "profile": "q120",
       "universe": 4,
       "address": 6,
@@ -888,7 +888,7 @@
     },
     {
       "id": "203",
-      "name": "Grid row 1 · 3",
+      "name": "Grid row 1 \u00b7 3",
       "profile": "q120",
       "universe": 4,
       "address": 36,
@@ -919,7 +919,7 @@
     },
     {
       "id": "204",
-      "name": "Grid row 1 · 4",
+      "name": "Grid row 1 \u00b7 4",
       "profile": "q120",
       "universe": 4,
       "address": 11,
@@ -950,7 +950,7 @@
     },
     {
       "id": "205",
-      "name": "Grid row 1 · 5",
+      "name": "Grid row 1 \u00b7 5",
       "profile": "q120",
       "universe": 4,
       "address": 16,
@@ -981,7 +981,7 @@
     },
     {
       "id": "206",
-      "name": "Grid row 2 · 1",
+      "name": "Grid row 2 \u00b7 1",
       "profile": "q120",
       "universe": 4,
       "address": 21,
@@ -1012,7 +1012,7 @@
     },
     {
       "id": "207",
-      "name": "Grid row 2 · 2",
+      "name": "Grid row 2 \u00b7 2",
       "profile": "q120",
       "universe": 4,
       "address": 26,
@@ -1043,7 +1043,7 @@
     },
     {
       "id": "208",
-      "name": "Grid row 2 · 3",
+      "name": "Grid row 2 \u00b7 3",
       "profile": "q120",
       "universe": 4,
       "address": 31,
@@ -1074,7 +1074,7 @@
     },
     {
       "id": "209",
-      "name": "Grid row 3 · 1",
+      "name": "Grid row 3 \u00b7 1",
       "profile": "q120",
       "universe": 4,
       "address": 41,
@@ -1105,7 +1105,7 @@
     },
     {
       "id": "210",
-      "name": "Grid row 3 · 2",
+      "name": "Grid row 3 \u00b7 2",
       "profile": "q120",
       "universe": 4,
       "address": 46,
@@ -1136,7 +1136,7 @@
     },
     {
       "id": "211",
-      "name": "Grid row 3 · 3",
+      "name": "Grid row 3 \u00b7 3",
       "profile": "q120",
       "universe": 4,
       "address": 51,
@@ -1167,7 +1167,7 @@
     },
     {
       "id": "212",
-      "name": "Grid row 3 · 4",
+      "name": "Grid row 3 \u00b7 4",
       "profile": "q120",
       "universe": 5,
       "address": 56,
@@ -1198,7 +1198,7 @@
     },
     {
       "id": "213",
-      "name": "Grid row 4 · 1",
+      "name": "Grid row 4 \u00b7 1",
       "profile": "q120",
       "universe": 5,
       "address": 61,
@@ -1229,7 +1229,7 @@
     },
     {
       "id": "214",
-      "name": "Grid row 4 · 2",
+      "name": "Grid row 4 \u00b7 2",
       "profile": "q120",
       "universe": 5,
       "address": 66,
@@ -1260,7 +1260,7 @@
     },
     {
       "id": "215",
-      "name": "Grid row 4 · 3",
+      "name": "Grid row 4 \u00b7 3",
       "profile": "q120",
       "universe": 5,
       "address": 71,
@@ -1291,7 +1291,7 @@
     },
     {
       "id": "216",
-      "name": "Grid row 5 · 1",
+      "name": "Grid row 5 \u00b7 1",
       "profile": "q120",
       "universe": 5,
       "address": 76,
@@ -1322,7 +1322,7 @@
     },
     {
       "id": "217",
-      "name": "Grid row 5 · 2",
+      "name": "Grid row 5 \u00b7 2",
       "profile": "q120",
       "universe": 5,
       "address": 81,
@@ -1353,7 +1353,7 @@
     },
     {
       "id": "218",
-      "name": "Grid row 5 · 3",
+      "name": "Grid row 5 \u00b7 3",
       "profile": "q120",
       "universe": 5,
       "address": 86,
@@ -1384,7 +1384,7 @@
     },
     {
       "id": "219",
-      "name": "Grid row 5 · 4",
+      "name": "Grid row 5 \u00b7 4",
       "profile": "q120",
       "universe": 5,
       "address": 91,
@@ -1415,7 +1415,7 @@
     },
     {
       "id": "220",
-      "name": "Grid row 5 · 5",
+      "name": "Grid row 5 \u00b7 5",
       "profile": "q120",
       "universe": 5,
       "address": 96,
@@ -1446,7 +1446,7 @@
     },
     {
       "id": "221",
-      "name": "Grid row 6 · 1",
+      "name": "Grid row 6 \u00b7 1",
       "profile": "q120",
       "universe": 5,
       "address": 101,
@@ -1477,7 +1477,7 @@
     },
     {
       "id": "grid-pending-1",
-      "name": "Grid row 6 · 2 · patch unknown",
+      "name": "Grid row 6 \u00b7 2 \u00b7 patch unknown",
       "profile": "unknown",
       "universe": 0,
       "address": 0,
@@ -1508,7 +1508,7 @@
     },
     {
       "id": "grid-pending-2",
-      "name": "Grid row 6 · 3 · patch unknown",
+      "name": "Grid row 6 \u00b7 3 \u00b7 patch unknown",
       "profile": "unknown",
       "universe": 0,
       "address": 0,
@@ -1539,7 +1539,7 @@
     },
     {
       "id": "4101",
-      "name": "4101 · 7R Beam 230W · color slots pending",
+      "name": "4101 \u00b7 7R Beam 230W \u00b7 color slots pending",
       "profile": "beam7r",
       "universe": 3,
       "address": 57,
@@ -1598,7 +1598,7 @@
           "value": 17
         },
         {
-          "name": "Yellow · 24",
+          "name": "Yellow \u00b7 24",
           "color": "#ffff00",
           "value": 24
         },
@@ -1648,7 +1648,7 @@
           "value": 78
         },
         {
-          "name": "Yellow · 82",
+          "name": "Yellow \u00b7 82",
           "color": "#ffe040",
           "value": 82
         },
@@ -1686,7 +1686,7 @@
     },
     {
       "id": "4102",
-      "name": "4102 · 7R Beam 230W · color slots pending",
+      "name": "4102 \u00b7 7R Beam 230W \u00b7 color slots pending",
       "profile": "beam7r",
       "universe": 3,
       "address": 78,
@@ -1745,7 +1745,7 @@
           "value": 17
         },
         {
-          "name": "Yellow · 24",
+          "name": "Yellow \u00b7 24",
           "color": "#ffff00",
           "value": 24
         },
@@ -1795,7 +1795,7 @@
           "value": 78
         },
         {
-          "name": "Yellow · 82",
+          "name": "Yellow \u00b7 82",
           "color": "#ffe040",
           "value": 82
         },
@@ -1833,7 +1833,7 @@
     },
     {
       "id": "4103",
-      "name": "4103 · 7R Beam 230W · color slots pending",
+      "name": "4103 \u00b7 7R Beam 230W \u00b7 color slots pending",
       "profile": "beam7r",
       "universe": 3,
       "address": 99,
@@ -1892,7 +1892,7 @@
           "value": 17
         },
         {
-          "name": "Yellow · 24",
+          "name": "Yellow \u00b7 24",
           "color": "#ffff00",
           "value": 24
         },
@@ -1942,7 +1942,7 @@
           "value": 78
         },
         {
-          "name": "Yellow · 82",
+          "name": "Yellow \u00b7 82",
           "color": "#ffe040",
           "value": 82
         },
@@ -1980,7 +1980,7 @@
     },
     {
       "id": "4104",
-      "name": "4104 · 7R Beam 230W · color slots pending",
+      "name": "4104 \u00b7 7R Beam 230W \u00b7 color slots pending",
       "profile": "beam7r",
       "universe": 3,
       "address": 120,
@@ -2039,7 +2039,7 @@
           "value": 17
         },
         {
-          "name": "Yellow · 24",
+          "name": "Yellow \u00b7 24",
           "color": "#ffff00",
           "value": 24
         },
@@ -2089,7 +2089,7 @@
           "value": 78
         },
         {
-          "name": "Yellow · 82",
+          "name": "Yellow \u00b7 82",
           "color": "#ffe040",
           "value": 82
         },
@@ -2127,7 +2127,7 @@
     },
     {
       "id": "3901",
-      "name": "3901 · 200W Beam · color slots pending",
+      "name": "3901 \u00b7 200W Beam \u00b7 color slots pending",
       "profile": "beam200",
       "universe": 3,
       "address": 162,
@@ -2213,7 +2213,7 @@
           "secondary": 0
         },
         {
-          "name": "Pink + purple · 30",
+          "name": "Pink + purple \u00b7 30",
           "color": "#dc50e8",
           "value": 30,
           "secondary": 0
@@ -2231,7 +2231,7 @@
           "secondary": 0
         },
         {
-          "name": "Green + red · 46",
+          "name": "Green + red \u00b7 46",
           "color": "#b29c20",
           "value": 46,
           "secondary": 0
@@ -2255,7 +2255,7 @@
           "secondary": 0
         },
         {
-          "name": "Pink + purple · 69",
+          "name": "Pink + purple \u00b7 69",
           "color": "#b850e8",
           "value": 69,
           "secondary": 0
@@ -2273,7 +2273,7 @@
           "secondary": 0
         },
         {
-          "name": "Green + red · 84",
+          "name": "Green + red \u00b7 84",
           "color": "#9cb830",
           "value": 84,
           "secondary": 0
@@ -3728,7 +3728,7 @@
     },
     {
       "id": "30",
-      "name": "Face light 30 · pulpit left",
+      "name": "Face light 30 \u00b7 pulpit left",
       "profile": "reveE3",
       "universe": 1,
       "address": 121,
@@ -3764,7 +3764,7 @@
     },
     {
       "id": "31",
-      "name": "Face light 31 · pulpit right",
+      "name": "Face light 31 \u00b7 pulpit right",
       "profile": "reveE3",
       "universe": 1,
       "address": 133,
@@ -3800,7 +3800,7 @@
     },
     {
       "id": "32",
-      "name": "Face light 32 · DSL center",
+      "name": "Face light 32 \u00b7 DSL center",
       "profile": "reveE3",
       "universe": 1,
       "address": 145,
@@ -4448,7 +4448,7 @@
     },
     {
       "id": "1001",
-      "name": "House 1001 · row 1",
+      "name": "House 1001 \u00b7 row 1",
       "profile": "pendant4",
       "universe": 8,
       "address": 1,
@@ -4479,7 +4479,7 @@
     },
     {
       "id": "1002",
-      "name": "House 1002 · row 1",
+      "name": "House 1002 \u00b7 row 1",
       "profile": "pendant4",
       "universe": 8,
       "address": 5,
@@ -4510,7 +4510,7 @@
     },
     {
       "id": "1003",
-      "name": "House 1003 · row 1",
+      "name": "House 1003 \u00b7 row 1",
       "profile": "pendant4",
       "universe": 8,
       "address": 9,
@@ -4541,7 +4541,7 @@
     },
     {
       "id": "1004",
-      "name": "House 1004 · row 1",
+      "name": "House 1004 \u00b7 row 1",
       "profile": "pendant4",
       "universe": 8,
       "address": 13,
@@ -4572,7 +4572,7 @@
     },
     {
       "id": "1005",
-      "name": "House 1005 · row 1",
+      "name": "House 1005 \u00b7 row 1",
       "profile": "pendant4",
       "universe": 8,
       "address": 17,
@@ -4603,7 +4603,7 @@
     },
     {
       "id": "1006",
-      "name": "House 1006 · row 1",
+      "name": "House 1006 \u00b7 row 1",
       "profile": "pendant4",
       "universe": 8,
       "address": 21,
@@ -4634,7 +4634,7 @@
     },
     {
       "id": "1007",
-      "name": "House 1007 · row 1",
+      "name": "House 1007 \u00b7 row 1",
       "profile": "pendant4",
       "universe": 8,
       "address": 25,
@@ -4665,7 +4665,7 @@
     },
     {
       "id": "1008",
-      "name": "House 1008 · row 1",
+      "name": "House 1008 \u00b7 row 1",
       "profile": "pendant4",
       "universe": 8,
       "address": 29,
@@ -4696,7 +4696,7 @@
     },
     {
       "id": "1009",
-      "name": "House 1009 · row 1",
+      "name": "House 1009 \u00b7 row 1",
       "profile": "pendant4",
       "universe": 8,
       "address": 33,
@@ -4727,7 +4727,7 @@
     },
     {
       "id": "1010",
-      "name": "House 1010 · row 2",
+      "name": "House 1010 \u00b7 row 2",
       "profile": "pendant4",
       "universe": 8,
       "address": 37,
@@ -4758,7 +4758,7 @@
     },
     {
       "id": "1011",
-      "name": "House 1011 · row 2",
+      "name": "House 1011 \u00b7 row 2",
       "profile": "pendant4",
       "universe": 8,
       "address": 41,
@@ -4789,7 +4789,7 @@
     },
     {
       "id": "1012",
-      "name": "House 1012 · row 2",
+      "name": "House 1012 \u00b7 row 2",
       "profile": "pendant4",
       "universe": 8,
       "address": 45,
@@ -4820,7 +4820,7 @@
     },
     {
       "id": "1013",
-      "name": "House 1013 · row 2",
+      "name": "House 1013 \u00b7 row 2",
       "profile": "pendant4",
       "universe": 8,
       "address": 49,
@@ -4851,7 +4851,7 @@
     },
     {
       "id": "1014",
-      "name": "House 1014 · row 2",
+      "name": "House 1014 \u00b7 row 2",
       "profile": "pendant4",
       "universe": 8,
       "address": 53,
@@ -4882,7 +4882,7 @@
     },
     {
       "id": "1015",
-      "name": "House 1015 · row 2",
+      "name": "House 1015 \u00b7 row 2",
       "profile": "pendant4",
       "universe": 8,
       "address": 57,
@@ -4913,7 +4913,7 @@
     },
     {
       "id": "1016",
-      "name": "House 1016 · row 2",
+      "name": "House 1016 \u00b7 row 2",
       "profile": "pendant4",
       "universe": 8,
       "address": 61,
@@ -4944,7 +4944,7 @@
     },
     {
       "id": "1017",
-      "name": "House 1017 · row 2",
+      "name": "House 1017 \u00b7 row 2",
       "profile": "pendant4",
       "universe": 8,
       "address": 65,
@@ -4975,7 +4975,7 @@
     },
     {
       "id": "1018",
-      "name": "House 1018 · row 2",
+      "name": "House 1018 \u00b7 row 2",
       "profile": "pendant4",
       "universe": 8,
       "address": 69,
@@ -5006,7 +5006,7 @@
     },
     {
       "id": "1019",
-      "name": "House 1019 · row 2",
+      "name": "House 1019 \u00b7 row 2",
       "profile": "pendant4",
       "universe": 8,
       "address": 73,
@@ -5037,7 +5037,7 @@
     },
     {
       "id": "1020",
-      "name": "House 1020 · row 2",
+      "name": "House 1020 \u00b7 row 2",
       "profile": "pendant4",
       "universe": 8,
       "address": 77,
@@ -5068,7 +5068,7 @@
     },
     {
       "id": "1021",
-      "name": "House 1021 · row 2",
+      "name": "House 1021 \u00b7 row 2",
       "profile": "pendant4",
       "universe": 8,
       "address": 81,
@@ -5099,7 +5099,7 @@
     },
     {
       "id": "1022",
-      "name": "House 1022 · row 2",
+      "name": "House 1022 \u00b7 row 2",
       "profile": "pendant4",
       "universe": 8,
       "address": 85,
@@ -5130,7 +5130,7 @@
     },
     {
       "id": "1023",
-      "name": "House 1023 · row 2",
+      "name": "House 1023 \u00b7 row 2",
       "profile": "pendant4",
       "universe": 8,
       "address": 89,
@@ -5161,7 +5161,7 @@
     },
     {
       "id": "1024",
-      "name": "House 1024 · row 3 (provisional)",
+      "name": "House 1024 \u00b7 row 3 (provisional)",
       "profile": "pendant4",
       "universe": 8,
       "address": 93,
@@ -5192,7 +5192,7 @@
     },
     {
       "id": "1025",
-      "name": "House 1025 · row 3 (provisional)",
+      "name": "House 1025 \u00b7 row 3 (provisional)",
       "profile": "pendant4",
       "universe": 8,
       "address": 97,
@@ -5223,7 +5223,7 @@
     },
     {
       "id": "1026",
-      "name": "House 1026 · row 3 (provisional)",
+      "name": "House 1026 \u00b7 row 3 (provisional)",
       "profile": "pendant4",
       "universe": 8,
       "address": 101,
@@ -5254,7 +5254,7 @@
     },
     {
       "id": "1027",
-      "name": "House 1027 · row 3 (provisional)",
+      "name": "House 1027 \u00b7 row 3 (provisional)",
       "profile": "pendant4",
       "universe": 8,
       "address": 105,
@@ -5285,7 +5285,7 @@
     },
     {
       "id": "1028",
-      "name": "House 1028 · row 3 (provisional)",
+      "name": "House 1028 \u00b7 row 3 (provisional)",
       "profile": "pendant4",
       "universe": 8,
       "address": 109,
@@ -5316,7 +5316,7 @@
     },
     {
       "id": "1029",
-      "name": "House 1029 · row 3 (provisional)",
+      "name": "House 1029 \u00b7 row 3 (provisional)",
       "profile": "pendant4",
       "universe": 8,
       "address": 113,
@@ -5347,7 +5347,7 @@
     },
     {
       "id": "1030",
-      "name": "House 1030 · row 3 (provisional)",
+      "name": "House 1030 \u00b7 row 3 (provisional)",
       "profile": "pendant4",
       "universe": 8,
       "address": 117,
@@ -5378,7 +5378,7 @@
     },
     {
       "id": "1031",
-      "name": "House 1031 · row 3 (provisional)",
+      "name": "House 1031 \u00b7 row 3 (provisional)",
       "profile": "pendant4",
       "universe": 8,
       "address": 121,
@@ -5409,7 +5409,7 @@
     },
     {
       "id": "1032",
-      "name": "House 1032 · row 3 (provisional)",
+      "name": "House 1032 \u00b7 row 3 (provisional)",
       "profile": "pendant4",
       "universe": 8,
       "address": 125,
@@ -5440,7 +5440,7 @@
     },
     {
       "id": "1033",
-      "name": "House 1033 · row 3 (provisional)",
+      "name": "House 1033 \u00b7 row 3 (provisional)",
       "profile": "pendant4",
       "universe": 8,
       "address": 129,
@@ -5471,7 +5471,7 @@
     },
     {
       "id": "1034",
-      "name": "House 1034 · row 3 (provisional)",
+      "name": "House 1034 \u00b7 row 3 (provisional)",
       "profile": "pendant4",
       "universe": 8,
       "address": 133,
@@ -5502,7 +5502,7 @@
     },
     {
       "id": "1035",
-      "name": "House 1035 · row 3 (provisional)",
+      "name": "House 1035 \u00b7 row 3 (provisional)",
       "profile": "pendant4",
       "universe": 8,
       "address": 137,
@@ -5533,7 +5533,7 @@
     },
     {
       "id": "1036",
-      "name": "House 1036 · row 3 (provisional)",
+      "name": "House 1036 \u00b7 row 3 (provisional)",
       "profile": "pendant4",
       "universe": 8,
       "address": 141,
@@ -5564,7 +5564,7 @@
     },
     {
       "id": "1037",
-      "name": "House 1037 · row 3 (provisional)",
+      "name": "House 1037 \u00b7 row 3 (provisional)",
       "profile": "pendant4",
       "universe": 8,
       "address": 145,
@@ -5595,7 +5595,7 @@
     },
     {
       "id": "1038",
-      "name": "House 1038 · row 4 (provisional)",
+      "name": "House 1038 \u00b7 row 4 (provisional)",
       "profile": "pendant4",
       "universe": 8,
       "address": 149,
@@ -5626,7 +5626,7 @@
     },
     {
       "id": "1039",
-      "name": "House 1039 · row 4 (provisional)",
+      "name": "House 1039 \u00b7 row 4 (provisional)",
       "profile": "pendant4",
       "universe": 8,
       "address": 153,
@@ -5657,7 +5657,7 @@
     },
     {
       "id": "1040",
-      "name": "House 1040 · row 4 (provisional)",
+      "name": "House 1040 \u00b7 row 4 (provisional)",
       "profile": "pendant4",
       "universe": 8,
       "address": 157,
@@ -5688,7 +5688,7 @@
     },
     {
       "id": "1041",
-      "name": "House 1041 · row 4 (provisional)",
+      "name": "House 1041 \u00b7 row 4 (provisional)",
       "profile": "pendant4",
       "universe": 8,
       "address": 161,
@@ -5719,7 +5719,7 @@
     },
     {
       "id": "1042",
-      "name": "House 1042 · row 4 (provisional)",
+      "name": "House 1042 \u00b7 row 4 (provisional)",
       "profile": "pendant4",
       "universe": 8,
       "address": 165,
@@ -5750,7 +5750,7 @@
     },
     {
       "id": "1043",
-      "name": "House 1043 · row 4 (provisional)",
+      "name": "House 1043 \u00b7 row 4 (provisional)",
       "profile": "pendant4",
       "universe": 8,
       "address": 169,
@@ -5781,7 +5781,7 @@
     },
     {
       "id": "1044",
-      "name": "House 1044 · row 4 (provisional)",
+      "name": "House 1044 \u00b7 row 4 (provisional)",
       "profile": "pendant4",
       "universe": 8,
       "address": 173,
@@ -5812,7 +5812,7 @@
     },
     {
       "id": "1045",
-      "name": "House 1045 · row 4 (provisional)",
+      "name": "House 1045 \u00b7 row 4 (provisional)",
       "profile": "pendant4",
       "universe": 8,
       "address": 177,
@@ -5843,7 +5843,7 @@
     },
     {
       "id": "1046",
-      "name": "House 1046 · row 4 (provisional)",
+      "name": "House 1046 \u00b7 row 4 (provisional)",
       "profile": "pendant4",
       "universe": 8,
       "address": 181,
@@ -5874,7 +5874,7 @@
     },
     {
       "id": "1047",
-      "name": "House 1047 · row 4 (provisional)",
+      "name": "House 1047 \u00b7 row 4 (provisional)",
       "profile": "pendant4",
       "universe": 8,
       "address": 185,
@@ -5905,7 +5905,7 @@
     },
     {
       "id": "1048",
-      "name": "House 1048 · row 4 (provisional)",
+      "name": "House 1048 \u00b7 row 4 (provisional)",
       "profile": "pendant4",
       "universe": 8,
       "address": 189,
@@ -5936,7 +5936,7 @@
     },
     {
       "id": "1049",
-      "name": "House 1049 · row 4 (provisional)",
+      "name": "House 1049 \u00b7 row 4 (provisional)",
       "profile": "pendant4",
       "universe": 8,
       "address": 193,
@@ -5967,7 +5967,7 @@
     },
     {
       "id": "1050",
-      "name": "House 1050 · row 4 (provisional)",
+      "name": "House 1050 \u00b7 row 4 (provisional)",
       "profile": "pendant4",
       "universe": 8,
       "address": 197,
@@ -5998,7 +5998,7 @@
     },
     {
       "id": "1051",
-      "name": "House 1051 · row 4 (provisional)",
+      "name": "House 1051 \u00b7 row 4 (provisional)",
       "profile": "pendant4",
       "universe": 8,
       "address": 201,
@@ -6029,7 +6029,7 @@
     },
     {
       "id": "1052",
-      "name": "House 1052 · row 5 (provisional)",
+      "name": "House 1052 \u00b7 row 5 (provisional)",
       "profile": "pendant4",
       "universe": 8,
       "address": 205,
@@ -6060,7 +6060,7 @@
     },
     {
       "id": "1053",
-      "name": "House 1053 · row 5 (provisional)",
+      "name": "House 1053 \u00b7 row 5 (provisional)",
       "profile": "pendant4",
       "universe": 8,
       "address": 209,
@@ -6091,7 +6091,7 @@
     },
     {
       "id": "1054",
-      "name": "House 1054 · row 5 (provisional)",
+      "name": "House 1054 \u00b7 row 5 (provisional)",
       "profile": "pendant4",
       "universe": 8,
       "address": 213,
@@ -6122,7 +6122,7 @@
     },
     {
       "id": "1055",
-      "name": "House 1055 · row 5 (provisional)",
+      "name": "House 1055 \u00b7 row 5 (provisional)",
       "profile": "pendant4",
       "universe": 8,
       "address": 217,
@@ -6153,7 +6153,7 @@
     },
     {
       "id": "1056",
-      "name": "House 1056 · row 5 (provisional)",
+      "name": "House 1056 \u00b7 row 5 (provisional)",
       "profile": "pendant4",
       "universe": 8,
       "address": 221,
@@ -6184,7 +6184,7 @@
     },
     {
       "id": "1057",
-      "name": "House 1057 · row 5 (provisional)",
+      "name": "House 1057 \u00b7 row 5 (provisional)",
       "profile": "pendant4",
       "universe": 8,
       "address": 225,
@@ -6215,7 +6215,7 @@
     },
     {
       "id": "1058",
-      "name": "House 1058 · row 5 (provisional)",
+      "name": "House 1058 \u00b7 row 5 (provisional)",
       "profile": "pendant4",
       "universe": 8,
       "address": 229,
@@ -6246,7 +6246,7 @@
     },
     {
       "id": "1059",
-      "name": "House 1059 · row 5 (provisional)",
+      "name": "House 1059 \u00b7 row 5 (provisional)",
       "profile": "pendant4",
       "universe": 8,
       "address": 233,
@@ -6277,7 +6277,7 @@
     },
     {
       "id": "1060",
-      "name": "House 1060 · row 5 (provisional)",
+      "name": "House 1060 \u00b7 row 5 (provisional)",
       "profile": "pendant4",
       "universe": 8,
       "address": 237,
@@ -6308,7 +6308,7 @@
     },
     {
       "id": "1061",
-      "name": "House 1061 · row 5 (provisional)",
+      "name": "House 1061 \u00b7 row 5 (provisional)",
       "profile": "pendant4",
       "universe": 8,
       "address": 241,
@@ -6339,7 +6339,7 @@
     },
     {
       "id": "1062",
-      "name": "House 1062 · row 5 (provisional)",
+      "name": "House 1062 \u00b7 row 5 (provisional)",
       "profile": "pendant4",
       "universe": 8,
       "address": 245,
@@ -6370,7 +6370,7 @@
     },
     {
       "id": "3301",
-      "name": "House 3301 · location unknown (provisional)",
+      "name": "House 3301 \u00b7 location unknown (provisional)",
       "profile": "pendant4",
       "universe": 5,
       "address": 165,
@@ -6401,7 +6401,7 @@
     },
     {
       "id": "3302",
-      "name": "House 3302 · location unknown (provisional)",
+      "name": "House 3302 \u00b7 location unknown (provisional)",
       "profile": "pendant4",
       "universe": 5,
       "address": 169,
@@ -6432,7 +6432,7 @@
     },
     {
       "id": "3303",
-      "name": "House 3303 · location unknown (provisional)",
+      "name": "House 3303 \u00b7 location unknown (provisional)",
       "profile": "pendant4",
       "universe": 5,
       "address": 173,
@@ -6463,7 +6463,7 @@
     },
     {
       "id": "3304",
-      "name": "House 3304 · location unknown (provisional)",
+      "name": "House 3304 \u00b7 location unknown (provisional)",
       "profile": "pendant4",
       "universe": 5,
       "address": 177,
@@ -6494,7 +6494,7 @@
     },
     {
       "id": "3305",
-      "name": "House 3305 · location unknown (provisional)",
+      "name": "House 3305 \u00b7 location unknown (provisional)",
       "profile": "pendant4",
       "universe": 5,
       "address": 181,
@@ -6525,7 +6525,7 @@
     },
     {
       "id": "3306",
-      "name": "House 3306 · location unknown (provisional)",
+      "name": "House 3306 \u00b7 location unknown (provisional)",
       "profile": "pendant4",
       "universe": 5,
       "address": 185,
@@ -6556,7 +6556,7 @@
     },
     {
       "id": "3307",
-      "name": "House 3307 · location unknown (provisional)",
+      "name": "House 3307 \u00b7 location unknown (provisional)",
       "profile": "pendant4",
       "universe": 5,
       "address": 189,
@@ -6587,7 +6587,7 @@
     },
     {
       "id": "3308",
-      "name": "House 3308 · location unknown (provisional)",
+      "name": "House 3308 \u00b7 location unknown (provisional)",
       "profile": "pendant4",
       "universe": 5,
       "address": 193,
@@ -6618,7 +6618,7 @@
     },
     {
       "id": "3309",
-      "name": "House 3309 · location unknown (provisional)",
+      "name": "House 3309 \u00b7 location unknown (provisional)",
       "profile": "pendant4",
       "universe": 5,
       "address": 197,
@@ -6649,7 +6649,7 @@
     },
     {
       "id": "3310",
-      "name": "House 3310 · location unknown (provisional)",
+      "name": "House 3310 \u00b7 location unknown (provisional)",
       "profile": "pendant4",
       "universe": 5,
       "address": 201,
@@ -6680,7 +6680,7 @@
     },
     {
       "id": "3311",
-      "name": "House 3311 · location unknown (provisional)",
+      "name": "House 3311 \u00b7 location unknown (provisional)",
       "profile": "pendant4",
       "universe": 5,
       "address": 205,
@@ -6711,7 +6711,7 @@
     },
     {
       "id": "3312",
-      "name": "House 3312 · location unknown (provisional)",
+      "name": "House 3312 \u00b7 location unknown (provisional)",
       "profile": "pendant4",
       "universe": 5,
       "address": 209,
@@ -6742,7 +6742,7 @@
     },
     {
       "id": "3313",
-      "name": "House 3313 · location unknown (provisional)",
+      "name": "House 3313 \u00b7 location unknown (provisional)",
       "profile": "pendant4",
       "universe": 5,
       "address": 213,
@@ -6773,7 +6773,7 @@
     },
     {
       "id": "3314",
-      "name": "House 3314 · location unknown (provisional)",
+      "name": "House 3314 \u00b7 location unknown (provisional)",
       "profile": "pendant4",
       "universe": 5,
       "address": 217,
@@ -6804,7 +6804,7 @@
     },
     {
       "id": "3315",
-      "name": "House 3315 · location unknown (provisional)",
+      "name": "House 3315 \u00b7 location unknown (provisional)",
       "profile": "pendant4",
       "universe": 5,
       "address": 221,
@@ -6835,7 +6835,7 @@
     },
     {
       "id": "3316",
-      "name": "House 3316 · location unknown (provisional)",
+      "name": "House 3316 \u00b7 location unknown (provisional)",
       "profile": "pendant4",
       "universe": 5,
       "address": 225,
@@ -6866,7 +6866,7 @@
     },
     {
       "id": "3317",
-      "name": "House 3317 · location unknown (provisional)",
+      "name": "House 3317 \u00b7 location unknown (provisional)",
       "profile": "pendant4",
       "universe": 5,
       "address": 229,
@@ -6897,7 +6897,7 @@
     },
     {
       "id": "3318",
-      "name": "House 3318 · location unknown (provisional)",
+      "name": "House 3318 \u00b7 location unknown (provisional)",
       "profile": "pendant4",
       "universe": 5,
       "address": 233,
@@ -6928,7 +6928,7 @@
     },
     {
       "id": "3320",
-      "name": "House 3320 · location unknown (provisional)",
+      "name": "House 3320 \u00b7 location unknown (provisional)",
       "profile": "pendant4",
       "universe": 5,
       "address": 241,
@@ -6959,7 +6959,7 @@
     },
     {
       "id": "3321",
-      "name": "House 3321 · location unknown (provisional)",
+      "name": "House 3321 \u00b7 location unknown (provisional)",
       "profile": "pendant4",
       "universe": 5,
       "address": 245,
@@ -6990,7 +6990,7 @@
     },
     {
       "id": "3322",
-      "name": "House 3322 · location unknown (provisional)",
+      "name": "House 3322 \u00b7 location unknown (provisional)",
       "profile": "pendant4",
       "universe": 5,
       "address": 249,
@@ -7021,7 +7021,7 @@
     },
     {
       "id": "3323",
-      "name": "House 3323 · location unknown (provisional)",
+      "name": "House 3323 \u00b7 location unknown (provisional)",
       "profile": "pendant4",
       "universe": 5,
       "address": 253,
@@ -7052,7 +7052,7 @@
     },
     {
       "id": "3324",
-      "name": "House 3324 · location unknown (provisional)",
+      "name": "House 3324 \u00b7 location unknown (provisional)",
       "profile": "pendant4",
       "universe": 5,
       "address": 257,
@@ -7083,7 +7083,7 @@
     },
     {
       "id": "3325",
-      "name": "House 3325 · location unknown (provisional)",
+      "name": "House 3325 \u00b7 location unknown (provisional)",
       "profile": "pendant4",
       "universe": 5,
       "address": 261,
@@ -7114,7 +7114,7 @@
     },
     {
       "id": "3326",
-      "name": "House 3326 · location unknown (provisional)",
+      "name": "House 3326 \u00b7 location unknown (provisional)",
       "profile": "pendant4",
       "universe": 5,
       "address": 265,
@@ -7145,7 +7145,7 @@
     },
     {
       "id": "3327",
-      "name": "House 3327 · location unknown (provisional)",
+      "name": "House 3327 \u00b7 location unknown (provisional)",
       "profile": "pendant4",
       "universe": 5,
       "address": 269,
@@ -7176,7 +7176,7 @@
     },
     {
       "id": "3328",
-      "name": "House 3328 · location unknown (provisional)",
+      "name": "House 3328 \u00b7 location unknown (provisional)",
       "profile": "pendant4",
       "universe": 5,
       "address": 273,
@@ -7207,7 +7207,7 @@
     },
     {
       "id": "3329",
-      "name": "House 3329 · location unknown (provisional)",
+      "name": "House 3329 \u00b7 location unknown (provisional)",
       "profile": "pendant4",
       "universe": 5,
       "address": 277,
@@ -7238,7 +7238,7 @@
     },
     {
       "id": "3330",
-      "name": "House 3330 · location unknown (provisional)",
+      "name": "House 3330 \u00b7 location unknown (provisional)",
       "profile": "pendant4",
       "universe": 5,
       "address": 281,
@@ -7269,7 +7269,7 @@
     },
     {
       "id": "3331",
-      "name": "House 3331 · location unknown (provisional)",
+      "name": "House 3331 \u00b7 location unknown (provisional)",
       "profile": "pendant4",
       "universe": 5,
       "address": 285,
@@ -7300,7 +7300,7 @@
     },
     {
       "id": "3332",
-      "name": "House 3332 · location unknown (provisional)",
+      "name": "House 3332 \u00b7 location unknown (provisional)",
       "profile": "pendant4",
       "universe": 5,
       "address": 289,
@@ -7331,7 +7331,7 @@
     },
     {
       "id": "3333",
-      "name": "House 3333 · location unknown (provisional)",
+      "name": "House 3333 \u00b7 location unknown (provisional)",
       "profile": "pendant4",
       "universe": 5,
       "address": 293,
@@ -7362,7 +7362,7 @@
     },
     {
       "id": "3334",
-      "name": "House 3334 · location unknown (provisional)",
+      "name": "House 3334 \u00b7 location unknown (provisional)",
       "profile": "pendant4",
       "universe": 5,
       "address": 297,
@@ -7393,7 +7393,7 @@
     },
     {
       "id": "3335",
-      "name": "House 3335 · location unknown (provisional)",
+      "name": "House 3335 \u00b7 location unknown (provisional)",
       "profile": "pendant4",
       "universe": 5,
       "address": 301,
@@ -7424,7 +7424,7 @@
     },
     {
       "id": "3336",
-      "name": "House 3336 · location unknown (provisional)",
+      "name": "House 3336 \u00b7 location unknown (provisional)",
       "profile": "pendant4",
       "universe": 5,
       "address": 305,
@@ -7455,7 +7455,7 @@
     },
     {
       "id": "3337",
-      "name": "House 3337 · location unknown (provisional)",
+      "name": "House 3337 \u00b7 location unknown (provisional)",
       "profile": "pendant4",
       "universe": 5,
       "address": 309,
@@ -7486,7 +7486,7 @@
     },
     {
       "id": "3338",
-      "name": "House 3338 · location unknown (provisional)",
+      "name": "House 3338 \u00b7 location unknown (provisional)",
       "profile": "pendant4",
       "universe": 5,
       "address": 313,
@@ -7517,7 +7517,7 @@
     },
     {
       "id": "3339",
-      "name": "House 3339 · location unknown (provisional)",
+      "name": "House 3339 \u00b7 location unknown (provisional)",
       "profile": "pendant4",
       "universe": 5,
       "address": 317,
@@ -7548,7 +7548,7 @@
     },
     {
       "id": "3340",
-      "name": "House 3340 · location unknown (provisional)",
+      "name": "House 3340 \u00b7 location unknown (provisional)",
       "profile": "pendant4",
       "universe": 5,
       "address": 321,
@@ -7579,7 +7579,7 @@
     },
     {
       "id": "3341",
-      "name": "House 3341 · location unknown (provisional)",
+      "name": "House 3341 \u00b7 location unknown (provisional)",
       "profile": "pendant4",
       "universe": 5,
       "address": 325,
@@ -7610,7 +7610,7 @@
     },
     {
       "id": "3342",
-      "name": "House 3342 · location unknown (provisional)",
+      "name": "House 3342 \u00b7 location unknown (provisional)",
       "profile": "pendant4",
       "universe": 5,
       "address": 329,
@@ -7641,7 +7641,7 @@
     },
     {
       "id": "3343",
-      "name": "House 3343 · location unknown (provisional)",
+      "name": "House 3343 \u00b7 location unknown (provisional)",
       "profile": "pendant4",
       "universe": 5,
       "address": 333,
@@ -7672,7 +7672,7 @@
     },
     {
       "id": "3344",
-      "name": "House 3344 · location unknown (provisional)",
+      "name": "House 3344 \u00b7 location unknown (provisional)",
       "profile": "pendant4",
       "universe": 5,
       "address": 337,
@@ -7703,7 +7703,7 @@
     },
     {
       "id": "3345",
-      "name": "House 3345 · location unknown (provisional)",
+      "name": "House 3345 \u00b7 location unknown (provisional)",
       "profile": "pendant4",
       "universe": 5,
       "address": 341,
@@ -7734,7 +7734,7 @@
     },
     {
       "id": "3346",
-      "name": "House 3346 · location unknown (provisional)",
+      "name": "House 3346 \u00b7 location unknown (provisional)",
       "profile": "pendant4",
       "universe": 5,
       "address": 345,
@@ -7765,7 +7765,7 @@
     },
     {
       "id": "3347",
-      "name": "House 3347 · location unknown (provisional)",
+      "name": "House 3347 \u00b7 location unknown (provisional)",
       "profile": "pendant4",
       "universe": 5,
       "address": 349,
@@ -7796,7 +7796,7 @@
     },
     {
       "id": "3348",
-      "name": "House 3348 · location unknown (provisional)",
+      "name": "House 3348 \u00b7 location unknown (provisional)",
       "profile": "pendant4",
       "universe": 5,
       "address": 353,
@@ -7827,7 +7827,7 @@
     },
     {
       "id": "3349",
-      "name": "House 3349 · location unknown (provisional)",
+      "name": "House 3349 \u00b7 location unknown (provisional)",
       "profile": "pendant4",
       "universe": 5,
       "address": 357,
@@ -7858,7 +7858,7 @@
     },
     {
       "id": "3350",
-      "name": "House 3350 · location unknown (provisional)",
+      "name": "House 3350 \u00b7 location unknown (provisional)",
       "profile": "pendant4",
       "universe": 5,
       "address": 361,
@@ -7889,7 +7889,7 @@
     },
     {
       "id": "3351",
-      "name": "House 3351 · location unknown (provisional)",
+      "name": "House 3351 \u00b7 location unknown (provisional)",
       "profile": "pendant4",
       "universe": 5,
       "address": 365,
@@ -7920,7 +7920,7 @@
     },
     {
       "id": "3352",
-      "name": "House 3352 · location unknown (provisional)",
+      "name": "House 3352 \u00b7 location unknown (provisional)",
       "profile": "pendant4",
       "universe": 5,
       "address": 369,
@@ -7951,7 +7951,7 @@
     },
     {
       "id": "3353",
-      "name": "House 3353 · location unknown (provisional)",
+      "name": "House 3353 \u00b7 location unknown (provisional)",
       "profile": "pendant4",
       "universe": 5,
       "address": 373,
@@ -7982,7 +7982,7 @@
     },
     {
       "id": "3354",
-      "name": "House 3354 · location unknown (provisional)",
+      "name": "House 3354 \u00b7 location unknown (provisional)",
       "profile": "pendant4",
       "universe": 5,
       "address": 377,
@@ -8013,7 +8013,7 @@
     },
     {
       "id": "3355",
-      "name": "House 3355 · location unknown (provisional)",
+      "name": "House 3355 \u00b7 location unknown (provisional)",
       "profile": "pendant4",
       "universe": 5,
       "address": 381,
@@ -8044,7 +8044,7 @@
     },
     {
       "id": "3356",
-      "name": "House 3356 · location unknown (provisional)",
+      "name": "House 3356 \u00b7 location unknown (provisional)",
       "profile": "pendant4",
       "universe": 5,
       "address": 385,
@@ -8075,7 +8075,7 @@
     },
     {
       "id": "3357",
-      "name": "House 3357 · location unknown (provisional)",
+      "name": "House 3357 \u00b7 location unknown (provisional)",
       "profile": "pendant4",
       "universe": 5,
       "address": 389,
@@ -8106,7 +8106,7 @@
     },
     {
       "id": "3358",
-      "name": "House 3358 · location unknown (provisional)",
+      "name": "House 3358 \u00b7 location unknown (provisional)",
       "profile": "pendant4",
       "universe": 5,
       "address": 393,
@@ -8137,7 +8137,7 @@
     },
     {
       "id": "3359",
-      "name": "House 3359 · location unknown (provisional)",
+      "name": "House 3359 \u00b7 location unknown (provisional)",
       "profile": "pendant4",
       "universe": 5,
       "address": 397,
@@ -8168,7 +8168,7 @@
     },
     {
       "id": "3360",
-      "name": "House 3360 · location unknown (provisional)",
+      "name": "House 3360 \u00b7 location unknown (provisional)",
       "profile": "pendant4",
       "universe": 5,
       "address": 401,
@@ -8199,7 +8199,7 @@
     },
     {
       "id": "3361",
-      "name": "House 3361 · location unknown (provisional)",
+      "name": "House 3361 \u00b7 location unknown (provisional)",
       "profile": "pendant4",
       "universe": 5,
       "address": 405,
@@ -8230,7 +8230,7 @@
     },
     {
       "id": "3362",
-      "name": "House 3362 · location unknown (provisional)",
+      "name": "House 3362 \u00b7 location unknown (provisional)",
       "profile": "pendant4",
       "universe": 5,
       "address": 409,
@@ -8315,7 +8315,7 @@
     },
     {
       "id": "mh7s",
-      "name": "MH7s · provisional positions",
+      "name": "MH7s \u00b7 provisional positions",
       "fixtures": [
         "705",
         "707",
@@ -8337,7 +8337,7 @@
     },
     {
       "id": "grid",
-      "name": "Ceiling grid · 21 patched / 23 positions",
+      "name": "Ceiling grid \u00b7 21 patched / 23 positions",
       "fixtures": [
         "201",
         "202",
@@ -8366,7 +8366,7 @@
     },
     {
       "id": "grid-row-1",
-      "name": "Grid row 1 · back to front",
+      "name": "Grid row 1 \u00b7 back to front",
       "fixtures": [
         "201",
         "202",
@@ -8377,7 +8377,7 @@
     },
     {
       "id": "grid-row-2",
-      "name": "Grid row 2 · back to front",
+      "name": "Grid row 2 \u00b7 back to front",
       "fixtures": [
         "206",
         "207",
@@ -8386,7 +8386,7 @@
     },
     {
       "id": "grid-row-3",
-      "name": "Grid row 3 · back to front",
+      "name": "Grid row 3 \u00b7 back to front",
       "fixtures": [
         "209",
         "210",
@@ -8396,7 +8396,7 @@
     },
     {
       "id": "grid-row-4",
-      "name": "Grid row 4 · back to front",
+      "name": "Grid row 4 \u00b7 back to front",
       "fixtures": [
         "213",
         "214",
@@ -8405,7 +8405,7 @@
     },
     {
       "id": "grid-row-5",
-      "name": "Grid row 5 · back to front",
+      "name": "Grid row 5 \u00b7 back to front",
       "fixtures": [
         "216",
         "217",
@@ -8416,7 +8416,7 @@
     },
     {
       "id": "grid-row-6",
-      "name": "Grid row 6 · back to front",
+      "name": "Grid row 6 \u00b7 back to front",
       "fixtures": [
         "221",
         "grid-pending-1",
@@ -8425,7 +8425,7 @@
     },
     {
       "id": "dance-r3",
-      "name": "R3 dance · left to right",
+      "name": "R3 dance \u00b7 left to right",
       "fixtures": [
         "305",
         "301",
@@ -8437,7 +8437,7 @@
     },
     {
       "id": "dance-mh7",
-      "name": "MH7 dance · left to right",
+      "name": "MH7 dance \u00b7 left to right",
       "fixtures": [
         "3103",
         "3102",
@@ -8462,7 +8462,7 @@
     },
     {
       "id": "rig-check-rogue",
-      "name": "Rig check · rogue",
+      "name": "Rig check \u00b7 rogue",
       "fixtures": [
         "305",
         "301",
@@ -8474,7 +8474,7 @@
     },
     {
       "id": "rig-check-mh7",
-      "name": "Rig check · mh7",
+      "name": "Rig check \u00b7 mh7",
       "fixtures": [
         "3103",
         "3102",
@@ -8488,7 +8488,7 @@
     },
     {
       "id": "rig-check-beam7r",
-      "name": "Rig check · beam7r",
+      "name": "Rig check \u00b7 beam7r",
       "fixtures": [
         "4104",
         "4102",
@@ -8498,7 +8498,7 @@
     },
     {
       "id": "rig-check-beam200",
-      "name": "Rig check · beam200",
+      "name": "Rig check \u00b7 beam200",
       "fixtures": [
         "3901"
       ]
@@ -8530,7 +8530,7 @@
     },
     {
       "id": "front-lights",
-      "name": "Front lights · truss facing stage",
+      "name": "Front lights \u00b7 truss facing stage",
       "fixtures": [
         "409",
         "410",
@@ -8546,7 +8546,7 @@
     },
     {
       "id": "face-lights",
-      "name": "Face lights · broadcast Rêve E-3",
+      "name": "Face lights \u00b7 broadcast R\u00eave E-3",
       "fixtures": [
         "1",
         "2",
@@ -8601,7 +8601,7 @@
     },
     {
       "id": "face-row-1",
-      "name": "Face lights · row 1 (provisional)",
+      "name": "Face lights \u00b7 row 1 (provisional)",
       "fixtures": [
         "1",
         "2",
@@ -8631,7 +8631,7 @@
     },
     {
       "id": "face-row-2",
-      "name": "Face lights · row 2 (provisional)",
+      "name": "Face lights \u00b7 row 2 (provisional)",
       "fixtures": [
         "25",
         "26",
@@ -8662,7 +8662,7 @@
     },
     {
       "id": "house-lights",
-      "name": "House lights · RGBW pendants",
+      "name": "House lights \u00b7 RGBW pendants",
       "fixtures": [
         "1001",
         "1002",
@@ -8791,7 +8791,7 @@
     },
     {
       "id": "house-row-1",
-      "name": "House lights · row 1",
+      "name": "House lights \u00b7 row 1",
       "fixtures": [
         "1001",
         "1002",
@@ -8806,7 +8806,7 @@
     },
     {
       "id": "house-row-2",
-      "name": "House lights · row 2",
+      "name": "House lights \u00b7 row 2",
       "fixtures": [
         "1010",
         "1011",
@@ -8826,7 +8826,7 @@
     },
     {
       "id": "house-row-3",
-      "name": "House lights · row 3 (provisional)",
+      "name": "House lights \u00b7 row 3 (provisional)",
       "fixtures": [
         "1024",
         "1025",
@@ -8846,7 +8846,7 @@
     },
     {
       "id": "house-row-4",
-      "name": "House lights · row 4 (provisional)",
+      "name": "House lights \u00b7 row 4 (provisional)",
       "fixtures": [
         "1038",
         "1039",
@@ -8866,7 +8866,7 @@
     },
     {
       "id": "house-row-5",
-      "name": "House lights · row 5 (provisional)",
+      "name": "House lights \u00b7 row 5 (provisional)",
       "fixtures": [
         "1052",
         "1053",
@@ -8883,7 +8883,7 @@
     },
     {
       "id": "house-3300s",
-      "name": "House lights · 3301–3362 (location unknown)",
+      "name": "House lights \u00b7 3301\u20133362 (location unknown)",
       "fixtures": [
         "3301",
         "3302",
@@ -8950,7 +8950,7 @@
     },
     {
       "id": "ygn-movers",
-      "name": "Your Great Name · all beams left to right",
+      "name": "Your Great Name \u00b7 all beams left to right",
       "fixtures": [
         "3103",
         "305",
@@ -8975,7 +8975,7 @@
     },
     {
       "id": "ygn-grid-z",
-      "name": "Your Great Name · ceiling grid back to front",
+      "name": "Your Great Name \u00b7 ceiling grid back to front",
       "fixtures": [
         "201",
         "202",
@@ -9002,7 +9002,7 @@
     },
     {
       "id": "ygn-hits",
-      "name": "Your Great Name · band-stop hits (no face, no house)",
+      "name": "Your Great Name \u00b7 band-stop hits (no face, no house)",
       "fixtures": [
         "401",
         "402",
@@ -9108,7 +9108,7 @@
     },
     {
       "id": "wheel-ffff00",
-      "name": "Yellow · 24",
+      "name": "Yellow \u00b7 24",
       "color": "#ffff00"
     },
     {
@@ -9158,7 +9158,7 @@
     },
     {
       "id": "wheel-ffe040",
-      "name": "Yellow · 82",
+      "name": "Yellow \u00b7 82",
       "color": "#ffe040"
     },
     {
@@ -9205,7 +9205,7 @@
     },
     {
       "id": "tidal-dance-center",
-      "name": "Tidal dance · calibrated centers",
+      "name": "Tidal dance \u00b7 calibrated centers",
       "positions": {
         "301": {
           "pan": 0.3672113289760348,
@@ -9267,7 +9267,7 @@
     },
     {
       "id": "rig-check-a",
-      "name": "Rig check · fan A",
+      "name": "Rig check \u00b7 fan A",
       "positions": {
         "301": {
           "pan": 0.3592113289760348,
@@ -9349,7 +9349,7 @@
     },
     {
       "id": "rig-check-b",
-      "name": "Rig check · fan B",
+      "name": "Rig check \u00b7 fan B",
       "positions": {
         "301": {
           "pan": 0.3732113289760348,
@@ -9465,7 +9465,7 @@
   "cues": [
     {
       "id": "ygn-intro",
-      "name": "YGN · Intro · first hit",
+      "name": "YGN \u00b7 Intro \u00b7 first hit",
       "description": "Your Great Name, bars 1-4 (0:00.0-0:09.5) at 102.975 BPM.",
       "duration": 9.5027,
       "loop": true,
@@ -9899,7 +9899,7 @@
     },
     {
       "id": "ygn-verse1",
-      "name": "YGN · Verse 1 · building",
+      "name": "YGN \u00b7 Verse 1 \u00b7 building",
       "description": "Your Great Name, bars 5-16 (0:09.5-0:37.5) at 102.975 BPM.",
       "duration": 27.9679,
       "loop": true,
@@ -10498,7 +10498,7 @@
     },
     {
       "id": "ygn-chorus1",
-      "name": "YGN · Chorus 1 · gold",
+      "name": "YGN \u00b7 Chorus 1 \u00b7 gold",
       "description": "Your Great Name, bars 17-24 (0:37.5-0:56.1) at 102.975 BPM.",
       "duration": 18.6453,
       "loop": true,
@@ -10974,7 +10974,7 @@
     },
     {
       "id": "ygn-turn1",
-      "name": "YGN · Chorus 1 · turnaround",
+      "name": "YGN \u00b7 Chorus 1 \u00b7 turnaround",
       "description": "Your Great Name, bars 25-28 (0:56.1-1:05.4) at 102.975 BPM.",
       "duration": 9.3227,
       "loop": true,
@@ -11374,7 +11374,7 @@
     },
     {
       "id": "ygn-lift",
-      "name": "YGN · Lift · before the big chorus",
+      "name": "YGN \u00b7 Lift \u00b7 before the big chorus",
       "description": "Your Great Name, bars 29-32 (1:05.4-1:14.8) at 102.975 BPM.",
       "duration": 9.3226,
       "loop": true,
@@ -11921,7 +11921,7 @@
     },
     {
       "id": "ygn-chorus2",
-      "name": "YGN · Big chorus",
+      "name": "YGN \u00b7 Big chorus",
       "description": "Your Great Name, bars 33-48 (1:14.8-1:52.1) at 102.975 BPM.",
       "duration": 37.2906,
       "loop": true,
@@ -12765,7 +12765,7 @@
     },
     {
       "id": "ygn-tag2",
-      "name": "YGN · Chorus tag · hits",
+      "name": "YGN \u00b7 Chorus tag \u00b7 hits",
       "description": "Your Great Name, bars 49-50 (1:52.1-1:56.7) at 102.975 BPM.",
       "duration": 4.6613,
       "loop": true,
@@ -13176,7 +13176,7 @@
     },
     {
       "id": "ygn-breakdown",
-      "name": "YGN · Breakdown · intimate",
+      "name": "YGN \u00b7 Breakdown \u00b7 intimate",
       "description": "Your Great Name, bars 51-64 (1:56.7-2:29.3) at 102.975 BPM.",
       "duration": 32.6293,
       "loop": true,
@@ -13727,7 +13727,7 @@
     },
     {
       "id": "ygn-chorus3a",
-      "name": "YGN · Chorus 3 · royal and gold",
+      "name": "YGN \u00b7 Chorus 3 \u00b7 royal and gold",
       "description": "Your Great Name, bars 65-80 (2:29.3-3:06.6) at 102.975 BPM.",
       "duration": 37.2906,
       "loop": true,
@@ -14244,7 +14244,7 @@
     },
     {
       "id": "ygn-chorus3b",
-      "name": "YGN · Chorus 3 · crimson power",
+      "name": "YGN \u00b7 Chorus 3 \u00b7 crimson power",
       "description": "Your Great Name, bars 81-96 (3:06.6-3:43.9) at 102.975 BPM.",
       "duration": 37.2906,
       "loop": true,
@@ -14915,7 +14915,7 @@
     },
     {
       "id": "ygn-hits",
-      "name": "YGN · Band stops · hits",
+      "name": "YGN \u00b7 Band stops \u00b7 hits",
       "description": "Your Great Name, bars 97-112 (3:43.9-4:21.2) at 102.975 BPM.",
       "duration": 37.2906,
       "loop": true,
@@ -16044,7 +16044,7 @@
     },
     {
       "id": "ygn-bridge",
-      "name": "YGN · Full band · climb to the peak",
+      "name": "YGN \u00b7 Full band \u00b7 climb to the peak",
       "description": "Your Great Name, bars 113-131 (4:21.2-5:05.5) at 102.975 BPM.",
       "duration": 44.2826,
       "loop": true,
@@ -16765,7 +16765,7 @@
     },
     {
       "id": "ygn-reset",
-      "name": "YGN · Reset · breathe",
+      "name": "YGN \u00b7 Reset \u00b7 breathe",
       "description": "Your Great Name, bars 132-137 (5:05.5-5:19.5) at 102.975 BPM.",
       "duration": 13.984,
       "loop": true,
@@ -17311,7 +17311,7 @@
     },
     {
       "id": "ygn-vamp1",
-      "name": "YGN · Vamp 1 · power",
+      "name": "YGN \u00b7 Vamp 1 \u00b7 power",
       "description": "Your Great Name, bars 138-156 (5:19.5-6:03.8) at 102.975 BPM.",
       "duration": 44.2826,
       "loop": true,
@@ -18018,7 +18018,7 @@
     },
     {
       "id": "ygn-breath",
-      "name": "YGN · Breath · regroup",
+      "name": "YGN \u00b7 Breath \u00b7 regroup",
       "description": "Your Great Name, bars 157-160 (6:03.8-6:13.1) at 102.975 BPM.",
       "duration": 9.3226,
       "loop": true,
@@ -18551,7 +18551,7 @@
     },
     {
       "id": "ygn-vamp2",
-      "name": "YGN · Vamp 2 · the peak",
+      "name": "YGN \u00b7 Vamp 2 \u00b7 the peak",
       "description": "Your Great Name, bars 161-179 (6:13.1-6:57.4) at 102.975 BPM.",
       "duration": 44.2826,
       "loop": true,
@@ -19289,7 +19289,7 @@
     },
     {
       "id": "ygn-callresp",
-      "name": "YGN · Call and response · loop",
+      "name": "YGN \u00b7 Call and response \u00b7 loop",
       "description": "Your Great Name, bars 180-203 (6:57.4-7:53.3) at 102.975 BPM. Two-bar loop, auto-follows after 24 bars.",
       "duration": 4.6613,
       "loop": true,
@@ -19816,7 +19816,7 @@
     },
     {
       "id": "ygn-outro",
-      "name": "YGN · Outro · ride out",
+      "name": "YGN \u00b7 Outro \u00b7 ride out",
       "description": "Your Great Name, bars 204-216 (7:53.3-8:23.6) at 102.975 BPM.",
       "duration": 30.2987,
       "loop": true,
@@ -20222,7 +20222,7 @@
     },
     {
       "id": "ygn-ending",
-      "name": "YGN · Ending · last chord",
+      "name": "YGN \u00b7 Ending \u00b7 last chord",
       "description": "Your Great Name, bars 217-222 (8:23.6-8:37.6) at 102.975 BPM.",
       "duration": 13.9839,
       "loop": false,
@@ -20601,7 +20601,7 @@
     },
     {
       "id": "rig-check-all-lights",
-      "name": "Rig Check · All Lights",
+      "name": "Rig Check \u00b7 All Lights",
       "description": "All 48 mapped lights: steady warm/cool grid, violet/rose backlights, contrasting gobo/prism fans and gentle 65-second position drift. No flashes or lamp commands. Stop fades out.",
       "duration": 900,
       "loop": true,
@@ -21615,6 +21615,67 @@
           }
         }
       ]
+    },
+    {
+      "id": "test-blue-red",
+      "name": "Backlights \u00b7 blue up, dip, red",
+      "description": "Backlights fade up to blue (3 s), hold blue 2 s, fade down 1 s, fade up to red (2 s) and stay red.",
+      "duration": 8,
+      "loop": false,
+      "hold": true,
+      "tracks": [
+        {
+          "group": "backlights",
+          "effect": "fade",
+          "start": 0,
+          "duration": 3,
+          "params": {
+            "color": "#0030ff",
+            "brightness": 1,
+            "direction": "in"
+          },
+          "fadeIn": 0,
+          "fadeOut": 0
+        },
+        {
+          "group": "backlights",
+          "effect": "static",
+          "start": 3,
+          "duration": 2,
+          "params": {
+            "color": "#0030ff",
+            "brightness": 1
+          },
+          "fadeIn": 0,
+          "fadeOut": 0
+        },
+        {
+          "group": "backlights",
+          "effect": "fade",
+          "start": 5,
+          "duration": 1,
+          "params": {
+            "color": "#0030ff",
+            "brightness": 1,
+            "direction": "out"
+          },
+          "fadeIn": 0,
+          "fadeOut": 0
+        },
+        {
+          "group": "backlights",
+          "effect": "fade",
+          "start": 6,
+          "duration": 2,
+          "params": {
+            "color": "#ff1a00",
+            "brightness": 1,
+            "direction": "in"
+          },
+          "fadeIn": 0,
+          "fadeOut": 0
+        }
+      ]
     }
   ],
   "settings": {
@@ -21657,7 +21718,7 @@
         {
           "id": "ygn-e01",
           "cue": "ygn-intro",
-          "label": "Intro · first hit · 0:00.0",
+          "label": "Intro \u00b7 first hit \u00b7 0:00.0",
           "fade": 0,
           "follow": "auto",
           "wait": 9.5027
@@ -21665,7 +21726,7 @@
         {
           "id": "ygn-e02",
           "cue": "ygn-verse1",
-          "label": "Verse 1 · building · 0:09.5",
+          "label": "Verse 1 \u00b7 building \u00b7 0:09.5",
           "fade": 0,
           "follow": "auto",
           "wait": 27.9679
@@ -21673,7 +21734,7 @@
         {
           "id": "ygn-e03",
           "cue": "ygn-chorus1",
-          "label": "Chorus 1 · gold · 0:37.5",
+          "label": "Chorus 1 \u00b7 gold \u00b7 0:37.5",
           "fade": 0,
           "follow": "auto",
           "wait": 18.6453
@@ -21681,7 +21742,7 @@
         {
           "id": "ygn-e04",
           "cue": "ygn-turn1",
-          "label": "Chorus 1 · turnaround · 0:56.1",
+          "label": "Chorus 1 \u00b7 turnaround \u00b7 0:56.1",
           "fade": 0,
           "follow": "auto",
           "wait": 9.3227
@@ -21689,7 +21750,7 @@
         {
           "id": "ygn-e05",
           "cue": "ygn-lift",
-          "label": "Lift · before the big chorus · 1:05.4",
+          "label": "Lift \u00b7 before the big chorus \u00b7 1:05.4",
           "fade": 0,
           "follow": "auto",
           "wait": 9.3226
@@ -21697,7 +21758,7 @@
         {
           "id": "ygn-e06",
           "cue": "ygn-chorus2",
-          "label": "Big chorus · 1:14.8",
+          "label": "Big chorus \u00b7 1:14.8",
           "fade": 0,
           "follow": "auto",
           "wait": 37.2906
@@ -21705,7 +21766,7 @@
         {
           "id": "ygn-e07",
           "cue": "ygn-tag2",
-          "label": "Chorus tag · hits · 1:52.1",
+          "label": "Chorus tag \u00b7 hits \u00b7 1:52.1",
           "fade": 0,
           "follow": "auto",
           "wait": 4.6613
@@ -21713,7 +21774,7 @@
         {
           "id": "ygn-e08",
           "cue": "ygn-breakdown",
-          "label": "Breakdown · intimate · 1:56.7",
+          "label": "Breakdown \u00b7 intimate \u00b7 1:56.7",
           "fade": 1,
           "follow": "auto",
           "wait": 32.6293
@@ -21721,7 +21782,7 @@
         {
           "id": "ygn-e09",
           "cue": "ygn-chorus3a",
-          "label": "Chorus 3 · royal and gold · 2:29.3",
+          "label": "Chorus 3 \u00b7 royal and gold \u00b7 2:29.3",
           "fade": 0,
           "follow": "auto",
           "wait": 37.2906
@@ -21729,7 +21790,7 @@
         {
           "id": "ygn-e10",
           "cue": "ygn-chorus3b",
-          "label": "Chorus 3 · crimson power · 3:06.6",
+          "label": "Chorus 3 \u00b7 crimson power \u00b7 3:06.6",
           "fade": 0,
           "follow": "auto",
           "wait": 37.2906
@@ -21737,7 +21798,7 @@
         {
           "id": "ygn-e11",
           "cue": "ygn-hits",
-          "label": "Band stops · hits · 3:43.9",
+          "label": "Band stops \u00b7 hits \u00b7 3:43.9",
           "fade": 0,
           "follow": "auto",
           "wait": 37.2906
@@ -21745,7 +21806,7 @@
         {
           "id": "ygn-e12",
           "cue": "ygn-bridge",
-          "label": "Full band · climb to the peak · 4:21.2",
+          "label": "Full band \u00b7 climb to the peak \u00b7 4:21.2",
           "fade": 0,
           "follow": "auto",
           "wait": 44.2826
@@ -21753,7 +21814,7 @@
         {
           "id": "ygn-e13",
           "cue": "ygn-reset",
-          "label": "Reset · breathe · 5:05.5",
+          "label": "Reset \u00b7 breathe \u00b7 5:05.5",
           "fade": 0,
           "follow": "auto",
           "wait": 13.984
@@ -21761,7 +21822,7 @@
         {
           "id": "ygn-e14",
           "cue": "ygn-vamp1",
-          "label": "Vamp 1 · power · 5:19.5",
+          "label": "Vamp 1 \u00b7 power \u00b7 5:19.5",
           "fade": 0,
           "follow": "auto",
           "wait": 44.2826
@@ -21769,7 +21830,7 @@
         {
           "id": "ygn-e15",
           "cue": "ygn-breath",
-          "label": "Breath · regroup · 6:03.8",
+          "label": "Breath \u00b7 regroup \u00b7 6:03.8",
           "fade": 0,
           "follow": "auto",
           "wait": 9.3226
@@ -21777,7 +21838,7 @@
         {
           "id": "ygn-e16",
           "cue": "ygn-vamp2",
-          "label": "Vamp 2 · the peak · 6:13.1",
+          "label": "Vamp 2 \u00b7 the peak \u00b7 6:13.1",
           "fade": 0,
           "follow": "auto",
           "wait": 44.2826
@@ -21785,7 +21846,7 @@
         {
           "id": "ygn-e17",
           "cue": "ygn-callresp",
-          "label": "Call and response · loop · 6:57.4",
+          "label": "Call and response \u00b7 loop \u00b7 6:57.4",
           "fade": 0,
           "follow": "auto",
           "wait": 55.9359
@@ -21793,7 +21854,7 @@
         {
           "id": "ygn-e18",
           "cue": "ygn-outro",
-          "label": "Outro · ride out · 7:53.3",
+          "label": "Outro \u00b7 ride out \u00b7 7:53.3",
           "fade": 0,
           "follow": "auto",
           "wait": 30.2987
@@ -21801,7 +21862,7 @@
         {
           "id": "ygn-e19",
           "cue": "ygn-ending",
-          "label": "Ending · last chord · 8:23.6",
+          "label": "Ending \u00b7 last chord \u00b7 8:23.6",
           "fade": 0,
           "follow": "manual"
         }
@@ -21816,6 +21877,20 @@
           "id": "rig-check-1",
           "cue": "rig-check-all-lights",
           "fade": 2,
+          "follow": "manual"
+        }
+      ]
+    },
+    {
+      "id": "test",
+      "name": "Test",
+      "color": "#7da6f0",
+      "cues": [
+        {
+          "id": "test-1",
+          "cue": "test-blue-red",
+          "label": "Blue up, dip, red",
+          "fade": 0,
           "follow": "manual"
         }
       ]
